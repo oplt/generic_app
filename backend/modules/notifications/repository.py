@@ -1,0 +1,46 @@
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.modules.notifications.models import Notification, NotificationPreference
+
+
+class NotificationsRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def list_for_user(self, user_id: str) -> list[Notification]:
+        result = await self.db.execute(
+            select(Notification)
+            .where(Notification.user_id == user_id)
+            .order_by(Notification.created_at.desc())
+            .limit(50)
+        )
+        return list(result.scalars().all())
+
+    async def get_by_id(self, notification_id: str) -> Notification | None:
+        result = await self.db.execute(
+            select(Notification).where(Notification.id == notification_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def mark_read(self, notification: Notification) -> None:
+        notification.is_read = True
+        await self.db.flush()
+
+    async def mark_all_read(self, user_id: str) -> None:
+        await self.db.execute(
+            update(Notification)
+            .where(Notification.user_id == user_id, Notification.is_read.is_(False))
+            .values(is_read=True)
+        )
+
+    async def get_or_create_preferences(self, user_id: str) -> NotificationPreference:
+        result = await self.db.execute(
+            select(NotificationPreference).where(NotificationPreference.user_id == user_id)
+        )
+        prefs = result.scalar_one_or_none()
+        if not prefs:
+            prefs = NotificationPreference(user_id=user_id)
+            self.db.add(prefs)
+            await self.db.flush()
+        return prefs
