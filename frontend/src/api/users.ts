@@ -14,6 +14,12 @@ export type Session = {
     expires_at: string;
 };
 
+export type UserDirectoryEntry = {
+    id: string;
+    email: string;
+    full_name: string | null;
+};
+
 export async function getMe(): Promise<UserProfile> {
     return apiFetch("/users/me");
 }
@@ -35,4 +41,8 @@ export async function getSessions(): Promise<Session[]> {
 
 export async function revokeSession(sessionId: string): Promise<void> {
     return apiFetch(`/users/me/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+export async function listUserDirectory(): Promise<UserDirectoryEntry[]> {
+    return apiFetch("/users/directory");
 }

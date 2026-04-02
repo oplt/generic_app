@@ -16,8 +16,10 @@ import {
 import {
     AddCircleOutline as AddCircleOutlineIcon,
     FolderOpen as FolderOpenIcon,
+    ArrowForward as ArrowForwardIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
+import { useNavigate } from "react-router-dom";
 import { createProject, listProjects } from "../api/projects";
 import { useSnackbar } from "../app/snackbarContext";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -25,6 +27,7 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
 import { SectionCard } from "../components/ui/SectionCard";
 import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
+import { formatDate } from "../utils/formatters";
 
 const projectSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters").max(255),
@@ -34,6 +37,7 @@ const projectSchema = z.object({
 type ProjectValues = z.infer<typeof projectSchema>;
 
 export default function ProjectsPage() {
+    const navigate = useNavigate();
     const queryClient = useQueryClient();
     const { showToast } = useSnackbar();
     const { data: platformMetadata } = usePlatformMetadata();
@@ -50,10 +54,11 @@ export default function ProjectsPage() {
 
     const mutation = useMutation({
         mutationFn: createProject,
-        onSuccess: async () => {
+        onSuccess: async (project) => {
             await queryClient.invalidateQueries({ queryKey: ["projects"] });
             reset();
             showToast({ message: "Project created successfully.", severity: "success" });
+            navigate(`/projects/${project.id}`);
         },
     });
 
@@ -182,13 +187,23 @@ export default function ProjectsPage() {
                                             <Box>
                                                 <Typography variant="subtitle1">{project.name}</Typography>
                                                 <Typography variant="caption" color="text.secondary">
-                                                    Ready for collaboration
+                                                    Created {formatDate(project.created_at)}
                                                 </Typography>
                                             </Box>
                                         </Stack>
                                         <Typography variant="body2" color="text.secondary">
                                             {project.description || `No description yet for this ${coreDomainSingular.toLowerCase()}.`}
                                         </Typography>
+                                        <Box>
+                                            <Button
+                                                variant="text"
+                                                endIcon={<ArrowForwardIcon />}
+                                                onClick={() => navigate(`/projects/${project.id}`)}
+                                                sx={{ px: 0 }}
+                                            >
+                                                Open workspace
+                                            </Button>
+                                        </Box>
                                     </Stack>
                                 </Paper>
                             ))}

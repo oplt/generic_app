@@ -19,6 +19,7 @@ import { useNavigate } from "react-router-dom";
 import { listProjects } from "../api/projects";
 import { getNotifications } from "../api/notifications";
 import { getMe } from "../api/users";
+import { DashboardCalendar } from "../components/dashboard/DashboardCalendar";
 import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -255,6 +256,14 @@ export default function DashboardPage() {
                             ))}
                         </Stack>
                     </SectionCard>
+
+                    <DashboardCalendar
+                        projects={projects ?? []}
+                        projectsLoading={projectsLoading}
+                        onOpenProjects={() => navigate("/projects")}
+                        allowedMonthSpans={[1]}
+                        initialMonthSpan={1}
+                    />
 
                     <SectionCard
                         title={`${coreDomainPlural} snapshot`}

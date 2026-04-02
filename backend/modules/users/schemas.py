@@ -15,6 +15,12 @@ class UserProfileResponse(BaseModel):
     mfa_enabled: bool
 
 
+class UserDirectoryResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str | None
+
+
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)

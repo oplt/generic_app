@@ -22,6 +22,7 @@ import {
 } from "@mui/material";
 import {
     AdminPanelSettings as AdminIcon,
+    CalendarMonth as CalendarIcon,
     ChevronLeft as ChevronLeftIcon,
     ChevronRight as ChevronRightIcon,
     Dashboard as DashboardIcon,
@@ -198,6 +199,7 @@ export function AppLayout() {
     const navItems = useMemo<NavItem[]>(
         () => [
             { label: "Dashboard", icon: <DashboardIcon />, path: "/dashboard", group: "workspace" },
+            { label: "Calendar", icon: <CalendarIcon />, path: "/calendar", group: "workspace" },
             { label: coreDomainPlural, icon: <ProjectsIcon />, path: "/projects", group: "workspace" },
             ...(hasUserPlatformModule
                 ? [{ label: "Platform", icon: <PlatformIcon />, path: "/platform", group: "workspace" as const }]

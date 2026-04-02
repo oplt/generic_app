@@ -7,6 +7,7 @@ from backend.modules.identity_access.models import User
 from backend.modules.users.schemas import (
     PasswordChangeRequest,
     SessionResponse,
+    UserDirectoryResponse,
     UserProfileResponse,
     UserProfileUpdate,
 )
@@ -24,6 +25,23 @@ async def get_me(current_user: User = Depends(get_current_user)):
         is_verified=current_user.is_verified,
         mfa_enabled=current_user.mfa_enabled,
     )
+
+
+@router.get("/directory", response_model=list[UserDirectoryResponse])
+async def list_directory(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    service = UsersService(db)
+    users = await service.list_directory()
+    return [
+        UserDirectoryResponse(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+        )
+        for user in users
+    ]
 
 
 @router.patch("/me", response_model=UserProfileResponse)

@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from backend.modules.calendar.router import router as calendar_router
 from backend.modules.admin.router import router as admin_router
 from backend.modules.identity_access.router import router as auth_router
 from backend.modules.notifications.router import router as notifications_router
@@ -12,6 +13,7 @@ from backend.modules.users.router import router as users_router
 api_router = APIRouter(prefix="/api/v1")
 
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
+api_router.include_router(calendar_router, prefix="/calendar", tags=["calendar"])
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(profile_router, prefix="/profile", tags=["profile"])
 api_router.include_router(projects_router, prefix="/projects", tags=["projects"])

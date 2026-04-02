@@ -8,6 +8,23 @@ class NotificationsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def create(
+        self,
+        user_id: str,
+        type: str,
+        title: str,
+        body: str | None = None,
+    ) -> Notification:
+        notification = Notification(
+            user_id=user_id,
+            type=type,
+            title=title,
+            body=body,
+        )
+        self.db.add(notification)
+        await self.db.flush()
+        return notification
+
     async def list_for_user(self, user_id: str) -> list[Notification]:
         result = await self.db.execute(
             select(Notification)

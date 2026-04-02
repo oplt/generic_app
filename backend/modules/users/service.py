@@ -37,3 +37,6 @@ class UsersService:
             raise HTTPException(status_code=404, detail="Session not found")
         await self.identity_repo.revoke_refresh_session(session)
         await self.db.commit()
+
+    async def list_directory(self) -> list[User]:
+        return await self.repo.list_active_users()

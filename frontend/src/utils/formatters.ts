@@ -14,6 +14,14 @@ export function formatDate(value: string) {
     }).format(new Date(value));
 }
 
+export function formatDateOnly(value: string) {
+    return new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+    }).format(new Date(`${value}T12:00:00`));
+}
+
 export function formatDateTime(value: string) {
     return new Intl.DateTimeFormat(undefined, {
         month: "short",
