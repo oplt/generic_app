@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from backend.core.schemas import RequestModel
 from backend.modules.projects.schemas import TaskPriority, TaskStatus
 
 
@@ -11,7 +12,7 @@ CalendarItemType = Literal["event", "appointment", "task"]
 CalendarItemSource = Literal["planner", "task"]
 
 
-class CalendarItemCreate(BaseModel):
+class CalendarItemCreate(RequestModel):
     type: CalendarItemType
     title: str = Field(min_length=2, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
@@ -37,4 +38,3 @@ class CalendarItemResponse(BaseModel):
     priority: TaskPriority | None = None
     status: TaskStatus | None = None
     created_at: datetime
-

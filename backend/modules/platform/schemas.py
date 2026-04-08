@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
+from backend.core.schemas import RequestModel
 
 MODULE_KEY_PATTERN = r"^[a-z0-9_]+$"
 
@@ -35,7 +36,7 @@ class PlatformConfigResponse(PlatformMetadataResponse):
     module_overrides: dict[str, bool]
 
 
-class PlatformConfigUpdateRequest(BaseModel):
+class PlatformConfigUpdateRequest(RequestModel):
     app_name: str | None = Field(default=None, min_length=1, max_length=255)
     core_domain_singular: str | None = Field(default=None, min_length=1, max_length=64)
     core_domain_plural: str | None = Field(default=None, min_length=1, max_length=64)
@@ -43,7 +44,7 @@ class PlatformConfigUpdateRequest(BaseModel):
     module_overrides: dict[str, bool] | None = None
 
 
-class SubscriptionPlanCreate(BaseModel):
+class SubscriptionPlanCreate(RequestModel):
     code: str = Field(min_length=2, max_length=64, pattern=MODULE_KEY_PATTERN)
     name: str = Field(min_length=2, max_length=255)
     description: str | None = None
@@ -53,7 +54,7 @@ class SubscriptionPlanCreate(BaseModel):
     features: list[str] = Field(default_factory=list)
 
 
-class SubscriptionPlanUpdate(BaseModel):
+class SubscriptionPlanUpdate(RequestModel):
     name: str | None = Field(default=None, min_length=2, max_length=255)
     description: str | None = None
     price_cents: int | None = Field(default=None, ge=0)
@@ -90,11 +91,11 @@ class UserSubscriptionResponse(BaseModel):
     plan: SubscriptionPlanResponse
 
 
-class SubscriptionSelectionRequest(BaseModel):
+class SubscriptionSelectionRequest(RequestModel):
     plan_code: str = Field(min_length=2, max_length=64, pattern=MODULE_KEY_PATTERN)
 
 
-class ApiKeyCreateRequest(BaseModel):
+class ApiKeyCreateRequest(RequestModel):
     name: str = Field(min_length=2, max_length=255)
 
 
@@ -113,13 +114,13 @@ class ApiKeyCreateResponse(ApiKeyResponse):
     plaintext_key: str
 
 
-class WebhookEndpointCreate(BaseModel):
+class WebhookEndpointCreate(RequestModel):
     target_url: HttpUrl
     description: str | None = None
     events: list[str] = Field(default_factory=list)
 
 
-class WebhookEndpointUpdate(BaseModel):
+class WebhookEndpointUpdate(RequestModel):
     target_url: HttpUrl | None = None
     description: str | None = None
     events: list[str] | None = None
@@ -132,13 +133,16 @@ class WebhookEndpointResponse(BaseModel):
     id: str
     target_url: str
     description: str | None
-    secret: str
     is_active: bool
     events: list[str]
     last_tested_at: datetime | None
     last_response_status: int | None
     created_at: datetime
     updated_at: datetime
+
+
+class WebhookEndpointCreateResponse(WebhookEndpointResponse):
+    signing_secret: str
 
 
 class WebhookTestResponse(BaseModel):
@@ -148,7 +152,7 @@ class WebhookTestResponse(BaseModel):
     error: str | None = None
 
 
-class FeatureFlagCreate(BaseModel):
+class FeatureFlagCreate(RequestModel):
     key: str = Field(min_length=2, max_length=128, pattern=MODULE_KEY_PATTERN)
     name: str = Field(min_length=2, max_length=255)
     description: str | None = None
@@ -157,7 +161,7 @@ class FeatureFlagCreate(BaseModel):
     rollout_percentage: int = Field(default=100, ge=0, le=100)
 
 
-class FeatureFlagUpdate(BaseModel):
+class FeatureFlagUpdate(RequestModel):
     name: str | None = Field(default=None, min_length=2, max_length=255)
     description: str | None = None
     module_key: str | None = Field(default=None, pattern=MODULE_KEY_PATTERN)
@@ -182,7 +186,7 @@ class EffectiveFeatureFlagResponse(FeatureFlagResponse):
     effective_enabled: bool
 
 
-class EmailTemplateCreate(BaseModel):
+class EmailTemplateCreate(RequestModel):
     key: str = Field(min_length=2, max_length=128)
     name: str = Field(min_length=2, max_length=255)
     subject_template: str = Field(min_length=1, max_length=500)
@@ -191,7 +195,7 @@ class EmailTemplateCreate(BaseModel):
     is_active: bool = True
 
 
-class EmailTemplateUpdate(BaseModel):
+class EmailTemplateUpdate(RequestModel):
     name: str | None = Field(default=None, min_length=2, max_length=255)
     subject_template: str | None = Field(default=None, min_length=1, max_length=500)
     html_template: str | None = None

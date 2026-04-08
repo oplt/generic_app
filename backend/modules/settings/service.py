@@ -70,6 +70,17 @@ TYPE_LABELS = {
     bool: "boolean",
 }
 
+REDACTED_SECRET = "********"
+SENSITIVE_KEY_MARKERS = (
+    "SECRET",
+    "PASSWORD",
+    "TOKEN",
+    "KEY",
+    "DSN",
+    "DATABASE_URL",
+    "REDIS_URL",
+)
+
 
 class SettingsService:
     def __init__(self, db: AsyncSession):
@@ -133,11 +144,12 @@ class SettingsService:
             items.append(
                 ConfigEntryResponse(
                     key=key,
-                    value=value,
+                    value=REDACTED_SECRET if cls._is_secret_key(key) and value else value,
                     value_type=cls._get_value_type(key),
                     description=CONFIG_FIELD_METADATA.get(key, {}).get("description"),
                     requires_restart=CONFIG_FIELD_METADATA.get(key, {}).get("requires_restart", True),
                     is_custom=key not in known_fields,
+                    is_secret=cls._is_secret_key(key),
                 )
             )
 
@@ -157,6 +169,9 @@ class SettingsService:
 
         merged_known_values = {key: getattr(settings, key) for key in Settings.model_fields}
         for key, value in raw_updates.items():
+            if cls._is_secret_key(key) and value == REDACTED_SECRET:
+                value = cls._read_env_entries().get(key, cls._serialize_value(getattr(settings, key, "")))
+                raw_updates[key] = value
             if key in merged_known_values:
                 merged_known_values[key] = value
 
@@ -189,6 +204,11 @@ class SettingsService:
         if isinstance(value, bool):
             return "true" if value else "false"
         return str(value)
+
+    @staticmethod
+    def _is_secret_key(key: str) -> bool:
+        normalized = key.upper()
+        return any(marker in normalized for marker in SENSITIVE_KEY_MARKERS)
 
     @staticmethod
     def _parse_env_line(line: str) -> tuple[str, str] | None:

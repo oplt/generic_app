@@ -102,6 +102,14 @@ async def update_user_status(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.is_active = payload.is_active
+    audit_repo = AuditRepository(db)
+    await audit_repo.log(
+        action="admin.update_user_status",
+        user_id=admin.id,
+        resource_type="user",
+        resource_id=user.id,
+        metadata={"is_active": payload.is_active},
+    )
     await db.commit()
     return _user_to_response(user)
 

@@ -10,9 +10,12 @@ export type AuthUser = {
 };
 
 export type AuthResponse = {
-    access_token: string;
-    token_type: string;
     user: AuthUser;
+};
+
+export type MfaSetup = {
+    secret: string;
+    provisioning_uri: string;
 };
 
 export async function signUp(payload: {
@@ -30,6 +33,7 @@ export async function signUp(payload: {
 export async function signIn(payload: {
     email: string;
     password: string;
+    mfa_code?: string;
 }): Promise<AuthResponse> {
     return apiFetch("/auth/sign-in", {
         method: "POST",
@@ -44,7 +48,7 @@ export async function refresh(): Promise<AuthResponse> {
 }
 
 export async function me() {
-    return apiFetch("/auth/me");
+    return apiFetch<AuthUser>("/auth/me");
 }
 
 export async function logout() {
@@ -78,5 +82,25 @@ export async function resendVerification(payload: { email: string }) {
     return apiFetch("/auth/resend-verification", {
         method: "POST",
         body: JSON.stringify(payload),
+    });
+}
+
+export async function enableMfa(): Promise<MfaSetup> {
+    return apiFetch("/auth/mfa/enable", {
+        method: "POST",
+    });
+}
+
+export async function verifyMfa(code: string) {
+    return apiFetch("/auth/mfa/verify", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+    });
+}
+
+export async function disableMfa(code: string) {
+    return apiFetch("/auth/mfa/disable", {
+        method: "POST",
+        body: JSON.stringify({ code }),
     });
 }

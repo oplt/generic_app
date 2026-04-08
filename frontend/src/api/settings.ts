@@ -7,6 +7,7 @@ export type ConfigEntry = {
     description: string | null;
     requires_restart: boolean;
     is_custom: boolean;
+    is_secret: boolean;
 };
 
 export type ConfigSettingsResponse = {

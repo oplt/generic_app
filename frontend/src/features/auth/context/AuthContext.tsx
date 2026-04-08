@@ -1,43 +1,32 @@
 import {
-    useEffect,
-    useState,
     type PropsWithChildren,
 } from "react";
-import { logout as logoutRequest, refresh, type AuthUser } from "../../../api/auth";
-import { authStore } from "../store/authStore";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { logout as logoutRequest, me, type AuthUser } from "../../../api/auth";
 import { AuthContext } from "./authContext";
 
 export function AuthProvider({ children }: PropsWithChildren) {
-    const [isReady, setIsReady] = useState(false);
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+    const queryClient = useQueryClient();
+    const {
+        data: currentUser = null,
+        isPending,
+        isError,
+    } = useQuery<AuthUser | null>({
+        queryKey: ["auth", "me"],
+        queryFn: me,
+        retry: false,
+    });
 
-    useEffect(() => {
-        refresh()
-            .then((data) => {
-                authStore.setAccessToken(data.access_token);
-                setCurrentUser(data.user);
-                setIsAuthenticated(true);
-            })
-            .catch(() => {
-                authStore.setAccessToken(null);
-                setCurrentUser(null);
-                setIsAuthenticated(false);
-            })
-            .finally(() => setIsReady(true));
-    }, []);
+    const isAuthenticated = currentUser !== null;
+    const isReady = !isPending || isError;
 
     async function logout() {
         await logoutRequest().catch(() => undefined);
-        authStore.setAccessToken(null);
-        setCurrentUser(null);
-        setIsAuthenticated(false);
+        queryClient.setQueryData(["auth", "me"], null);
     }
 
-    function setAuthenticated(token: string, user: AuthUser) {
-        authStore.setAccessToken(token);
-        setCurrentUser(user);
-        setIsAuthenticated(true);
+    function setAuthenticated(user: AuthUser) {
+        queryClient.setQueryData(["auth", "me"], user);
     }
 
     return (
@@ -46,6 +35,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
                 isReady,
                 isAuthenticated,
                 isAdmin: currentUser?.is_admin ?? false,
+                isMfaEnabled: currentUser?.mfa_enabled ?? false,
                 currentUser,
                 logout,
                 setAuthenticated,

@@ -81,6 +81,7 @@ export default function PlatformPage() {
 
     const [apiKeyName, setApiKeyName] = useState("");
     const [revealedKey, setRevealedKey] = useState<string | null>(null);
+    const [revealedWebhookSecret, setRevealedWebhookSecret] = useState<string | null>(null);
     const [webhookDraft, setWebhookDraft] = useState({
         target_url: "",
         description: "",
@@ -118,8 +119,9 @@ export default function PlatformPage() {
     });
     const createWebhookMutation = useMutation({
         mutationFn: createWebhook,
-        onSuccess: async () => {
+        onSuccess: async (data) => {
             setWebhookDraft({ target_url: "", description: "", events: "platform.test" });
+            setRevealedWebhookSecret(data.signing_secret);
             await queryClient.invalidateQueries({ queryKey: ["platform", "webhooks"] });
             showToast({ message: "Webhook created.", severity: "success" });
         },
@@ -514,7 +516,7 @@ export default function PlatformPage() {
                                                         color="text.secondary"
                                                         sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
                                                     >
-                                                        Secret: {webhook.secret}
+                                                        Signing secret is hidden after creation. Rotate by recreating the webhook if needed.
                                                     </Typography>
                                                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                                                         {webhook.events.map((eventName) => (
@@ -625,10 +627,16 @@ export default function PlatformPage() {
                             icon={<FlagIcon />}
                             title="No feature flags configured"
                             description="Flags will appear here when the platform exposes rollout-based capabilities."
-                        />
+                                />
+                            )}
+
+                            {revealedWebhookSecret && (
+                                <Alert severity="success">
+                                    New webhook signing secret: <strong>{revealedWebhookSecret}</strong>
+                                </Alert>
+                            )}
+                        </SectionCard>
                     )}
-                </SectionCard>
-            )}
         </PageShell>
     );
 }

@@ -71,13 +71,16 @@ export type WebhookEndpoint = {
     id: string;
     target_url: string;
     description: string | null;
-    secret: string;
     is_active: boolean;
     events: string[];
     last_tested_at: string | null;
     last_response_status: number | null;
     created_at: string;
     updated_at: string;
+};
+
+export type CreatedWebhookEndpoint = WebhookEndpoint & {
+    signing_secret: string;
 };
 
 export type WebhookTestResult = {
@@ -211,7 +214,7 @@ export async function createWebhook(payload: {
     target_url: string;
     description?: string;
     events: string[];
-}): Promise<WebhookEndpoint> {
+}): Promise<CreatedWebhookEndpoint> {
     return apiFetch("/platform/webhooks", {
         method: "POST",
         body: JSON.stringify(payload),

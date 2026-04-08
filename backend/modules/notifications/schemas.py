@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from backend.core.schemas import RequestModel
+
 
 class NotificationResponse(BaseModel):
     id: str
@@ -18,7 +20,7 @@ class NotificationPreferenceResponse(BaseModel):
     marketing_enabled: bool
 
 
-class NotificationPreferenceUpdate(BaseModel):
+class NotificationPreferenceUpdate(RequestModel):
     email_enabled: bool | None = None
     push_enabled: bool | None = None
     marketing_enabled: bool | None = None

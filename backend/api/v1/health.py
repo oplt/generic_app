@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 
 from backend.core.cache import redis_client
@@ -15,6 +15,8 @@ async def live():
 
 @health_router.get("/ready")
 async def ready():
+    if not settings.HEALTH_READY_PUBLIC and settings.is_production:
+        raise HTTPException(status_code=404, detail="Not found")
     checks: dict[str, str] = {}
 
     try:
@@ -41,6 +43,8 @@ async def ready():
 
 @health_router.get("/version")
 async def version():
+    if not settings.HEALTH_VERSION_PUBLIC and settings.is_production:
+        raise HTTPException(status_code=404, detail="Not found")
     return {
         "app": settings.APP_NAME,
         "env": settings.APP_ENV,

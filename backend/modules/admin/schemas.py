@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr
 
+from backend.core.schemas import RequestModel
+
 
 class AdminUserResponse(BaseModel):
     id: str
@@ -22,7 +24,7 @@ class AdminUserListResponse(BaseModel):
     page_size: int
 
 
-class AdminUserStatusUpdate(BaseModel):
+class AdminUserStatusUpdate(RequestModel):
     is_active: bool
 
 

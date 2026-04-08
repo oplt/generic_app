@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,6 +11,7 @@ import {
     Chip,
     CircularProgress,
     Link,
+    Paper,
     Skeleton,
     Stack,
     TextField,
@@ -18,11 +20,14 @@ import {
 import {
     DeleteOutline as DeleteIcon,
     Devices as DevicesIcon,
+    LockOutlined as LockOutlinedIcon,
     PlaceOutlined as PlaceOutlinedIcon,
     Public as PublicIcon,
     UploadFile as UploadFileIcon,
 } from "@mui/icons-material";
 import { alpha } from "@mui/material/styles";
+import QRCode from "qrcode";
+import { disableMfa, enableMfa, verifyMfa } from "../api/auth";
 import { changePassword, getMe, getSessions, revokeSession, updateMe } from "../api/users";
 import { deleteAvatar, getProfile, updateProfile, uploadAvatar } from "../api/profile";
 import { useSnackbar } from "../app/snackbarContext";
@@ -53,9 +58,70 @@ const passwordSchema = z
         path: ["confirm_password"],
     });
 
+const mfaCodeSchema = z.object({
+    code: z.string().regex(/^\d{6}$/, "Enter the 6-digit authenticator code"),
+});
+
 type AccountValues = z.infer<typeof accountSchema>;
 type ProfileValues = z.infer<typeof profileSchema>;
 type PasswordValues = z.infer<typeof passwordSchema>;
+type MfaCodeValues = z.infer<typeof mfaCodeSchema>;
+
+function MfaQrCode({ provisioningUri }: { provisioningUri: string }) {
+    const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+    const [qrError, setQrError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isActive = true;
+
+        void QRCode.toDataURL(provisioningUri, {
+            errorCorrectionLevel: "M",
+            margin: 1,
+            width: 220,
+        })
+            .then((dataUrl) => {
+                if (isActive) {
+                    setQrDataUrl(dataUrl);
+                }
+            })
+            .catch(() => {
+                if (isActive) {
+                    setQrError("Failed to generate QR code.");
+                }
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, [provisioningUri]);
+
+    if (qrError) {
+        return <Alert severity="warning">{qrError}</Alert>;
+    }
+
+    return (
+        <Paper
+            variant="outlined"
+            sx={{
+                p: 2,
+                alignSelf: "flex-start",
+                borderRadius: 3,
+                bgcolor: "common.white",
+            }}
+        >
+            {qrDataUrl ? (
+                <Box
+                    component="img"
+                    src={qrDataUrl}
+                    alt="Scan this QR code with your authenticator app"
+                    sx={{ display: "block", width: 220, height: 220 }}
+                />
+            ) : (
+                <Skeleton variant="rounded" width={220} height={220} />
+            )}
+        </Paper>
+    );
+}
 
 export default function ProfilePage() {
     const queryClient = useQueryClient();
@@ -89,10 +155,19 @@ export default function ProfilePage() {
     const passwordForm = useForm<PasswordValues>({
         resolver: zodResolver(passwordSchema),
     });
+    const mfaVerifyForm = useForm<MfaCodeValues>({
+        resolver: zodResolver(mfaCodeSchema),
+    });
+    const mfaDisableForm = useForm<MfaCodeValues>({
+        resolver: zodResolver(mfaCodeSchema),
+    });
 
     const accountMutation = useMutation({
         mutationFn: updateMe,
-        onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["me"] }),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ["me"] });
+            await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+        },
     });
     const profileMutation = useMutation({
         mutationFn: updateProfile,
@@ -105,6 +180,27 @@ export default function ProfilePage() {
     const revokeSessionMutation = useMutation({
         mutationFn: revokeSession,
         onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+    });
+    const enableMfaMutation = useMutation({
+        mutationFn: enableMfa,
+    });
+    const verifyMfaMutation = useMutation({
+        mutationFn: (values: MfaCodeValues) => verifyMfa(values.code),
+        onSuccess: async () => {
+            mfaVerifyForm.reset();
+            await queryClient.invalidateQueries({ queryKey: ["me"] });
+            await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+            showToast({ message: "MFA enabled.", severity: "success" });
+        },
+    });
+    const disableMfaMutation = useMutation({
+        mutationFn: (values: MfaCodeValues) => disableMfa(values.code),
+        onSuccess: async () => {
+            mfaDisableForm.reset();
+            await queryClient.invalidateQueries({ queryKey: ["me"] });
+            await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+            showToast({ message: "MFA disabled.", severity: "success" });
+        },
     });
     const uploadAvatarMutation = useMutation({
         mutationFn: uploadAvatar,
@@ -297,6 +393,100 @@ export default function ProfilePage() {
                             </Button>
                         </Stack>
                     </Box>
+                </SectionCard>
+
+                <SectionCard
+                    title="Multi-factor authentication"
+                    description="Use a TOTP authenticator app to protect high-privilege access and sensitive account actions."
+                >
+                    <Stack spacing={2}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <LockOutlinedIcon fontSize="small" color="action" />
+                            <Typography variant="body2" color="text.secondary">
+                                {user?.mfa_enabled
+                                    ? "MFA is active on this account."
+                                    : "Admins must enable MFA before they can use admin routes."}
+                            </Typography>
+                        </Stack>
+
+                        {!user?.mfa_enabled ? (
+                            <>
+                                <Button
+                                    variant="outlined"
+                                    onClick={() => enableMfaMutation.mutate()}
+                                    disabled={enableMfaMutation.isPending}
+                                >
+                                    {enableMfaMutation.isPending ? "Preparing..." : "Start MFA setup"}
+                                </Button>
+                                {enableMfaMutation.data && (
+                                    <Stack spacing={1.5}>
+                                        <Alert severity="info">
+                                            Scan the QR code with your authenticator app, or enter the secret manually, then confirm with a 6-digit code.
+                                        </Alert>
+                                        <MfaQrCode
+                                            key={enableMfaMutation.data.provisioning_uri}
+                                            provisioningUri={enableMfaMutation.data.provisioning_uri}
+                                        />
+                                        <Typography variant="body2" sx={{ fontFamily: '"IBM Plex Mono", monospace' }}>
+                                            Secret: {enableMfaMutation.data.secret}
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ wordBreak: "break-all" }}>
+                                            Provisioning URI: {enableMfaMutation.data.provisioning_uri}
+                                        </Typography>
+                                        <Box
+                                            component="form"
+                                            onSubmit={mfaVerifyForm.handleSubmit((values) => verifyMfaMutation.mutate(values))}
+                                        >
+                                            <Stack spacing={2}>
+                                                <TextField
+                                                    label="Authenticator code"
+                                                    {...mfaVerifyForm.register("code")}
+                                                    error={!!mfaVerifyForm.formState.errors.code}
+                                                    helperText={mfaVerifyForm.formState.errors.code?.message}
+                                                    fullWidth
+                                                />
+                                                {verifyMfaMutation.isError && (
+                                                    <Alert severity="error">
+                                                        {verifyMfaMutation.error instanceof Error
+                                                            ? verifyMfaMutation.error.message
+                                                            : "Failed to verify MFA."}
+                                                    </Alert>
+                                                )}
+                                                <Button type="submit" variant="contained" disabled={verifyMfaMutation.isPending}>
+                                                    {verifyMfaMutation.isPending ? "Verifying..." : "Enable MFA"}
+                                                </Button>
+                                            </Stack>
+                                        </Box>
+                                    </Stack>
+                                )}
+                            </>
+                        ) : (
+                            <Box
+                                component="form"
+                                onSubmit={mfaDisableForm.handleSubmit((values) => disableMfaMutation.mutate(values))}
+                            >
+                                <Stack spacing={2}>
+                                    <TextField
+                                        label="Authenticator code"
+                                        {...mfaDisableForm.register("code")}
+                                        error={!!mfaDisableForm.formState.errors.code}
+                                        helperText={mfaDisableForm.formState.errors.code?.message}
+                                        fullWidth
+                                    />
+                                    {disableMfaMutation.isError && (
+                                        <Alert severity="error">
+                                            {disableMfaMutation.error instanceof Error
+                                                ? disableMfaMutation.error.message
+                                                : "Failed to disable MFA."}
+                                        </Alert>
+                                    )}
+                                    <Button type="submit" variant="outlined" color="error" disabled={disableMfaMutation.isPending}>
+                                        {disableMfaMutation.isPending ? "Disabling..." : "Disable MFA"}
+                                    </Button>
+                                </Stack>
+                            </Box>
+                        )}
+                    </Stack>
                 </SectionCard>
             </Box>
 

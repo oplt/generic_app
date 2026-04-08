@@ -22,12 +22,14 @@ class IdentityRepository:
         password_hash: str,
         full_name: str | None,
         is_admin: bool = False,
+        is_verified: bool = False,
     ) -> User:
         user = User(
             email=email,
             password_hash=password_hash,
             full_name=full_name,
             is_admin=is_admin,
+            is_verified=is_verified,
         )
         self.db.add(user)
         await self.db.flush()
@@ -55,6 +57,12 @@ class IdentityRepository:
         session.is_revoked = True
         await self.db.flush()
 
+    async def revoke_all_refresh_sessions_for_user(self, user_id: str) -> None:
+        sessions = await self.list_active_sessions(user_id)
+        for session in sessions:
+            session.is_revoked = True
+        await self.db.flush()
+
     async def list_active_sessions(self, user_id: str) -> list[RefreshSession]:
         now = datetime.now(timezone.utc)
         result = await self.db.execute(
@@ -71,3 +79,11 @@ class IdentityRepository:
             select(RefreshSession).where(RefreshSession.id == session_id)
         )
         return result.scalar_one_or_none()
+
+    async def get_active_session_by_id(self, session_id: str) -> RefreshSession | None:
+        session = await self.get_session_by_id(session_id)
+        if not session or session.is_revoked:
+            return None
+        if session.expires_at <= datetime.now(timezone.utc):
+            return None
+        return session

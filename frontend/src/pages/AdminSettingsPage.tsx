@@ -209,7 +209,13 @@ function ConfigEntryEditor({
                         )}
                     </Stack>
                 </Stack>
-                <TextField value={value} onChange={(event) => onChange(event.target.value)} fullWidth />
+                <TextField
+                    type={item.is_secret ? "password" : "text"}
+                    value={value}
+                    onChange={(event) => onChange(event.target.value)}
+                    helperText={item.is_secret ? "Stored value is masked. Enter a new value to replace it." : undefined}
+                    fullWidth
+                />
             </Stack>
         </Box>
     );

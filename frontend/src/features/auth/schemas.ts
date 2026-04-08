@@ -3,6 +3,12 @@ import { z } from "zod";
 export const signInSchema = z.object({
     email: z.string().email("Enter a valid email"),
     password: z.string().min(1, "Password is required"),
+    mfa_code: z
+        .string()
+        .trim()
+        .regex(/^\d{6}$/, "Enter the 6-digit code from your authenticator app")
+        .optional()
+        .or(z.literal("")),
 });
 
 export const forgotPasswordSchema = z.object({

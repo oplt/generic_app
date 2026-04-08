@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.core.schemas import RequestModel
 
 ENV_KEY_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*$"
 SETTING_KEY_PATTERN = r"^[A-Za-z0-9_.:-]+$"
@@ -14,6 +15,7 @@ class ConfigEntryResponse(BaseModel):
     description: str | None = None
     requires_restart: bool = False
     is_custom: bool = False
+    is_secret: bool = False
 
 
 class ConfigSettingsResponse(BaseModel):
@@ -21,22 +23,22 @@ class ConfigSettingsResponse(BaseModel):
     notice: str
 
 
-class ConfigEntryUpdate(BaseModel):
+class ConfigEntryUpdate(RequestModel):
     key: str = Field(min_length=1, max_length=128, pattern=ENV_KEY_PATTERN)
     value: str = ""
 
 
-class ConfigSettingsUpdateRequest(BaseModel):
+class ConfigSettingsUpdateRequest(RequestModel):
     items: list[ConfigEntryUpdate]
 
 
-class DatabaseSettingCreate(BaseModel):
+class DatabaseSettingCreate(RequestModel):
     key: str = Field(min_length=1, max_length=128, pattern=SETTING_KEY_PATTERN)
     value: str = ""
     description: str | None = Field(default=None, max_length=1000)
 
 
-class DatabaseSettingUpdate(BaseModel):
+class DatabaseSettingUpdate(RequestModel):
     value: str | None = None
     description: str | None = Field(default=None, max_length=1000)
 
@@ -49,4 +51,3 @@ class DatabaseSettingResponse(BaseModel):
     value: str
     description: str | None
     updated_at: datetime
-

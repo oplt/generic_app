@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps.admin import get_admin_user
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
+from backend.modules.audit.repository import AuditRepository
 from backend.modules.identity_access.models import User
 from backend.modules.platform.schemas import (
     ApiKeyCreateRequest,
@@ -25,6 +26,7 @@ from backend.modules.platform.schemas import (
     SubscriptionSelectionRequest,
     UserSubscriptionResponse,
     WebhookEndpointCreate,
+    WebhookEndpointCreateResponse,
     WebhookEndpointResponse,
     WebhookEndpointUpdate,
     WebhookTestResponse,
@@ -32,6 +34,28 @@ from backend.modules.platform.schemas import (
 from backend.modules.platform.service import PlatformService
 
 router = APIRouter()
+
+
+async def _log_admin_action(
+    db: AsyncSession,
+    request: Request,
+    admin: User,
+    action: str,
+    *,
+    resource_type: str,
+    resource_id: str | None = None,
+    metadata: dict | None = None,
+) -> None:
+    audit_repo = AuditRepository(db)
+    await audit_repo.log(
+        action=action,
+        user_id=admin.id,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        metadata=metadata,
+    )
 
 
 def _plan_to_response(plan) -> SubscriptionPlanResponse:
@@ -79,7 +103,6 @@ def _webhook_to_response(webhook) -> WebhookEndpointResponse:
         id=webhook.id,
         target_url=webhook.target_url,
         description=webhook.description,
-        secret=webhook.secret,
         is_active=webhook.is_active,
         events=webhook.events_json,
         last_tested_at=webhook.last_tested_at,
@@ -201,7 +224,7 @@ async def list_webhooks(
     return [_webhook_to_response(item) for item in await service.list_webhooks_for_user(current_user)]
 
 
-@router.post("/webhooks", response_model=WebhookEndpointResponse, status_code=201)
+@router.post("/webhooks", response_model=WebhookEndpointCreateResponse, status_code=201)
 async def create_webhook(
     payload: WebhookEndpointCreate,
     db: AsyncSession = Depends(get_db),
@@ -214,7 +237,8 @@ async def create_webhook(
         description=payload.description,
         events=payload.events,
     )
-    return _webhook_to_response(webhook)
+    response = _webhook_to_response(webhook)
+    return WebhookEndpointCreateResponse(**response.model_dump(), signing_secret=webhook.secret)
 
 
 @router.patch("/webhooks/{webhook_id}", response_model=WebhookEndpointResponse)
@@ -274,11 +298,21 @@ async def get_platform_config(
 @router.put("/admin/config", response_model=PlatformConfigResponse)
 async def update_platform_config(
     payload: PlatformConfigUpdateRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    admin: User = Depends(get_admin_user),
 ):
     service = PlatformService(db)
-    return await service.update_platform_config(**payload.model_dump())
+    response = await service.update_platform_config(**payload.model_dump())
+    await _log_admin_action(
+        db,
+        request,
+        admin,
+        "admin.platform_config_updated",
+        resource_type="platform_config",
+    )
+    await db.commit()
+    return response
 
 
 @router.get("/admin/plans", response_model=list[SubscriptionPlanResponse])
@@ -293,11 +327,22 @@ async def list_admin_plans(
 @router.post("/admin/plans", response_model=SubscriptionPlanResponse, status_code=201)
 async def create_plan(
     payload: SubscriptionPlanCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    admin: User = Depends(get_admin_user),
 ):
     service = PlatformService(db)
     plan = await service.create_plan(payload.model_dump())
+    await _log_admin_action(
+        db,
+        request,
+        admin,
+        "admin.plan_created",
+        resource_type="subscription_plan",
+        resource_id=plan.id,
+        metadata={"code": plan.code},
+    )
+    await db.commit()
     return _plan_to_response(plan)
 
 
@@ -305,11 +350,21 @@ async def create_plan(
 async def update_plan(
     plan_id: str,
     payload: SubscriptionPlanUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    admin: User = Depends(get_admin_user),
 ):
     service = PlatformService(db)
     plan = await service.update_plan(plan_id, payload.model_dump(exclude_unset=True))
+    await _log_admin_action(
+        db,
+        request,
+        admin,
+        "admin.plan_updated",
+        resource_type="subscription_plan",
+        resource_id=plan.id,
+    )
+    await db.commit()
     return _plan_to_response(plan)
 
 
@@ -325,11 +380,22 @@ async def list_feature_flags(
 @router.post("/admin/feature-flags", response_model=FeatureFlagResponse, status_code=201)
 async def create_feature_flag(
     payload: FeatureFlagCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    admin: User = Depends(get_admin_user),
 ):
     service = PlatformService(db)
     flag = await service.create_feature_flag(payload.model_dump())
+    await _log_admin_action(
+        db,
+        request,
+        admin,
+        "admin.feature_flag_created",
+        resource_type="feature_flag",
+        resource_id=flag.id,
+        metadata={"key": flag.key},
+    )
+    await db.commit()
     return _feature_flag_to_response(flag)
 
 
@@ -337,11 +403,21 @@ async def create_feature_flag(
 async def update_feature_flag(
     feature_flag_id: str,
     payload: FeatureFlagUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    admin: User = Depends(get_admin_user),
 ):
     service = PlatformService(db)
     flag = await service.update_feature_flag(feature_flag_id, payload.model_dump(exclude_unset=True))
+    await _log_admin_action(
+        db,
+        request,
+        admin,
+        "admin.feature_flag_updated",
+        resource_type="feature_flag",
+        resource_id=flag.id,
+    )
+    await db.commit()
     return _feature_flag_to_response(flag)
 
 
@@ -357,11 +433,22 @@ async def list_email_templates(
 @router.post("/admin/email-templates", response_model=EmailTemplateResponse, status_code=201)
 async def create_email_template(
     payload: EmailTemplateCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    admin: User = Depends(get_admin_user),
 ):
     service = PlatformService(db)
     template = await service.create_email_template(payload.model_dump())
+    await _log_admin_action(
+        db,
+        request,
+        admin,
+        "admin.email_template_created",
+        resource_type="email_template",
+        resource_id=template.id,
+        metadata={"key": template.key},
+    )
+    await db.commit()
     return _email_template_to_response(template)
 
 
@@ -369,9 +456,19 @@ async def create_email_template(
 async def update_email_template(
     template_id: str,
     payload: EmailTemplateUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_admin_user),
+    admin: User = Depends(get_admin_user),
 ):
     service = PlatformService(db)
     template = await service.update_email_template(template_id, payload.model_dump(exclude_unset=True))
+    await _log_admin_action(
+        db,
+        request,
+        admin,
+        "admin.email_template_updated",
+        resource_type="email_template",
+        resource_id=template.id,
+    )
+    await db.commit()
     return _email_template_to_response(template)

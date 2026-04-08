@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.cache import redis_client
 from backend.core.config import settings
 from backend.core.security import (
-    create_access_token,
     generate_refresh_token,
     hash_password,
     hash_refresh_token,
@@ -43,10 +42,12 @@ class IdentityService:
         password: str,
         full_name: str | None,
         admin_invite_code: str | None = None,
-    ) -> User:
+    ) -> User | None:
         existing = await self.repo.get_user_by_email(email)
         if existing:
-            raise HTTPException(status_code=409, detail="Email already registered")
+            if settings.REQUIRE_EMAIL_VERIFICATION and not existing.is_verified:
+                await self.resend_verification(email)
+            return None
 
         invite_code = (admin_invite_code or "").strip()
         configured_invite_code = settings.ADMIN_SIGNUP_INVITE_CODE.strip()
@@ -61,56 +62,66 @@ class IdentityService:
             password_hash=hash_password(password),
             full_name=full_name,
             is_admin=is_admin,
+            is_verified=not settings.REQUIRE_EMAIL_VERIFICATION,
         )
         await self.db.commit()
         await self.db.refresh(user)
 
-        # queue verification email (fire-and-forget)
-        token = await self._store_verification_token(user.id)
-        verification_link = f"{settings.FRONTEND_URL}/verify-email?{urlencode({'token': token, 'email': user.email})}"
-        platform_service = PlatformService(self.db)
-        app_name = await self._get_platform_app_name()
-        subject, html_body, text_body = await platform_service.render_email_template(
-            key="auth.verify_email",
-            context={
-                "app_name": app_name,
-                "recipient_email": user.email,
-                "action_url": verification_link,
-            },
-            fallback_subject="Verify your email address",
-            fallback_html=(
-                "<p>Thanks for signing up. Click the link below to verify your email:</p>"
-                f"<p><a href=\"{verification_link}\">{verification_link}</a></p>"
-                "<p>This link expires in 24 hours.</p>"
-            ),
-            fallback_text=(
-                "Thanks for signing up.\n"
-                f"Verify your email: {verification_link}\n"
-                "This link expires in 24 hours."
-            ),
-        )
-        queue_email(
-            to=user.email,
-            subject=subject,
-            html_body=html_body,
-            text_body=text_body,
-        )
+        if settings.REQUIRE_EMAIL_VERIFICATION:
+            token = await self._store_verification_token(user.id)
+            verification_link = f"{settings.FRONTEND_URL}/verify-email?{urlencode({'token': token, 'email': user.email})}"
+            platform_service = PlatformService(self.db)
+            app_name = await self._get_platform_app_name()
+            subject, html_body, text_body = await platform_service.render_email_template(
+                key="auth.verify_email",
+                context={
+                    "app_name": app_name,
+                    "recipient_email": user.email,
+                    "action_url": verification_link,
+                },
+                fallback_subject="Verify your email address",
+                fallback_html=(
+                    "<p>Thanks for signing up. Click the link below to verify your email:</p>"
+                    f"<p><a href=\"{verification_link}\">{verification_link}</a></p>"
+                    "<p>This link expires in 24 hours.</p>"
+                ),
+                fallback_text=(
+                    "Thanks for signing up.\n"
+                    f"Verify your email: {verification_link}\n"
+                    "This link expires in 24 hours."
+                ),
+            )
+            queue_email(
+                to=user.email,
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+            )
 
         return user
 
-    async def sign_in(self, email: str, password: str) -> dict:
+    async def sign_in(self, email: str, password: str, mfa_code: str | None = None) -> dict:
         user = await self.repo.get_user_by_email(email)
         if not user or not verify_password(password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account disabled")
+        if settings.REQUIRE_EMAIL_VERIFICATION and not user.is_verified:
+            raise HTTPException(status_code=403, detail="Verify your email before signing in")
+        if user.mfa_enabled:
+            try:
+                import pyotp
+            except ImportError as exc:
+                raise HTTPException(status_code=501, detail="MFA not available") from exc
+            if not mfa_code or not user.mfa_secret or not pyotp.TOTP(user.mfa_secret).verify(mfa_code, valid_window=1):
+                raise HTTPException(status_code=401, detail="Invalid multi-factor authentication code")
 
         raw_refresh = generate_refresh_token()
         expires_at = datetime.now(timezone.utc) + timedelta(
             days=settings.REFRESH_TOKEN_EXPIRE_DAYS
         )
-        await self.repo.create_refresh_session(
+        session = await self.repo.create_refresh_session(
             user_id=user.id,
             token_hash=hash_refresh_token(raw_refresh),
             expires_at=expires_at,
@@ -118,8 +129,8 @@ class IdentityService:
         await self.db.commit()
 
         return {
-            "access_token": create_access_token(user.id),
             "refresh_token": raw_refresh,
+            "session_id": session.id,
             "user": user,
         }
 
@@ -135,17 +146,23 @@ class IdentityService:
         user = await self.repo.get_user_by_id(session.user_id)
         if not user or not user.is_active:
             raise HTTPException(status_code=401, detail="User not found or disabled")
+        if settings.REQUIRE_EMAIL_VERIFICATION and not user.is_verified:
+            raise HTTPException(status_code=403, detail="Verify your email before signing in")
 
         await self.repo.revoke_refresh_session(session)
 
         new_raw = generate_refresh_token()
         new_expires = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-        await self.repo.create_refresh_session(user.id, hash_refresh_token(new_raw), new_expires)
+        session = await self.repo.create_refresh_session(
+            user.id,
+            hash_refresh_token(new_raw),
+            new_expires,
+        )
         await self.db.commit()
 
         return {
-            "access_token": create_access_token(user.id),
             "refresh_token": new_raw,
+            "session_id": session.id,
             "user": user,
         }
 
@@ -179,6 +196,9 @@ class IdentityService:
         await redis_client.delete(key)
 
     async def resend_verification(self, email: str) -> None:
+        if not settings.REQUIRE_EMAIL_VERIFICATION:
+            return
+
         user = await self.repo.get_user_by_email(email)
         if not user or user.is_verified:
             # Don't leak whether address exists
@@ -265,6 +285,7 @@ class IdentityService:
             raise HTTPException(status_code=404, detail="User not found")
 
         user.password_hash = hash_password(new_password)
+        await self.repo.revoke_all_refresh_sessions_for_user(user.id)
         await self.db.commit()
         await redis_client.delete(key)
 

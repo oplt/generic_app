@@ -166,7 +166,7 @@ function NavBlock({
 export function AppLayout() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [desktopNavCollapsed, setDesktopNavCollapsed] = useState(false);
-    const { logout, isAdmin } = useAuth();
+    const { logout, isAdmin, isMfaEnabled } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const theme = useTheme();
@@ -219,7 +219,7 @@ export function AppLayout() {
         [coreDomainPlural, hasUserPlatformModule, unreadCount]
     );
 
-    const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
+    const visibleNavItems = navItems.filter((item) => !item.adminOnly || (isAdmin && isMfaEnabled));
     const currentItem = visibleNavItems.find((item) =>
         item.path === "/dashboard" ? location.pathname === item.path : location.pathname.startsWith(item.path)
     );

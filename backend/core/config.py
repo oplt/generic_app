@@ -1,5 +1,9 @@
 from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import json
+from typing import Annotated
+
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
@@ -38,7 +42,20 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
     COOKIE_SECURE: bool = False
+    COOKIE_SAMESITE: str = "lax"
+    COOKIE_DOMAIN: str | None = None
     ADMIN_SIGNUP_INVITE_CODE: str = ""
+    ACCESS_COOKIE_NAME: str = "access_token"
+    REFRESH_COOKIE_NAME: str = "refresh_token"
+    CSRF_COOKIE_NAME: str = "csrf_token"
+    CSRF_HEADER_NAME: str = "X-CSRF-Token"
+    PUBLIC_RATE_LIMIT_REQUESTS: int = 120
+    PUBLIC_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    AUTH_FAILURE_LIMIT: int = 8
+    AUTH_FAILURE_WINDOW_SECONDS: int = 900
+    HEALTH_READY_PUBLIC: bool = False
+    HEALTH_VERSION_PUBLIC: bool = False
+    REQUIRE_EMAIL_VERIFICATION: bool = True
 
     # Email verification / password reset token TTLs (seconds)
     VERIFICATION_TOKEN_TTL: int = 86400   # 24 h
@@ -71,6 +88,8 @@ class Settings(BaseSettings):
     STORAGE_PUBLIC_READ: bool = True
     STORAGE_AVATAR_MAX_BYTES: int = 5 * 1024 * 1024
 
+    CORS_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
     @property
     def celery_broker_url(self) -> str:
         return self.CELERY_BROKER_URL or self.REDIS_URL
@@ -78,6 +97,84 @@ class Settings(BaseSettings):
     @property
     def celery_result_backend(self) -> str:
         return self.CELERY_RESULT_BACKEND or self.REDIS_URL
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.lower() == "production"
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        return self.CORS_ALLOWED_ORIGINS or [self.FRONTEND_URL]
+
+    @property
+    def content_security_policy(self) -> str:
+        origins = " ".join(dict.fromkeys(["'self'", *self.allowed_origins]))
+        connect_src = " ".join(dict.fromkeys(["'self'", *self.allowed_origins]))
+        return (
+            "default-src 'self'; "
+            f"connect-src {connect_src}; "
+            "img-src 'self' data: blob:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; "
+            "base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        )
+
+    @field_validator("COOKIE_SAMESITE")
+    @classmethod
+    def validate_cookie_samesite(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"lax", "strict", "none"}:
+            raise ValueError("COOKIE_SAMESITE must be one of: lax, strict, none")
+        return normalized
+
+    @field_validator("JWT_SECRET")
+    @classmethod
+    def validate_jwt_secret(cls, value: str) -> str:
+        stripped = value.strip()
+        if len(stripped) < 32 or stripped.lower() in {"replace-me", "changeme", "secret"}:
+            raise ValueError("JWT_SECRET must be a high-entropy secret with at least 32 characters")
+        return stripped
+
+    @field_validator("ACCESS_TOKEN_EXPIRE_MINUTES")
+    @classmethod
+    def validate_access_ttl(cls, value: int) -> int:
+        if value <= 0 or value > 30:
+            raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be between 1 and 30")
+        return value
+
+    @field_validator("REFRESH_TOKEN_EXPIRE_DAYS")
+    @classmethod
+    def validate_refresh_ttl(cls, value: int) -> int:
+        if value <= 0 or value > 30:
+            raise ValueError("REFRESH_TOKEN_EXPIRE_DAYS must be between 1 and 30")
+        return value
+
+    @field_validator("CORS_ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_allowed_origins(cls, value):
+        if value in (None, ""):
+            return []
+        if isinstance(value, str):
+            normalized = value.strip()
+            if normalized.startswith(("'", '"')) and normalized.endswith(("'", '"')):
+                normalized = normalized[1:-1].strip()
+            if normalized.startswith("["):
+                parsed = json.loads(normalized)
+                if not isinstance(parsed, list):
+                    raise ValueError("CORS_ALLOWED_ORIGINS must be a list or comma-separated string")
+                return [str(item).strip() for item in parsed if str(item).strip()]
+            return [item.strip() for item in normalized.split(",") if item.strip()]
+        return value
+
+    @model_validator(mode="after")
+    def validate_security_posture(self):
+        if self.COOKIE_SAMESITE == "none" and not self.COOKIE_SECURE:
+            raise ValueError("COOKIE_SECURE must be true when COOKIE_SAMESITE is 'none'")
+        if self.is_production and not self.COOKIE_SECURE:
+            raise ValueError("COOKIE_SECURE must be enabled in production")
+        if self.is_production and any(origin.startswith("http://") for origin in self.allowed_origins):
+            raise ValueError("CORS_ALLOWED_ORIGINS/FRONTEND_URL must use https in production")
+        return self
 
 
 settings = Settings()

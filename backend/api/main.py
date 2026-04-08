@@ -4,7 +4,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .middleware.correlation_id import CorrelationIdMiddleware
+from .middleware.csrf import CSRFMiddleware
+from .middleware.public_rate_limit import PublicRateLimitMiddleware
 from .middleware.request_logging import RequestLoggingMiddleware
+from .middleware.security_headers import SecurityHeadersMiddleware
 from .router import api_router
 from .v1.health import health_router
 from backend.core.cache import redis_client
@@ -40,12 +43,15 @@ app = FastAPI(
 
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(PublicRateLimitMiddleware)
+app.add_middleware(CSRFMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
 )
 
 register_exception_handlers(app)

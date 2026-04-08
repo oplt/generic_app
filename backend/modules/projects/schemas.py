@@ -3,12 +3,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from backend.core.schemas import RequestModel
+
 
 TaskStatus = Literal["backlog", "todo", "in_progress", "review", "done"]
 TaskPriority = Literal["low", "medium", "high", "urgent"]
 
 
-class ProjectCreate(BaseModel):
+class ProjectCreate(RequestModel):
     name: str = Field(min_length=2, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
 
@@ -26,7 +28,7 @@ class ProjectTaskAssigneeResponse(BaseModel):
     full_name: str | None
 
 
-class ProjectTaskCreate(BaseModel):
+class ProjectTaskCreate(RequestModel):
     title: str = Field(min_length=2, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
     status: TaskStatus = "backlog"
@@ -35,7 +37,7 @@ class ProjectTaskCreate(BaseModel):
     assignee_id: str | None = None
 
 
-class ProjectTaskUpdate(BaseModel):
+class ProjectTaskUpdate(RequestModel):
     title: str | None = Field(default=None, min_length=2, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
     status: TaskStatus | None = None
@@ -58,10 +60,10 @@ class ProjectTaskResponse(BaseModel):
     updated_at: datetime
 
 
-class ProjectTaskReorderColumn(BaseModel):
+class ProjectTaskReorderColumn(RequestModel):
     status: TaskStatus
     task_ids: list[str]
 
 
-class ProjectTaskReorderRequest(BaseModel):
+class ProjectTaskReorderRequest(RequestModel):
     columns: list[ProjectTaskReorderColumn]

@@ -1,8 +1,10 @@
 import hashlib
 import hmac
+import ipaddress
 import json
 import re
 import secrets
+from urllib.parse import urlparse
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -465,6 +467,7 @@ class PlatformService:
         events: list[str],
     ) -> WebhookEndpoint:
         await self.ensure_module_enabled("webhooks")
+        self._validate_webhook_target(target_url)
         webhook = await self.repo.create_webhook(
             user_id=user.id,
             target_url=target_url,
@@ -487,6 +490,7 @@ class PlatformService:
             if field == "events":
                 webhook.events_json = value
             elif field == "target_url" and value is not None:
+                self._validate_webhook_target(str(value))
                 webhook.target_url = str(value)
             elif value is not None:
                 setattr(webhook, field, value)
@@ -677,6 +681,30 @@ class PlatformService:
     @staticmethod
     def _hash_secret(raw_value: str) -> str:
         return hashlib.sha256(raw_value.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _validate_webhook_target(target_url: str) -> None:
+        parsed = urlparse(target_url)
+        host = (parsed.hostname or "").strip().lower()
+        if not host:
+            raise HTTPException(status_code=422, detail="Webhook target host is required")
+        if host in {"localhost", "metadata.google.internal"} or host.endswith(".internal"):
+            raise HTTPException(status_code=422, detail="Webhook target host is not allowed")
+        if "." not in host and not host.startswith("["):
+            raise HTTPException(status_code=422, detail="Webhook target host is not allowed")
+        try:
+            ip = ipaddress.ip_address(host.strip("[]"))
+        except ValueError:
+            return
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            raise HTTPException(status_code=422, detail="Webhook target host is not allowed")
 
     @staticmethod
     def _calculate_period_end(interval: str) -> datetime | None:

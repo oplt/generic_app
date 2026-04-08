@@ -25,6 +25,7 @@ class UsersService:
         if not verify_password(current_password, user.password_hash):
             raise HTTPException(status_code=400, detail="Current password is incorrect")
         user.password_hash = hash_password(new_password)
+        await self.identity_repo.revoke_all_refresh_sessions_for_user(user.id)
         await self.db.flush()
         await self.db.commit()
 

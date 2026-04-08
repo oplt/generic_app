@@ -16,8 +16,14 @@ Generic full-stack starter with:
 1. Start infrastructure:
 
 ```bash
+cp infra/.env.example infra/.env
 docker compose -f infra/docker-compose.yml up -d
 ```
+
+Mailpit is included for local email capture:
+
+- SMTP server: `localhost:1025`
+- Web inbox: `http://localhost:8025`
 
 2. Configure the backend:
 
@@ -60,12 +66,14 @@ npm run dev
 ## Notes
 
 - Local object storage uses MinIO on `http://localhost:9000` and its console on `http://localhost:9001`.
+- Local infrastructure secrets now come from `infra/.env`; the compose file no longer embeds credentials.
 - Redis now serves both app-level caching/token storage and the Celery broker/result backend.
 - The first Celery-backed workflow is outbound email delivery for verification and password reset flows.
-- Set `CELERY_TASK_ALWAYS_EAGER=true` in `backend/.env` if you want queued email work to execute inline without a worker process.
+- Local `.env.example` defaults to Mailpit plus `CELERY_TASK_ALWAYS_EAGER=true`, so signup/reset emails work without a separate worker.
 - Avatar uploads are stored in the configured S3-compatible bucket instead of a placeholder path.
 - `/admin/platform` lets you rename the app, rename the core domain labels, pick a module pack, and manage plans, flags, and email templates.
 - Set `ADMIN_SIGNUP_INVITE_CODE` in `backend/.env` to allow invite-only admin registration during sign-up.
+- Authentication now uses `httpOnly` cookies plus a CSRF token cookie/header pair for state-changing requests.
 - Module packs are intended for clone-time reuse:
   - `lean_saas`
   - `automation_suite`

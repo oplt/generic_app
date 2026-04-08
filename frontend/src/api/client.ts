@@ -1,22 +1,30 @@
-import { authStore } from "../features/auth/store/authStore";
-
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000/api/v1";
 
-let refreshPromise: Promise<string | null> | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
-async function refreshAccessToken(): Promise<string | null> {
+function readCookie(name: string): string | null {
+    const match = document.cookie.match(
+        new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}=([^;]*)`)
+    );
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
+async function refreshAccessToken(): Promise<boolean> {
     try {
         const res = await fetch(`${API_BASE}/auth/refresh`, {
             method: "POST",
             credentials: "include",
+            headers: buildCsrfHeaders(),
         });
-        if (!res.ok) return null;
-        const data = await res.json();
-        authStore.setAccessToken(data.access_token ?? null);
-        return data.access_token ?? null;
+        return res.ok;
     } catch {
-        return null;
+        return false;
     }
+}
+
+function buildCsrfHeaders(): HeadersInit {
+    const csrfToken = readCookie("csrf_token");
+    return csrfToken ? { "X-CSRF-Token": csrfToken } : {};
 }
 
 export async function apiFetch<T>(
@@ -30,9 +38,11 @@ export async function apiFetch<T>(
     if (!isFormData && options.body !== undefined && !headers.has("Content-Type")) {
         headers.set("Content-Type", "application/json");
     }
-
-    if (authStore.accessToken) {
-        headers.set("Authorization", `Bearer ${authStore.accessToken}`);
+    if (!headers.has("X-CSRF-Token")) {
+        const csrfValue = readCookie("csrf_token");
+        if (csrfValue) {
+            headers.set("X-CSRF-Token", csrfValue);
+        }
     }
 
     const response = await fetch(`${API_BASE}${path}`, {
@@ -48,8 +58,8 @@ export async function apiFetch<T>(
                 refreshPromise = null;
             });
         }
-        const newToken = await refreshPromise;
-        if (!newToken) {
+        const refreshed = await refreshPromise;
+        if (!refreshed) {
             throw new Error("Session expired. Please sign in again.");
         }
         return apiFetch<T>(path, options, false);

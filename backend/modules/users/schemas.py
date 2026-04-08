@@ -2,8 +2,10 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from backend.core.schemas import RequestModel
 
-class UserProfileUpdate(BaseModel):
+
+class UserProfileUpdate(RequestModel):
     full_name: str | None = None
 
 
@@ -21,7 +23,7 @@ class UserDirectoryResponse(BaseModel):
     full_name: str | None
 
 
-class PasswordChangeRequest(BaseModel):
+class PasswordChangeRequest(RequestModel):
     current_password: str
     new_password: str = Field(min_length=8)
 

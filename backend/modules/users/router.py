@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
+from backend.modules.audit.repository import AuditRepository
 from backend.modules.identity_access.models import User
 from backend.modules.users.schemas import (
     PasswordChangeRequest,
@@ -64,11 +65,22 @@ async def update_me(
 @router.patch("/me/password", status_code=204)
 async def change_password(
     payload: PasswordChangeRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = UsersService(db)
     await service.change_password(current_user, payload.current_password, payload.new_password)
+    audit_repo = AuditRepository(db)
+    await audit_repo.log(
+        action="user.password_changed",
+        user_id=current_user.id,
+        resource_type="user",
+        resource_id=current_user.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()
 
 
 @router.get("/me/sessions", response_model=list[SessionResponse])
@@ -87,8 +99,19 @@ async def list_sessions(
 @router.delete("/me/sessions/{session_id}", status_code=204)
 async def revoke_session(
     session_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = UsersService(db)
     await service.revoke_session(current_user, session_id)
+    audit_repo = AuditRepository(db)
+    await audit_repo.log(
+        action="user.session_revoked",
+        user_id=current_user.id,
+        resource_type="refresh_session",
+        resource_id=session_id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await db.commit()

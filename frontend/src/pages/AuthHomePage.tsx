@@ -84,8 +84,12 @@ function SignInForm({ onSuccess }: { onSuccess: () => void }) {
     async function onSubmit(values: SignInValues) {
         setServerError("");
         try {
-            const data = await signIn(values);
-            setAuthenticated(data.access_token, data.user);
+            const mfaCode = values.mfa_code?.trim();
+            const data = await signIn({
+                ...values,
+                mfa_code: mfaCode || undefined,
+            });
+            setAuthenticated(data.user);
             onSuccess();
             navigate("/dashboard");
         } catch (error) {
@@ -133,6 +137,14 @@ function SignInForm({ onSuccess }: { onSuccess: () => void }) {
                         {...register("password")}
                         error={!!errors.password}
                         helperText={errors.password?.message}
+                        fullWidth
+                    />
+                    <TextField
+                        label="Authenticator code"
+                        autoComplete="one-time-code"
+                        {...register("mfa_code")}
+                        error={!!errors.mfa_code}
+                        helperText={errors.mfa_code?.message || "Required for accounts with MFA enabled."}
                         fullWidth
                     />
                     <Button type="submit" variant="contained" size="large" disabled={isSubmitting}>

@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from backend.core.schemas import RequestModel
+
 
 class ProfileResponse(BaseModel):
     user_id: str
@@ -9,7 +11,7 @@ class ProfileResponse(BaseModel):
     website: str | None
 
 
-class ProfileUpdate(BaseModel):
+class ProfileUpdate(RequestModel):
     bio: str | None = None
     location: str | None = None
     website: str | None = None
