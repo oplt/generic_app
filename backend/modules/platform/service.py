@@ -4,8 +4,8 @@ import ipaddress
 import json
 import re
 import secrets
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
-from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import HTTPException
@@ -30,7 +30,6 @@ from backend.modules.platform.schemas import (
     PlatformMetadataResponse,
 )
 from backend.modules.settings.repository import SettingsRepository
-
 
 MODULE_CATALOG = (
     {
@@ -111,7 +110,9 @@ DEFAULT_PLANS = (
         "price_cents": 4900,
         "interval": "month",
         "is_default": False,
-        "features_json": ["core_access", "priority_support", "platform_webhooks", "platform_api_keys"],
+        "features_json": [
+            "core_access", "priority_support", "platform_webhooks", "platform_api_keys",
+        ],
     },
     {
         "code": "enterprise",
@@ -165,7 +166,8 @@ DEFAULT_EMAIL_TEMPLATES = (
         "html_template": (
             "<p>Thanks for joining {{app_name}}.</p>"
             "<p>Verify your email by opening <a href=\"{{action_url}}\">this link</a>.</p>"
-            "<p>If you did not create an account for {{recipient_email}}, you can ignore this email.</p>"
+            "<p>If you did not create an account for"
+            " {{recipient_email}}, you can ignore this email.</p>"
         ),
         "text_template": (
             "Thanks for joining {{app_name}}.\n"
@@ -300,7 +302,8 @@ class PlatformService:
             enabled_modules=enabled_modules,
             module_catalog=module_catalog,
             available_module_packs=[
-                ModulePackResponse(key=key, **pack_payload) for key, pack_payload in MODULE_PACKS.items()
+                ModulePackResponse(key=key, **pack_payload)
+                for key, pack_payload in MODULE_PACKS.items()
             ],
             module_overrides=explicit_overrides,
         )
@@ -320,7 +323,9 @@ class PlatformService:
             raise HTTPException(status_code=422, detail="Unknown module pack")
 
         if app_name is not None:
-            await self._upsert_setting(SETTING_APP_NAME, app_name, "Clone-specific app display name.")
+            await self._upsert_setting(
+                SETTING_APP_NAME, app_name, "Clone-specific app display name."
+            )
         if core_domain_singular is not None:
             await self._upsert_setting(
                 SETTING_CORE_DOMAIN_SINGULAR,
@@ -393,7 +398,7 @@ class PlatformService:
 
         for field, value in payload.items():
             if field == "features":
-                setattr(plan, "features_json", value)
+                plan.features_json = value
             else:
                 setattr(plan, field, value)
 
@@ -420,7 +425,7 @@ class PlatformService:
                 plan_id=plan.id,
                 status="active",
                 cancel_at_period_end=False,
-                started_at=datetime.now(timezone.utc),
+                started_at=datetime.now(UTC),
                 current_period_end=current_period_end,
             )
         else:
@@ -455,7 +460,7 @@ class PlatformService:
         api_key = await self.repo.get_api_key_for_user(user.id, api_key_id)
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
-        api_key.revoked_at = datetime.now(timezone.utc)
+        api_key.revoked_at = datetime.now(UTC)
         await self.db.commit()
         await self.db.refresh(api_key)
         return api_key
@@ -486,7 +491,9 @@ class PlatformService:
         await self.db.refresh(webhook)
         return webhook
 
-    async def update_webhook_for_user(self, user: User, webhook_id: str, payload: dict) -> WebhookEndpoint:
+    async def update_webhook_for_user(
+        self, user: User, webhook_id: str, payload: dict
+    ) -> WebhookEndpoint:
         await self.ensure_module_enabled("webhooks")
         webhook = await self.repo.get_webhook_for_user(user.id, webhook_id)
         if not webhook:
@@ -522,7 +529,7 @@ class PlatformService:
         metadata = await self.get_platform_metadata()
         payload = {
             "event": "platform.test",
-            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "sent_at": datetime.now(UTC).isoformat(),
             "app_name": metadata.app_name,
             "core_domain_plural": metadata.core_domain_plural,
             "target_user_id": user.id,
@@ -541,7 +548,7 @@ class PlatformService:
                         "X-Generic-App-Signature": signature,
                     },
                 )
-            webhook.last_tested_at = datetime.now(timezone.utc)
+            webhook.last_tested_at = datetime.now(UTC)
             webhook.last_response_status = response.status_code
             await self.db.commit()
             await self.db.refresh(webhook)
@@ -552,7 +559,7 @@ class PlatformService:
                 "error": None,
             }
         except httpx.HTTPError as exc:
-            webhook.last_tested_at = datetime.now(timezone.utc)
+            webhook.last_tested_at = datetime.now(UTC)
             webhook.last_response_status = None
             await self.db.commit()
             await self.db.refresh(webhook)
@@ -566,7 +573,9 @@ class PlatformService:
     async def list_feature_flags(self) -> list[FeatureFlag]:
         return await self.repo.list_feature_flags()
 
-    async def list_effective_feature_flags_for_user(self, user: User) -> list[EffectiveFeatureFlagResponse]:
+    async def list_effective_feature_flags_for_user(
+        self, user: User
+    ) -> list[EffectiveFeatureFlagResponse]:
         await self.ensure_module_enabled("feature_flags")
         flags = await self.repo.list_feature_flags()
         metadata = await self.get_platform_metadata()
@@ -588,7 +597,9 @@ class PlatformService:
 
     async def create_feature_flag(self, payload: dict) -> FeatureFlag:
         if await self.repo.get_feature_flag_by_key(payload["key"]) is not None:
-            raise HTTPException(status_code=409, detail="A feature flag with this key already exists")
+            raise HTTPException(
+                status_code=409, detail="A feature flag with this key already exists"
+            )
 
         flag = await self.repo.create_feature_flag(**payload)
         await self.db.commit()
@@ -610,7 +621,9 @@ class PlatformService:
 
     async def create_email_template(self, payload: dict) -> EmailTemplate:
         if await self.repo.get_email_template_by_key(payload["key"]) is not None:
-            raise HTTPException(status_code=409, detail="An email template with this key already exists")
+            raise HTTPException(
+                status_code=409, detail="An email template with this key already exists"
+            )
         template = await self.repo.create_email_template(**payload)
         await self.db.commit()
         await self.db.refresh(template)
@@ -641,7 +654,11 @@ class PlatformService:
         return (
             self._render_template_string(template.subject_template, context),
             self._render_template_string(template.html_template, context),
-            self._render_template_string(template.text_template, context) if template.text_template else None,
+            (
+                self._render_template_string(template.text_template, context)
+                if template.text_template
+                else None
+            ),
         )
 
     async def ensure_module_enabled(self, module_key: str) -> None:
@@ -666,7 +683,9 @@ class PlatformService:
             setting.description = description
 
     @staticmethod
-    def _resolve_enabled_modules(module_pack: str, explicit_overrides: dict[str, bool]) -> list[str]:
+    def _resolve_enabled_modules(
+        module_pack: str, explicit_overrides: dict[str, bool]
+    ) -> list[str]:
         enabled = set(MODULE_PACKS[module_pack]["modules"])
         for key, value in explicit_overrides.items():
             if value:
@@ -714,7 +733,7 @@ class PlatformService:
 
     @staticmethod
     def _calculate_period_end(interval: str) -> datetime | None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         normalized = interval.lower()
         if normalized == "month":
             return now + timedelta(days=30)
@@ -744,6 +763,6 @@ class PlatformService:
             return True
         if flag.rollout_percentage <= 0:
             return False
-        digest = hashlib.sha256(f"{flag.key}:{user_id}".encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(f"{flag.key}:{user_id}".encode()).hexdigest()
         bucket = int(digest[:8], 16) % 100
         return bucket < flag.rollout_percentage

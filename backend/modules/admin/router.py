@@ -4,10 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps.admin import get_admin_user
 from backend.api.deps.db import get_db
-from backend.modules.audit.repository import AuditRepository
-from backend.modules.identity_access.models import User
-from backend.modules.identity_access.repository import IdentityRepository
-from backend.modules.notifications.models import Notification
 from backend.modules.admin.schemas import (
     AdminUserListResponse,
     AdminUserResponse,
@@ -15,6 +11,10 @@ from backend.modules.admin.schemas import (
     AuditLogResponse,
     MetricsResponse,
 )
+from backend.modules.audit.repository import AuditRepository
+from backend.modules.identity_access.models import User
+from backend.modules.identity_access.repository import IdentityRepository
+from backend.modules.notifications.models import Notification
 
 router = APIRouter()
 
@@ -137,7 +137,9 @@ async def get_metrics(
     _: User = Depends(get_admin_user),
 ):
     total = await db.scalar(select(func.count()).select_from(User))
-    verified = await db.scalar(select(func.count()).select_from(User).where(User.is_verified.is_(True)))
+    verified = await db.scalar(
+        select(func.count()).select_from(User).where(User.is_verified.is_(True))
+    )
     active = await db.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True)))
     notifs = await db.scalar(select(func.count()).select_from(Notification))
 

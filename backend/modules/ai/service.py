@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 
@@ -101,10 +101,15 @@ class AiService:
     async def list_prompt_templates(self, user: User):
         return await self.repo.list_prompt_templates_for_user(user.id)
 
-    async def create_prompt_template(self, user: User, key: str, name: str, description: str | None):
+    async def create_prompt_template(
+        self, user: User, key: str, name: str, description: str | None
+    ):
         existing = await self.repo.get_prompt_template_by_key_for_user(user.id, key)
         if existing:
-            raise HTTPException(status_code=409, detail="A prompt template with this key already exists")
+            raise HTTPException(
+                status_code=409,
+                detail="A prompt template with this key already exists",
+            )
         template = await self.repo.create_prompt_template(
             user_id=user.id,
             key=key,
@@ -115,16 +120,24 @@ class AiService:
         await self.db.refresh(template)
         return template
 
-    async def update_prompt_template(self, user: User, template_id: str, updates: dict[str, Any]):
+    async def update_prompt_template(
+        self, user: User, template_id: str, updates: dict[str, Any]
+    ):
         template = await self.repo.get_prompt_template_for_user(user.id, template_id)
         if not template:
             raise HTTPException(status_code=404, detail="Prompt template not found")
         if "active_version_id" in updates and updates["active_version_id"]:
             version = await self.repo.get_prompt_version(updates["active_version_id"])
             if not version or version.prompt_template_id != template.id:
-                raise HTTPException(status_code=404, detail="Prompt version not found for this template")
+                raise HTTPException(
+                    status_code=404,
+                    detail="Prompt version not found for this template",
+                )
             if not version.is_published:
-                raise HTTPException(status_code=422, detail="Only published versions can be activated")
+                raise HTTPException(
+                    status_code=422,
+                    detail="Only published versions can be activated",
+                )
         for field, value in updates.items():
             setattr(template, field, value)
         await self.db.commit()
@@ -144,7 +157,9 @@ class AiService:
             model_name=payload["model_name"],
             system_prompt=payload["system_prompt"],
             user_prompt_template=payload["user_prompt_template"],
-            variable_definitions_json=[item.model_dump() for item in payload["variable_definitions"]],
+            variable_definitions_json=[
+                item.model_dump() for item in payload["variable_definitions"]
+            ],
             response_format=payload["response_format"],
             temperature=payload["temperature"],
             rollout_percentage=payload["rollout_percentage"],
@@ -160,7 +175,9 @@ class AiService:
         await self.db.refresh(template)
         return version
 
-    async def update_prompt_version(self, user: User, template_id: str, version_id: str, updates: dict[str, Any]):
+    async def update_prompt_version(
+        self, user: User, template_id: str, version_id: str, updates: dict[str, Any]
+    ):
         template = await self.repo.get_prompt_template_for_user(user.id, template_id)
         if not template:
             raise HTTPException(status_code=404, detail="Prompt template not found")
@@ -201,9 +218,14 @@ class AiService:
         if len(content.encode("utf-8")) > settings.AI_DOCUMENT_MAX_BYTES:
             raise HTTPException(
                 status_code=413,
-                detail=f"Document exceeds the maximum size of {settings.AI_DOCUMENT_MAX_BYTES} bytes",
+                detail=(
+                    f"Document exceeds the maximum size of"
+                    f" {settings.AI_DOCUMENT_MAX_BYTES} bytes"
+                ),
             )
-        chunks = _chunk_text(content, settings.AI_DOCUMENT_CHUNK_SIZE, settings.AI_DOCUMENT_CHUNK_OVERLAP)
+        chunks = _chunk_text(
+            content, settings.AI_DOCUMENT_CHUNK_SIZE, settings.AI_DOCUMENT_CHUNK_OVERLAP
+        )
         embeddings = await self.providers.embed_texts(chunks) if chunks else []
         document = await self.repo.create_document(
             user_id=user.id,
@@ -228,7 +250,9 @@ class AiService:
         await self.db.refresh(document)
         return document
 
-    async def create_document_from_upload(self, user: User, file: UploadFile, description: str | None):
+    async def create_document_from_upload(
+        self, user: User, file: UploadFile, description: str | None
+    ):
         content_type = file.content_type or "text/plain"
         if not (
             content_type.startswith("text/")
@@ -244,12 +268,17 @@ class AiService:
         if len(payload) > settings.AI_DOCUMENT_MAX_BYTES:
             raise HTTPException(
                 status_code=413,
-                detail=f"Document exceeds the maximum size of {settings.AI_DOCUMENT_MAX_BYTES} bytes",
+                detail=(
+                    f"Document exceeds the maximum size of"
+                    f" {settings.AI_DOCUMENT_MAX_BYTES} bytes"
+                ),
             )
         try:
             content = payload.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise HTTPException(status_code=400, detail="Uploaded document must be valid UTF-8 text") from exc
+            raise HTTPException(
+                status_code=400, detail="Uploaded document must be valid UTF-8 text"
+            ) from exc
         title = file.filename or "Untitled document"
         return await self.create_document_from_text(
             user,
@@ -271,7 +300,9 @@ class AiService:
         allowed_docs = await self.repo.list_documents_for_user(user.id)
         allowed_doc_map = {document.id: document for document in allowed_docs}
         candidate_ids = document_ids or list(allowed_doc_map)
-        invalid_ids = [document_id for document_id in candidate_ids if document_id not in allowed_doc_map]
+        invalid_ids = [
+            document_id for document_id in candidate_ids if document_id not in allowed_doc_map
+        ]
         if invalid_ids:
             raise HTTPException(status_code=404, detail="One or more documents were not found")
         chunks = await self.repo.list_document_chunks(candidate_ids)
@@ -306,19 +337,28 @@ class AiService:
             version = await self.repo.get_prompt_version(prompt_version_id)
             if not version:
                 raise HTTPException(status_code=404, detail="Prompt version not found")
-            template = await self.repo.get_prompt_template_for_user(user.id, version.prompt_template_id)
+            template = await self.repo.get_prompt_template_for_user(
+                user.id, version.prompt_template_id
+            )
             if not template:
                 raise HTTPException(status_code=404, detail="Prompt template not found")
             return template, version
         if not prompt_template_key:
-            raise HTTPException(status_code=422, detail="prompt_template_key or prompt_version_id is required")
-        template = await self.repo.get_prompt_template_by_key_for_user(user.id, prompt_template_key)
+            raise HTTPException(
+                status_code=422,
+                detail="prompt_template_key or prompt_version_id is required",
+            )
+        template = await self.repo.get_prompt_template_by_key_for_user(
+            user.id, prompt_template_key
+        )
         if not template:
             raise HTTPException(status_code=404, detail="Prompt template not found")
         versions = await self.repo.list_prompt_versions(template.id)
         version = None
         if template.active_version_id:
-            version = next((item for item in versions if item.id == template.active_version_id), None)
+            version = next(
+                (item for item in versions if item.id == template.active_version_id), None
+            )
         if version is None:
             version = next((item for item in versions if item.is_published), None)
         if version is None and versions:
@@ -358,7 +398,8 @@ class AiService:
             variables = {
                 **variables,
                 "retrieval_context": "\n\n".join(
-                    f"[{item['document_title']} #{item['chunk_index']}]\n{item['content']}" for item in matches
+                    f"[{item['document_title']} #{item['chunk_index']}]\n{item['content']}"
+                    for item in matches
                 ),
             }
 
@@ -408,17 +449,17 @@ class AiService:
                 (result.input_tokens * version.input_cost_per_million)
                 + (result.output_tokens * version.output_cost_per_million)
             )
-            run.completed_at = datetime.now(timezone.utc)
+            run.completed_at = datetime.now(UTC)
         except HTTPException as exc:
             run.status = "failed"
             run.error_message = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
-            run.completed_at = datetime.now(timezone.utc)
+            run.completed_at = datetime.now(UTC)
             await self.db.commit()
             raise
         except Exception as exc:
             run.status = "failed"
             run.error_message = str(exc)
-            run.completed_at = datetime.now(timezone.utc)
+            run.completed_at = datetime.now(UTC)
             await self.db.commit()
             raise HTTPException(status_code=502, detail="AI provider execution failed") from exc
 
@@ -477,7 +518,10 @@ class AiService:
         await self.db.refresh(review)
         return review
 
-    async def add_feedback(self, user: User, run_id: str, rating: int, comment: str | None, corrected_output: str | None):
+    async def add_feedback(
+        self, user: User, run_id: str, rating: int,
+        comment: str | None, corrected_output: str | None,
+    ):
         run = await self.repo.get_run_for_user(user.id, run_id)
         if not run:
             raise HTTPException(status_code=404, detail="AI run not found")
@@ -502,7 +546,9 @@ class AiService:
         return await self.repo.list_datasets_for_user(user.id)
 
     async def create_dataset(self, user: User, name: str, description: str | None):
-        dataset = await self.repo.create_dataset(user_id=user.id, name=name, description=description)
+        dataset = await self.repo.create_dataset(
+            user_id=user.id, name=name, description=description
+        )
         await self.db.commit()
         await self.db.refresh(dataset)
         return dataset
@@ -538,7 +584,9 @@ class AiService:
         await self.db.refresh(case)
         return case
 
-    async def run_evaluation(self, user: User, dataset_id: str, prompt_version_id: str) -> AiEvaluationRun:
+    async def run_evaluation(
+        self, user: User, dataset_id: str, prompt_version_id: str
+    ) -> AiEvaluationRun:
         dataset = await self.repo.get_dataset_for_user(user.id, dataset_id)
         if not dataset:
             raise HTTPException(status_code=404, detail="Evaluation dataset not found")
@@ -573,7 +621,9 @@ class AiService:
                 evaluation_dataset_id=dataset.id,
                 evaluation_case_id=case.id,
             )
-            score, passed, notes = self._score_evaluation_case(ai_run.output_text, ai_run.output_json, case)
+            score, passed, notes = self._score_evaluation_case(
+                ai_run.output_text, ai_run.output_json, case
+            )
             scores.append(score)
             if passed:
                 passed_cases += 1
@@ -588,12 +638,14 @@ class AiService:
         evaluation_run.status = "completed"
         evaluation_run.passed_cases = passed_cases
         evaluation_run.average_score = round(sum(scores) / len(scores), 4) if scores else 0.0
-        evaluation_run.completed_at = datetime.now(timezone.utc)
+        evaluation_run.completed_at = datetime.now(UTC)
         await self.db.commit()
         await self.db.refresh(evaluation_run)
         return evaluation_run
 
-    def _score_evaluation_case(self, output_text: str | None, output_json: dict | None, case) -> tuple[float, bool, str]:
+    def _score_evaluation_case(
+        self, output_text: str | None, output_json: dict | None, case
+    ) -> tuple[float, bool, str]:
         if case.expected_output_json is not None:
             passed = output_json == case.expected_output_json
             return (1.0 if passed else 0.0, passed, "JSON exact match")

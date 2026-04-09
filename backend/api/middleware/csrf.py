@@ -4,7 +4,6 @@ from starlette.responses import JSONResponse, Response
 
 from backend.core.config import settings
 
-
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 CSRF_EXEMPT_PATHS = {
     "/api/v1/auth/sign-in",

@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
+from backend.modules.admin.router import router as admin_router
 from backend.modules.ai.router import router as ai_router
 from backend.modules.calendar.router import router as calendar_router
-from backend.modules.admin.router import router as admin_router
 from backend.modules.identity_access.router import router as auth_router
 from backend.modules.notifications.router import router as notifications_router
 from backend.modules.platform.router import router as platform_router

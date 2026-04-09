@@ -1,6 +1,6 @@
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 from fastapi import HTTPException
@@ -53,7 +53,10 @@ class IdentityService:
         configured_invite_code = settings.ADMIN_SIGNUP_INVITE_CODE.strip()
         is_admin = False
         if invite_code:
-            if not configured_invite_code or not secrets.compare_digest(invite_code, configured_invite_code):
+            if (
+                not configured_invite_code
+                or not secrets.compare_digest(invite_code, configured_invite_code)
+            ):
                 raise HTTPException(status_code=403, detail="Invalid admin invite code")
             is_admin = True
 
@@ -69,7 +72,8 @@ class IdentityService:
 
         if settings.REQUIRE_EMAIL_VERIFICATION:
             token = await self._store_verification_token(user.id)
-            verification_link = f"{settings.FRONTEND_URL}/verify-email?{urlencode({'token': token, 'email': user.email})}"
+            _query = urlencode({"token": token, "email": user.email})
+            verification_link = f"{settings.FRONTEND_URL}/verify-email?{_query}"
             platform_service = PlatformService(self.db)
             app_name = await self._get_platform_app_name()
             subject, html_body, text_body = await platform_service.render_email_template(
@@ -114,11 +118,18 @@ class IdentityService:
                 import pyotp
             except ImportError as exc:
                 raise HTTPException(status_code=501, detail="MFA not available") from exc
-            if not mfa_code or not user.mfa_secret or not pyotp.TOTP(user.mfa_secret).verify(mfa_code, valid_window=1):
-                raise HTTPException(status_code=401, detail="Invalid multi-factor authentication code")
+            if (
+                not mfa_code
+                or not user.mfa_secret
+                or not pyotp.TOTP(user.mfa_secret).verify(mfa_code, valid_window=1)
+            ):
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid multi-factor authentication code",
+                )
 
         raw_refresh = generate_refresh_token()
-        expires_at = datetime.now(timezone.utc) + timedelta(
+        expires_at = datetime.now(UTC) + timedelta(
             days=settings.REFRESH_TOKEN_EXPIRE_DAYS
         )
         session = await self.repo.create_refresh_session(
@@ -140,7 +151,7 @@ class IdentityService:
 
         if not session or session.is_revoked:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
-        if session.expires_at < datetime.now(timezone.utc):
+        if session.expires_at < datetime.now(UTC):
             raise HTTPException(status_code=401, detail="Refresh token expired")
 
         user = await self.repo.get_user_by_id(session.user_id)
@@ -152,7 +163,7 @@ class IdentityService:
         await self.repo.revoke_refresh_session(session)
 
         new_raw = generate_refresh_token()
-        new_expires = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        new_expires = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         session = await self.repo.create_refresh_session(
             user.id,
             hash_refresh_token(new_raw),
@@ -205,7 +216,8 @@ class IdentityService:
             return
 
         token = await self._store_verification_token(user.id)
-        verification_link = f"{settings.FRONTEND_URL}/verify-email?{urlencode({'token': token, 'email': user.email})}"
+        _query = urlencode({"token": token, "email": user.email})
+        verification_link = f"{settings.FRONTEND_URL}/verify-email?{_query}"
         platform_service = PlatformService(self.db)
         app_name = await self._get_platform_app_name()
         subject, html_body, text_body = await platform_service.render_email_template(
@@ -259,7 +271,8 @@ class IdentityService:
             fallback_html=(
                 "<p>We received a request to reset your password. Click the link below:</p>"
                 f"<p><a href=\"{reset_link}\">{reset_link}</a></p>"
-                "<p>This link expires in 1 hour. If you did not request this, ignore this email.</p>"
+                "<p>This link expires in 1 hour."
+                " If you did not request this, ignore this email.</p>"
             ),
             fallback_text=(
                 "We received a request to reset your password.\n"
@@ -295,7 +308,9 @@ class IdentityService:
         try:
             import pyotp
         except ImportError:
-            raise HTTPException(status_code=501, detail="MFA not available (pyotp not installed)")
+            raise HTTPException(
+                status_code=501, detail="MFA not available (pyotp not installed)"
+            ) from None
 
         secret = pyotp.random_base32()
         # Store temporarily until the user verifies with the first TOTP code
@@ -303,14 +318,16 @@ class IdentityService:
         await redis_client.setex(key, 600, secret)  # 10 min to complete setup
 
         totp = pyotp.TOTP(secret)
-        uri = totp.provisioning_uri(name=user.email, issuer_name=await self._get_platform_app_name())
+        uri = totp.provisioning_uri(
+            name=user.email, issuer_name=await self._get_platform_app_name()
+        )
         return {"secret": secret, "provisioning_uri": uri}
 
     async def mfa_verify_enable(self, user: User, code: str) -> None:
         try:
             import pyotp
         except ImportError:
-            raise HTTPException(status_code=501, detail="MFA not available")
+            raise HTTPException(status_code=501, detail="MFA not available") from None
 
         key = f"mfa_pending:{user.id}"
         secret = await redis_client.get(key)
@@ -329,7 +346,7 @@ class IdentityService:
         try:
             import pyotp
         except ImportError:
-            raise HTTPException(status_code=501, detail="MFA not available")
+            raise HTTPException(status_code=501, detail="MFA not available") from None
 
         if not user.mfa_enabled or not user.mfa_secret:
             raise HTTPException(status_code=400, detail="MFA is not enabled")

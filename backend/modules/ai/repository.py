@@ -28,7 +28,9 @@ class AiRepository:
         )
         return list(result.scalars().all())
 
-    async def get_prompt_template_for_user(self, user_id: str, template_id: str) -> AiPromptTemplate | None:
+    async def get_prompt_template_for_user(
+        self, user_id: str, template_id: str
+    ) -> AiPromptTemplate | None:
         result = await self.db.execute(
             select(AiPromptTemplate).where(
                 AiPromptTemplate.user_id == user_id,
@@ -37,7 +39,9 @@ class AiRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_prompt_template_by_key_for_user(self, user_id: str, key: str) -> AiPromptTemplate | None:
+    async def get_prompt_template_by_key_for_user(
+        self, user_id: str, key: str
+    ) -> AiPromptTemplate | None:
         result = await self.db.execute(
             select(AiPromptTemplate).where(
                 AiPromptTemplate.user_id == user_id,
@@ -61,7 +65,9 @@ class AiRepository:
         return list(result.scalars().all())
 
     async def get_prompt_version(self, version_id: str) -> AiPromptVersion | None:
-        result = await self.db.execute(select(AiPromptVersion).where(AiPromptVersion.id == version_id))
+        result = await self.db.execute(
+            select(AiPromptVersion).where(AiPromptVersion.id == version_id)
+        )
         return result.scalar_one_or_none()
 
     async def create_prompt_version(self, **kwargs) -> AiPromptVersion:
@@ -194,7 +200,9 @@ class AiRepository:
         )
         return list(result.scalars().all())
 
-    async def get_dataset_for_user(self, user_id: str, dataset_id: str) -> AiEvaluationDataset | None:
+    async def get_dataset_for_user(
+        self, user_id: str, dataset_id: str
+    ) -> AiEvaluationDataset | None:
         result = await self.db.execute(
             select(AiEvaluationDataset).where(
                 AiEvaluationDataset.user_id == user_id,
@@ -218,7 +226,9 @@ class AiRepository:
         return list(result.scalars().all())
 
     async def get_dataset_case(self, case_id: str) -> AiEvaluationCase | None:
-        result = await self.db.execute(select(AiEvaluationCase).where(AiEvaluationCase.id == case_id))
+        result = await self.db.execute(
+            select(AiEvaluationCase).where(AiEvaluationCase.id == case_id)
+        )
         return result.scalar_one_or_none()
 
     async def create_dataset_case(self, **kwargs) -> AiEvaluationCase:

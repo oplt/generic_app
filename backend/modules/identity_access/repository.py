@@ -1,7 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.modules.identity_access.models import User, RefreshSession
+
+from backend.modules.identity_access.models import RefreshSession, User
 
 
 class IdentityRepository:
@@ -64,7 +66,7 @@ class IdentityRepository:
         await self.db.flush()
 
     async def list_active_sessions(self, user_id: str) -> list[RefreshSession]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         result = await self.db.execute(
             select(RefreshSession).where(
                 RefreshSession.user_id == user_id,
@@ -84,6 +86,6 @@ class IdentityRepository:
         session = await self.get_session_by_id(session_id)
         if not session or session.is_revoked:
             return None
-        if session.expires_at <= datetime.now(timezone.utc):
+        if session.expires_at <= datetime.now(UTC):
             return None
         return session

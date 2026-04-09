@@ -10,7 +10,9 @@ from backend.core.config import settings
 logger = logging.getLogger(__name__)
 
 
-async def send_email(*, to: str, subject: str, html_body: str, text_body: str | None = None) -> None:
+async def send_email(
+    *, to: str, subject: str, html_body: str, text_body: str | None = None
+) -> None:
     if not settings.SMTP_HOST:
         logger.info("SMTP not configured — skipping email to=%s subject=%s", to, subject)
         return

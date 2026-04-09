@@ -10,10 +10,10 @@ from backend.modules.platform.schemas import (
     ApiKeyCreateRequest,
     ApiKeyCreateResponse,
     ApiKeyResponse,
+    EffectiveFeatureFlagResponse,
     EmailTemplateCreate,
     EmailTemplateResponse,
     EmailTemplateUpdate,
-    EffectiveFeatureFlagResponse,
     FeatureFlagCreate,
     FeatureFlagResponse,
     FeatureFlagUpdate,
@@ -189,7 +189,8 @@ async def list_api_keys(
     current_user: User = Depends(get_current_user),
 ):
     service = PlatformService(db)
-    return [_api_key_to_response(item) for item in await service.list_api_keys_for_user(current_user)]
+    keys = await service.list_api_keys_for_user(current_user)
+    return [_api_key_to_response(item) for item in keys]
 
 
 @router.post("/api-keys", response_model=ApiKeyCreateResponse, status_code=201)
@@ -221,7 +222,8 @@ async def list_webhooks(
     current_user: User = Depends(get_current_user),
 ):
     service = PlatformService(db)
-    return [_webhook_to_response(item) for item in await service.list_webhooks_for_user(current_user)]
+    webhooks = await service.list_webhooks_for_user(current_user)
+    return [_webhook_to_response(item) for item in webhooks]
 
 
 @router.post("/webhooks", response_model=WebhookEndpointCreateResponse, status_code=201)
@@ -408,7 +410,9 @@ async def update_feature_flag(
     admin: User = Depends(get_admin_user),
 ):
     service = PlatformService(db)
-    flag = await service.update_feature_flag(feature_flag_id, payload.model_dump(exclude_unset=True))
+    flag = await service.update_feature_flag(
+        feature_flag_id, payload.model_dump(exclude_unset=True)
+    )
     await _log_admin_action(
         db,
         request,
@@ -461,7 +465,9 @@ async def update_email_template(
     admin: User = Depends(get_admin_user),
 ):
     service = PlatformService(db)
-    template = await service.update_email_template(template_id, payload.model_dump(exclude_unset=True))
+    template = await service.update_email_template(
+        template_id, payload.model_dump(exclude_unset=True)
+    )
     await _log_admin_action(
         db,
         request,

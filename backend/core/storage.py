@@ -118,7 +118,8 @@ class ObjectStorage:
             return f"{settings.STORAGE_PUBLIC_BASE_URL.rstrip('/')}/{object_key}"
 
         if settings.STORAGE_ENDPOINT_URL:
-            return f"{settings.STORAGE_ENDPOINT_URL.rstrip('/')}/{settings.STORAGE_BUCKET}/{object_key}"
+            base = settings.STORAGE_ENDPOINT_URL.rstrip("/")
+            return f"{base}/{settings.STORAGE_BUCKET}/{object_key}"
 
         if settings.STORAGE_REGION == "us-east-1":
             return f"https://{settings.STORAGE_BUCKET}.s3.amazonaws.com/{object_key}"

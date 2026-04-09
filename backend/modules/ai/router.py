@@ -17,13 +17,13 @@ from backend.modules.ai.schemas import (
     AiFeedbackCreate,
     AiFeedbackResponse,
     AiModuleOverviewResponse,
-    AiProviderDescriptor,
     AiPromptTemplateCreate,
     AiPromptTemplateResponse,
     AiPromptTemplateUpdate,
     AiPromptVersionCreate,
     AiPromptVersionResponse,
     AiPromptVersionUpdate,
+    AiProviderDescriptor,
     AiRetrieveRequest,
     AiReviewCreate,
     AiReviewDecision,
@@ -138,7 +138,9 @@ async def get_overview(
     overview = await service.get_overview(current_user)
     return AiModuleOverviewResponse(
         providers=overview["providers"],
-        prompt_templates=[_prompt_template_to_response(item) for item in overview["prompt_templates"]],
+        prompt_templates=[
+            _prompt_template_to_response(item) for item in overview["prompt_templates"]
+        ],
         recent_runs=[_run_to_response(item) for item in overview["recent_runs"]],
         documents=[_document_to_response(item) for item in overview["documents"]],
         datasets=[_dataset_to_response(item) for item in overview["datasets"]],
@@ -156,7 +158,8 @@ async def list_prompt_templates(
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    return [_prompt_template_to_response(item) for item in await service.list_prompt_templates(current_user)]
+    templates = await service.list_prompt_templates(current_user)
+    return [_prompt_template_to_response(item) for item in templates]
 
 
 @router.post("/prompts", response_model=AiPromptTemplateResponse, status_code=201)
@@ -166,7 +169,9 @@ async def create_prompt_template(
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    template = await service.create_prompt_template(current_user, payload.key, payload.name, payload.description)
+    template = await service.create_prompt_template(
+        current_user, payload.key, payload.name, payload.description
+    )
     return _prompt_template_to_response(template)
 
 
@@ -193,10 +198,15 @@ async def list_prompt_versions(
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    return [_prompt_version_to_response(item) for item in await service.list_prompt_versions(current_user, template_id)]
+    versions = await service.list_prompt_versions(current_user, template_id)
+    return [_prompt_version_to_response(item) for item in versions]
 
 
-@router.post("/prompts/{template_id}/versions", response_model=AiPromptVersionResponse, status_code=201)
+@router.post(
+    "/prompts/{template_id}/versions",
+    response_model=AiPromptVersionResponse,
+    status_code=201,
+)
 async def create_prompt_version(
     template_id: str,
     payload: AiPromptVersionCreate,
@@ -208,7 +218,10 @@ async def create_prompt_version(
     return _prompt_version_to_response(version)
 
 
-@router.patch("/prompts/{template_id}/versions/{version_id}", response_model=AiPromptVersionResponse)
+@router.patch(
+    "/prompts/{template_id}/versions/{version_id}",
+    response_model=AiPromptVersionResponse,
+)
 async def update_prompt_version(
     template_id: str,
     version_id: str,
@@ -350,7 +363,8 @@ async def list_feedback(
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    return [_feedback_to_response(item) for item in await service.list_feedback(current_user, run_id)]
+    feedback_items = await service.list_feedback(current_user, run_id)
+    return [_feedback_to_response(item) for item in feedback_items]
 
 
 @router.post("/runs/{run_id}/feedback", response_model=AiFeedbackResponse, status_code=201)
@@ -399,18 +413,24 @@ async def update_dataset(
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    dataset = await service.update_dataset(current_user, dataset_id, payload.model_dump(exclude_unset=True))
+    dataset = await service.update_dataset(
+        current_user, dataset_id, payload.model_dump(exclude_unset=True)
+    )
     return _dataset_to_response(dataset)
 
 
-@router.get("/evaluation-datasets/{dataset_id}/cases", response_model=list[AiEvaluationCaseResponse])
+@router.get(
+    "/evaluation-datasets/{dataset_id}/cases",
+    response_model=list[AiEvaluationCaseResponse],
+)
 async def list_dataset_cases(
     dataset_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    return [_dataset_case_to_response(item) for item in await service.list_dataset_cases(current_user, dataset_id)]
+    cases = await service.list_dataset_cases(current_user, dataset_id)
+    return [_dataset_case_to_response(item) for item in cases]
 
 
 @router.post(
@@ -451,5 +471,7 @@ async def run_evaluation(
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    evaluation_run = await service.run_evaluation(current_user, dataset_id, payload.prompt_version_id)
+    evaluation_run = await service.run_evaluation(
+        current_user, dataset_id, payload.prompt_version_id
+    )
     return AiEvaluationRunResponse.model_validate(evaluation_run)

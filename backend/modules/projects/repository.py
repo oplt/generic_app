@@ -57,7 +57,9 @@ class ProjectsRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_tasks_with_assignees(self, project_id: str) -> list[tuple[ProjectTask, User | None]]:
+    async def list_tasks_with_assignees(
+        self, project_id: str
+    ) -> list[tuple[ProjectTask, User | None]]:
         assignee = aliased(User)
         status_order = case(
             (ProjectTask.status == "backlog", 0),

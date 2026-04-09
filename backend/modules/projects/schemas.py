@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 
 from backend.core.schemas import RequestModel
 
-
 TaskStatus = Literal["backlog", "todo", "in_progress", "review", "done"]
 TaskPriority = Literal["low", "medium", "high", "urgent"]
 

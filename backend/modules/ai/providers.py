@@ -51,7 +51,7 @@ def _estimate_tokens(text: str) -> int:
 def _hash_embedding(text: str, dimensions: int = 32) -> list[float]:
     values: list[float] = []
     for index in range(dimensions):
-        digest = hashlib.sha256(f"{index}:{text}".encode("utf-8")).digest()
+        digest = hashlib.sha256(f"{index}:{text}".encode()).digest()
         integer = int.from_bytes(digest[:8], "big")
         values.append(((integer % 2000) / 1000.0) - 1.0)
     norm = math.sqrt(sum(value * value for value in values)) or 1.0
@@ -117,7 +117,10 @@ class OpenAIProvider(BaseAiProvider):
                 },
             )
         if response.status_code >= 400:
-            raise HTTPException(status_code=502, detail=f"OpenAI request failed: {response.text[:300]}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"OpenAI request failed: {response.text[:300]}",
+            )
         payload = response.json()
         output_text = payload["choices"][0]["message"]["content"]
         output_json = None
@@ -185,7 +188,9 @@ class AnthropicProvider(BaseAiProvider):
             )
         payload = response.json()
         content_blocks = payload.get("content", [])
-        output_text = "\n".join(block.get("text", "") for block in content_blocks if block.get("type") == "text")
+        output_text = "\n".join(
+            block.get("text", "") for block in content_blocks if block.get("type") == "text"
+        )
         output_json = None
         if request.response_format == "json":
             try:
@@ -231,5 +236,9 @@ class AiProviderRegistry:
 
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
         provider = self.get(settings.AI_EMBEDDING_PROVIDER)
-        model = settings.OPENAI_EMBEDDING_MODEL if provider.key == "openai" else settings.AI_LOCAL_MODEL_NAME
+        model = (
+            settings.OPENAI_EMBEDDING_MODEL
+            if provider.key == "openai"
+            else settings.AI_LOCAL_MODEL_NAME
+        )
         return await provider.embed_texts(texts, model=model)

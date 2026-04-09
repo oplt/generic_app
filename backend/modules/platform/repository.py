@@ -16,15 +16,21 @@ class PlatformRepository:
         self.db = db
 
     async def list_plans(self) -> list[SubscriptionPlan]:
-        result = await self.db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.price_cents.asc()))
+        result = await self.db.execute(
+            select(SubscriptionPlan).order_by(SubscriptionPlan.price_cents.asc())
+        )
         return list(result.scalars().all())
 
     async def get_plan_by_id(self, plan_id: str) -> SubscriptionPlan | None:
-        result = await self.db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
+        result = await self.db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id)
+        )
         return result.scalar_one_or_none()
 
     async def get_plan_by_code(self, code: str) -> SubscriptionPlan | None:
-        result = await self.db.execute(select(SubscriptionPlan).where(SubscriptionPlan.code == code))
+        result = await self.db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.code == code)
+        )
         return result.scalar_one_or_none()
 
     async def create_plan(self, **kwargs) -> SubscriptionPlan:
@@ -34,7 +40,9 @@ class PlatformRepository:
         return plan
 
     async def list_subscriptions(self) -> list[UserSubscription]:
-        result = await self.db.execute(select(UserSubscription).order_by(UserSubscription.created_at.desc()))
+        result = await self.db.execute(
+            select(UserSubscription).order_by(UserSubscription.created_at.desc())
+        )
         return list(result.scalars().all())
 
     async def get_subscription_for_user(self, user_id: str) -> UserSubscription | None:

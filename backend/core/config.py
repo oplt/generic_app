@@ -1,10 +1,9 @@
-from pathlib import Path
 import json
+from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
-
 
 ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 
@@ -123,7 +122,6 @@ class Settings(BaseSettings):
 
     @property
     def content_security_policy(self) -> str:
-        origins = " ".join(dict.fromkeys(["'self'", *self.allowed_origins]))
         connect_src = " ".join(dict.fromkeys(["'self'", *self.allowed_origins]))
         return (
             "default-src 'self'; "
@@ -176,7 +174,9 @@ class Settings(BaseSettings):
             if normalized.startswith("["):
                 parsed = json.loads(normalized)
                 if not isinstance(parsed, list):
-                    raise ValueError("CORS_ALLOWED_ORIGINS must be a list or comma-separated string")
+                    raise ValueError(
+                    "CORS_ALLOWED_ORIGINS must be a list or comma-separated string"
+                )
                 return [str(item).strip() for item in parsed if str(item).strip()]
             return [item.strip() for item in normalized.split(",") if item.strip()]
         return value
@@ -187,7 +187,9 @@ class Settings(BaseSettings):
             raise ValueError("COOKIE_SECURE must be true when COOKIE_SAMESITE is 'none'")
         if self.is_production and not self.COOKIE_SECURE:
             raise ValueError("COOKIE_SECURE must be enabled in production")
-        if self.is_production and any(origin.startswith("http://") for origin in self.allowed_origins):
+        if self.is_production and any(
+            origin.startswith("http://") for origin in self.allowed_origins
+        ):
             raise ValueError("CORS_ALLOWED_ORIGINS/FRONTEND_URL must use https in production")
         return self
 

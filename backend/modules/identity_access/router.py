@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps.auth import get_authenticated_user, get_current_user
+from backend.api.deps.auth import get_authenticated_user
 from backend.api.deps.db import get_db
 from backend.core.config import settings
 from backend.core.rate_limit import (
@@ -108,7 +108,10 @@ async def sign_up(
     db: AsyncSession = Depends(get_db),
 ):
     await check_rate_limit(
-        key=f"rate_limit:signup:{request.client.host if request.client else 'unknown'}:{payload.email}",
+        key=(
+            f"rate_limit:signup:"
+            f"{request.client.host if request.client else 'unknown'}:{payload.email}"
+        ),
         max_attempts=5,
         window_seconds=3600,
     )
@@ -139,7 +142,10 @@ async def sign_in(
         max_attempts=10,
         window_seconds=60,
     )
-    failure_key = f"rate_limit:auth_fail:{request.client.host if request.client else 'unknown'}:{payload.email}"
+    failure_key = (
+        f"rate_limit:auth_fail:"
+        f"{request.client.host if request.client else 'unknown'}:{payload.email}"
+    )
     await enforce_rate_limit(failure_key, settings.AUTH_FAILURE_LIMIT)
     service = IdentityService(db)
     try:
@@ -240,7 +246,10 @@ async def forgot_password(
     db: AsyncSession = Depends(get_db),
 ):
     await check_rate_limit(
-        key=f"rate_limit:forgot:{request.client.host if request.client else 'unknown'}:{payload.email}",
+        key=(
+            f"rate_limit:forgot:"
+            f"{request.client.host if request.client else 'unknown'}:{payload.email}"
+        ),
         max_attempts=5,
         window_seconds=300,
     )

@@ -3,13 +3,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .middleware.correlation_id import CorrelationIdMiddleware
-from .middleware.csrf import CSRFMiddleware
-from .middleware.public_rate_limit import PublicRateLimitMiddleware
-from .middleware.request_logging import RequestLoggingMiddleware
-from .middleware.security_headers import SecurityHeadersMiddleware
-from .router import api_router
-from .v1.health import health_router
 from backend.core.cache import redis_client
 from backend.core.config import settings
 from backend.core.error_handler import register_exception_handlers
@@ -18,6 +11,14 @@ from backend.core.storage import object_storage
 from backend.core.telemetry import setup_telemetry
 from backend.db.session import SessionLocal, engine
 from backend.modules.platform.service import PlatformService
+
+from .middleware.correlation_id import CorrelationIdMiddleware
+from .middleware.csrf import CSRFMiddleware
+from .middleware.public_rate_limit import PublicRateLimitMiddleware
+from .middleware.request_logging import RequestLoggingMiddleware
+from .middleware.security_headers import SecurityHeadersMiddleware
+from .router import api_router
+from .v1.health import health_router
 
 setup_logging()
 

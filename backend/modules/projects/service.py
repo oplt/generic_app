@@ -34,7 +34,9 @@ class ProjectsService:
     async def get_project(self, user_id: str, project_id: str) -> Project:
         return await self._get_project_or_404(user_id, project_id)
 
-    async def list_tasks(self, user_id: str, project_id: str) -> list[tuple[ProjectTask, User | None]]:
+    async def list_tasks(
+        self, user_id: str, project_id: str
+    ) -> list[tuple[ProjectTask, User | None]]:
         project = await self._get_project_or_404(user_id, project_id)
         return await self.repo.list_tasks_with_assignees(project.id)
 
@@ -150,7 +152,10 @@ class ProjectsService:
                 seen_ids.append(task_id)
 
         if len(seen_ids) != len(tasks_by_id) or set(seen_ids) != set(tasks_by_id):
-            raise HTTPException(status_code=400, detail="Reorder payload must include every task exactly once")
+            raise HTTPException(
+                status_code=400,
+                detail="Reorder payload must include every task exactly once",
+            )
 
         await self._normalize_positions(project.id)
 

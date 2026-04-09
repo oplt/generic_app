@@ -60,7 +60,10 @@ class CalendarService:
         if payload.priority not in {None, "medium"}:
             raise HTTPException(status_code=400, detail="Priority can only be set for task items")
         if payload.end_time and not payload.start_time:
-            raise HTTPException(status_code=400, detail="Start time is required when end time is set")
+            raise HTTPException(
+                status_code=400,
+                detail="Start time is required when end time is set",
+            )
         if payload.start_time and payload.end_time and payload.end_time <= payload.start_time:
             raise HTTPException(status_code=400, detail="End time must be after start time")
 
