@@ -18,6 +18,7 @@ const VerifyEmailPage = lazy(() => import("../pages/VerifyEmailPage"));
 const AdminUsersPage = lazy(() => import("../pages/AdminUsersPage"));
 const AdminPlatformPage = lazy(() => import("../pages/AdminPlatformPage"));
 const AdminSettingsPage = lazy(() => import("../pages/AdminSettingsPage"));
+const AiStudioPage = lazy(() => import("../pages/AiStudioPage"));
 
 function PageLoader() {
     return (
@@ -61,6 +62,7 @@ export function AppRouter() {
                     <Route path="/projects" element={<SuspensePage><ProjectsPage /></SuspensePage>} />
                     <Route path="/projects/:projectId" element={<SuspensePage><ProjectDetailPage /></SuspensePage>} />
                     <Route path="/platform" element={<SuspensePage><PlatformPage /></SuspensePage>} />
+                    <Route path="/ai" element={<SuspensePage><AiStudioPage /></SuspensePage>} />
                     <Route path="/profile" element={<SuspensePage><ProfilePage /></SuspensePage>} />
                     <Route path="/notifications" element={<SuspensePage><NotificationsPage /></SuspensePage>} />
                     <Route

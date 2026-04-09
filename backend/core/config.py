@@ -88,6 +88,21 @@ class Settings(BaseSettings):
     STORAGE_PUBLIC_READ: bool = True
     STORAGE_AVATAR_MAX_BYTES: int = 5 * 1024 * 1024
 
+    AI_DEFAULT_PROVIDER: str = "local"
+    AI_EMBEDDING_PROVIDER: str = "local"
+    AI_LOCAL_MODEL_NAME: str = "local-heuristic"
+    AI_DOCUMENT_MAX_BYTES: int = 1024 * 1024
+    AI_DOCUMENT_CHUNK_SIZE: int = 1200
+    AI_DOCUMENT_CHUNK_OVERLAP: int = 150
+    AI_MAX_OUTPUT_TOKENS: int = 1024
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_DEFAULT_MODEL: str = "gpt-4.1-mini"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_BASE_URL: str = "https://api.anthropic.com/v1"
+    ANTHROPIC_DEFAULT_MODEL: str = "claude-3-5-sonnet-latest"
+
     CORS_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     @property

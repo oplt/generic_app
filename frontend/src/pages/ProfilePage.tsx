@@ -79,7 +79,7 @@ function MfaQrCode({ provisioningUri }: { provisioningUri: string }) {
             margin: 1,
             width: 220,
         })
-            .then((dataUrl) => {
+            .then((dataUrl: string) => {
                 if (isActive) {
                     setQrDataUrl(dataUrl);
                 }

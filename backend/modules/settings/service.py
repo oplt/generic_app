@@ -62,6 +62,20 @@ CONFIG_FIELD_METADATA: dict[str, dict[str, Any]] = {
     "STORAGE_AUTO_CREATE_BUCKET": {"description": "Create the storage bucket automatically on startup.", "requires_restart": True},
     "STORAGE_PUBLIC_READ": {"description": "Apply a public-read policy to the storage bucket.", "requires_restart": True},
     "STORAGE_AVATAR_MAX_BYTES": {"description": "Maximum avatar upload size in bytes.", "requires_restart": False},
+    "AI_DEFAULT_PROVIDER": {"description": "Default provider key used for AI generation.", "requires_restart": False},
+    "AI_EMBEDDING_PROVIDER": {"description": "Provider used for document embeddings.", "requires_restart": False},
+    "AI_LOCAL_MODEL_NAME": {"description": "Label used for the built-in local heuristic model.", "requires_restart": False},
+    "AI_DOCUMENT_MAX_BYTES": {"description": "Maximum source document size for AI ingestion.", "requires_restart": False},
+    "AI_DOCUMENT_CHUNK_SIZE": {"description": "Chunk size in characters for document ingestion.", "requires_restart": False},
+    "AI_DOCUMENT_CHUNK_OVERLAP": {"description": "Chunk overlap in characters for document ingestion.", "requires_restart": False},
+    "AI_MAX_OUTPUT_TOKENS": {"description": "Maximum output tokens requested from AI providers.", "requires_restart": False},
+    "OPENAI_API_KEY": {"description": "OpenAI API key used by the AI provider adapter.", "requires_restart": False},
+    "OPENAI_BASE_URL": {"description": "Override for OpenAI-compatible API base URL.", "requires_restart": False},
+    "OPENAI_DEFAULT_MODEL": {"description": "Default OpenAI chat model for prompt versions.", "requires_restart": False},
+    "OPENAI_EMBEDDING_MODEL": {"description": "Default OpenAI embedding model.", "requires_restart": False},
+    "ANTHROPIC_API_KEY": {"description": "Anthropic API key used by the AI provider adapter.", "requires_restart": False},
+    "ANTHROPIC_BASE_URL": {"description": "Override for Anthropic API base URL.", "requires_restart": False},
+    "ANTHROPIC_DEFAULT_MODEL": {"description": "Default Anthropic model for prompt versions.", "requires_restart": False},
 }
 
 TYPE_LABELS = {

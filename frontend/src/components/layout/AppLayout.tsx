@@ -32,6 +32,7 @@ import {
     LightMode as LightModeIcon,
     Logout as LogoutIcon,
     Menu as MenuIcon,
+    SmartToy as AiStudioIcon,
     Notifications as NotificationsIcon,
     Person as ProfileIcon,
     Settings as SettingsIcon,
@@ -193,6 +194,8 @@ export function AppLayout() {
     const coreDomainPlural = platformMetadata?.core_domain_plural ?? "Projects";
     const hasUserPlatformModule =
         platformMetadata?.module_catalog.some((item) => item.user_visible && item.enabled) ?? false;
+    const hasAiModule =
+        platformMetadata?.module_catalog.some((item) => item.key === "ai" && item.enabled) ?? false;
     const drawerCollapsed = !isMobile && desktopNavCollapsed;
     const desktopDrawerWidth = drawerCollapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH;
 
@@ -203,6 +206,9 @@ export function AppLayout() {
             { label: coreDomainPlural, icon: <ProjectsIcon />, path: "/projects", group: "workspace" },
             ...(hasUserPlatformModule
                 ? [{ label: "Platform", icon: <PlatformIcon />, path: "/platform", group: "workspace" as const }]
+                : []),
+            ...(hasAiModule
+                ? [{ label: "AI Studio", icon: <AiStudioIcon />, path: "/ai", group: "workspace" as const }]
                 : []),
             {
                 label: "Notifications",
@@ -216,7 +222,7 @@ export function AppLayout() {
             { label: "Platform Admin", icon: <PlatformIcon />, path: "/admin/platform", adminOnly: true, group: "admin" },
             { label: "Settings", icon: <SettingsIcon />, path: "/admin/settings", adminOnly: true, group: "admin" },
         ],
-        [coreDomainPlural, hasUserPlatformModule, unreadCount]
+        [coreDomainPlural, hasAiModule, hasUserPlatformModule, unreadCount]
     );
 
     const visibleNavItems = navItems.filter((item) => !item.adminOnly || (isAdmin && isMfaEnabled));

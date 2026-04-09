@@ -34,6 +34,12 @@ from backend.modules.settings.repository import SettingsRepository
 
 MODULE_CATALOG = (
     {
+        "key": "ai",
+        "label": "AI",
+        "description": "Prompt ops, document retrieval, reviews, and evaluations.",
+        "user_visible": True,
+    },
+    {
         "key": "billing",
         "label": "Billing",
         "description": "Plan catalog and subscription management.",
@@ -69,17 +75,17 @@ MODULE_PACKS = {
     "lean_saas": {
         "label": "Lean SaaS",
         "description": "Billing plus integration basics for a straightforward SaaS clone.",
-        "modules": ["billing", "api_keys", "feature_flags"],
+        "modules": ["billing", "api_keys", "feature_flags", "ai"],
     },
     "automation_suite": {
         "label": "Automation Suite",
         "description": "API keys, webhooks, flags, and templates for workflow-driven products.",
-        "modules": ["api_keys", "webhooks", "feature_flags", "email_templates"],
+        "modules": ["api_keys", "webhooks", "feature_flags", "email_templates", "ai"],
     },
     "client_portal": {
         "label": "Client Portal",
         "description": "Subscription-led portal with flags and email customization.",
-        "modules": ["billing", "feature_flags", "email_templates"],
+        "modules": ["billing", "feature_flags", "email_templates", "ai"],
     },
     "full_platform": {
         "label": "Full Platform",

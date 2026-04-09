@@ -360,3 +360,4 @@ backend/logs
 frontend/build
 frontend/dist
 frontend/node_modules
+.gitnexus
