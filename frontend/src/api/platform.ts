@@ -23,6 +23,7 @@ export type PlatformMetadata = {
     enabled_modules: string[];
     module_catalog: ModuleCatalogItem[];
     available_module_packs: ModulePack[];
+    mfa_enabled: boolean;
 };
 
 export type PlatformConfig = PlatformMetadata & {
@@ -130,6 +131,7 @@ export async function updatePlatformConfig(payload: {
     core_domain_plural?: string;
     module_pack?: string;
     module_overrides?: Record<string, boolean>;
+    mfa_enabled?: boolean;
 }): Promise<PlatformConfig> {
     return apiFetch("/platform/admin/config", {
         method: "PUT",

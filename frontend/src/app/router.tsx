@@ -41,7 +41,7 @@ function SuspensePage({ children }: { children: React.ReactNode }) {
 }
 
 export function AppRouter() {
-    const { isReady, isAuthenticated, isAdmin, isMfaEnabled } = useAuth();
+    const { isReady, isAuthenticated, isAdmin } = useAuth();
 
     return (
         <BrowserRouter>
@@ -72,9 +72,7 @@ export function AppRouter() {
                                 isReady={isReady}
                                 isAuthenticated={isAuthenticated}
                                 isAdmin={isAdmin}
-                                isMfaEnabled={isMfaEnabled}
                                 requireAdmin
-                                requireMfa
                             >
                                 <SuspensePage><AdminUsersPage /></SuspensePage>
                             </ProtectedRoute>
@@ -87,9 +85,7 @@ export function AppRouter() {
                                 isReady={isReady}
                                 isAuthenticated={isAuthenticated}
                                 isAdmin={isAdmin}
-                                isMfaEnabled={isMfaEnabled}
                                 requireAdmin
-                                requireMfa
                             >
                                 <SuspensePage><AdminPlatformPage /></SuspensePage>
                             </ProtectedRoute>
@@ -102,9 +98,7 @@ export function AppRouter() {
                                 isReady={isReady}
                                 isAuthenticated={isAuthenticated}
                                 isAdmin={isAdmin}
-                                isMfaEnabled={isMfaEnabled}
                                 requireAdmin
-                                requireMfa
                             >
                                 <SuspensePage><AdminSettingsPage /></SuspensePage>
                             </ProtectedRoute>

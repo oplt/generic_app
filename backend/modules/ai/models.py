@@ -17,7 +17,7 @@ class AiPromptTemplate(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     active_version_id: Mapped[str | None] = mapped_column(
-        ForeignKey("ai_prompt_versions.id", ondelete="SET NULL"),
+        ForeignKey("ai_prompt_versions.id", ondelete="SET NULL", use_alter=True, name="fk_template_active_version"),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(

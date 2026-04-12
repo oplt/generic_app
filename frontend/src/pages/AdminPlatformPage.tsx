@@ -75,6 +75,7 @@ function buildConfigDraft(configData: PlatformConfig) {
         core_domain_plural: configData.core_domain_plural,
         module_pack: configData.module_pack,
         module_states: Object.fromEntries(configData.module_catalog.map((item) => [item.key, item.enabled])),
+        mfa_enabled: configData.mfa_enabled,
     };
 }
 
@@ -339,6 +340,7 @@ function AdminPlatformContent({
                                 core_domain_plural: configDraft.core_domain_plural,
                                 module_pack: configDraft.module_pack,
                                 module_overrides: configDraft.module_states,
+                                mfa_enabled: configDraft.mfa_enabled,
                             })
                         }
                     >
@@ -414,6 +416,32 @@ function AdminPlatformContent({
                         ))}
                     </TextField>
                     {activePackSummary && <Alert severity="info">{activePackSummary.description}</Alert>}
+
+                    <Box
+                        sx={(theme) => ({
+                            p: 2,
+                            borderRadius: 4,
+                            border: `1px solid ${theme.palette.divider}`,
+                        })}
+                    >
+                        <Stack direction="row" justifyContent="space-between" spacing={1.5}>
+                            <Box>
+                                <Typography variant="subtitle2">MFA authentication</Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Show the authenticator code field on the login page.
+                                </Typography>
+                            </Box>
+                            <Switch
+                                checked={configDraft.mfa_enabled}
+                                onChange={(event) =>
+                                    setConfigDraft((current) => ({
+                                        ...current,
+                                        mfa_enabled: event.target.checked,
+                                    }))
+                                }
+                            />
+                        </Stack>
+                    </Box>
 
                     <Box>
                         <Typography variant="subtitle2" sx={{ mb: 1.25 }}>

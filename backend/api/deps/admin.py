@@ -12,7 +12,4 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
     if not current_user.is_admin:
         logger.warning("authorization_failed action=admin_access user_id=%s", current_user.id)
         raise HTTPException(status_code=403, detail="Admin access required")
-    if not current_user.mfa_enabled:
-        logger.warning("authorization_failed action=admin_requires_mfa user_id=%s", current_user.id)
-        raise HTTPException(status_code=403, detail="Admin accounts require MFA")
     return current_user

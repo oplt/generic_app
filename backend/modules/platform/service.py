@@ -199,6 +199,7 @@ SETTING_CORE_DOMAIN_SINGULAR = "platform.core_domain_singular"
 SETTING_CORE_DOMAIN_PLURAL = "platform.core_domain_plural"
 SETTING_MODULE_PACK = "platform.module_pack"
 SETTING_MODULE_OVERRIDE_PREFIX = "platform.module_override."
+SETTING_MFA_ENABLED = "platform.mfa_enabled"
 
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([a-zA-Z0-9_]+)\s*}}")
 
@@ -228,6 +229,11 @@ class PlatformService:
                 SETTING_MODULE_PACK,
                 settings.PLATFORM_DEFAULT_MODULE_PACK,
                 "Active module pack for optional platform capabilities.",
+            ),
+            (
+                SETTING_MFA_ENABLED,
+                "false",
+                "Whether MFA authentication is shown and enforced on login.",
             ),
         ):
             if await self.settings_repo.get_by_key(key) is None:
@@ -262,6 +268,7 @@ class PlatformService:
             enabled_modules=config.enabled_modules,
             module_catalog=config.module_catalog,
             available_module_packs=config.available_module_packs,
+            mfa_enabled=config.mfa_enabled,
         )
 
     async def get_platform_config(self) -> PlatformConfigResponse:
@@ -290,6 +297,8 @@ class PlatformService:
             for item in MODULE_CATALOG
         ]
 
+        mfa_enabled = self._parse_bool(setting_map.get(SETTING_MFA_ENABLED, "false"))
+
         return PlatformConfigResponse(
             app_name=setting_map.get(SETTING_APP_NAME, settings.APP_NAME),
             core_domain_singular=setting_map.get(
@@ -306,6 +315,7 @@ class PlatformService:
                 for key, pack_payload in MODULE_PACKS.items()
             ],
             module_overrides=explicit_overrides,
+            mfa_enabled=mfa_enabled,
         )
 
     async def update_platform_config(
@@ -316,6 +326,7 @@ class PlatformService:
         core_domain_plural: str | None,
         module_pack: str | None,
         module_overrides: dict[str, bool] | None,
+        mfa_enabled: bool | None,
     ) -> PlatformConfigResponse:
         current_config = await self.get_platform_config()
         next_pack = module_pack or current_config.module_pack
@@ -343,6 +354,13 @@ class PlatformService:
                 SETTING_MODULE_PACK,
                 module_pack,
                 "Active module pack for optional platform capabilities.",
+            )
+
+        if mfa_enabled is not None:
+            await self._upsert_setting(
+                SETTING_MFA_ENABLED,
+                self._serialize_bool(mfa_enabled),
+                "Whether MFA authentication is shown and enforced on login.",
             )
 
         if module_overrides is not None:

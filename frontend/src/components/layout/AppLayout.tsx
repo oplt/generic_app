@@ -225,7 +225,7 @@ export function AppLayout() {
         [coreDomainPlural, hasAiModule, hasUserPlatformModule, unreadCount]
     );
 
-    const visibleNavItems = navItems.filter((item) => !item.adminOnly || (isAdmin && isMfaEnabled));
+    const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
     const currentItem = visibleNavItems.find((item) =>
         item.path === "/dashboard" ? location.pathname === item.path : location.pathname.startsWith(item.path)
     );

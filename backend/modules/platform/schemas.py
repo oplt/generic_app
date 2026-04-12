@@ -30,6 +30,7 @@ class PlatformMetadataResponse(BaseModel):
     enabled_modules: list[str]
     module_catalog: list[ModuleCatalogItem]
     available_module_packs: list[ModulePackResponse]
+    mfa_enabled: bool = False
 
 
 class PlatformConfigResponse(PlatformMetadataResponse):
@@ -42,6 +43,7 @@ class PlatformConfigUpdateRequest(RequestModel):
     core_domain_plural: str | None = Field(default=None, min_length=1, max_length=64)
     module_pack: str | None = None
     module_overrides: dict[str, bool] | None = None
+    mfa_enabled: bool | None = None
 
 
 class SubscriptionPlanCreate(RequestModel):

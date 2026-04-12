@@ -57,7 +57,7 @@ function PasswordField(props: TextFieldProps) {
     );
 }
 
-function SignInForm({ onSuccess }: { onSuccess: () => void }) {
+function SignInForm({ onSuccess, mfaEnabled }: { onSuccess: () => void; mfaEnabled: boolean }) {
     const navigate = useNavigate();
     const { setAuthenticated } = useAuth();
     const {
@@ -139,14 +139,16 @@ function SignInForm({ onSuccess }: { onSuccess: () => void }) {
                         helperText={errors.password?.message}
                         fullWidth
                     />
-                    <TextField
-                        label="Authenticator code"
-                        autoComplete="one-time-code"
-                        {...register("mfa_code")}
-                        error={!!errors.mfa_code}
-                        helperText={errors.mfa_code?.message || "Required for accounts with MFA enabled."}
-                        fullWidth
-                    />
+                    {mfaEnabled && (
+                        <TextField
+                            label="Authenticator code"
+                            autoComplete="one-time-code"
+                            {...register("mfa_code")}
+                            error={!!errors.mfa_code}
+                            helperText={errors.mfa_code?.message || "Required for accounts with MFA enabled."}
+                            fullWidth
+                        />
+                    )}
                     <Button type="submit" variant="contained" size="large" disabled={isSubmitting}>
                         {isSubmitting ? "Signing in..." : "Sign in"}
                     </Button>
@@ -333,7 +335,7 @@ export default function AuthHomePage() {
                 {successMsg && <Alert severity="success">{successMsg}</Alert>}
 
                 {mode === "signIn" ? (
-                    <SignInForm onSuccess={() => undefined} />
+                    <SignInForm onSuccess={() => undefined} mfaEnabled={platformMetadata?.mfa_enabled ?? false} />
                 ) : (
                     <SignUpForm
                         onSuccess={(email) => {
