@@ -27,7 +27,9 @@ export function StatCard({
         <Paper
             sx={{
                 p: 2.5,
-                borderRadius: 2,
+                borderRadius: 4,
+                border: 1,
+                borderColor: "divider",
                 minHeight: "100%",
                 background: `linear-gradient(180deg, ${alpha(accent, theme.palette.mode === "dark" ? 0.16 : 0.08)} 0%, ${alpha(
                     theme.palette.background.paper,
@@ -48,7 +50,7 @@ export function StatCard({
                             height: 44,
                             display: "grid",
                             placeItems: "center",
-                            borderRadius: 3,
+                            borderRadius: 4,
                             color: accent,
                             backgroundColor: alpha(accent, theme.palette.mode === "dark" ? 0.2 : 0.12),
                         }}

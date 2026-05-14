@@ -73,7 +73,12 @@ function ThemeToggle() {
 
     return (
         <Tooltip title={`Theme: ${colorMode}`}>
-            <IconButton onClick={cycle} size="small" sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper" }}>
+            <IconButton
+                onClick={cycle}
+                size="small"
+                aria-label="Cycle color theme"
+                sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper" }}
+            >
                 {icon}
             </IconButton>
         </Tooltip>
@@ -167,7 +172,7 @@ function NavBlock({
 export function AppLayout() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [desktopNavCollapsed, setDesktopNavCollapsed] = useState(false);
-    const { logout, isAdmin, isMfaEnabled } = useAuth();
+    const { logout, isAdmin } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const theme = useTheme();
@@ -256,10 +261,10 @@ export function AppLayout() {
                         py: drawerCollapsed ? 1.75 : 2.25,
                         mb: 2,
                         border: `1px solid ${currentTheme.palette.divider}`,
-                        background: `linear-gradient(155deg, ${alpha(currentTheme.palette.primary.main, currentTheme.palette.mode === "dark" ? 0.3 : 0.12)} 0%, ${alpha(
-                            currentTheme.palette.secondary.main,
-                            currentTheme.palette.mode === "dark" ? 0.18 : 0.08
-                        )} 100%)`,
+                        background:
+                            currentTheme.palette.mode === "dark"
+                                ? `linear-gradient(155deg, ${alpha("#ffffff", 0.08)} 0%, ${alpha(currentTheme.palette.secondary.main, 0.12)} 100%)`
+                                : `linear-gradient(155deg, ${alpha("#ffffff", 0.86)} 0%, ${alpha(currentTheme.palette.secondary.main, 0.16)} 100%)`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: drawerCollapsed ? "center" : "flex-start",
@@ -400,6 +405,7 @@ export function AppLayout() {
                     borderBottom: 1,
                     borderColor: "divider",
                     backgroundColor: alpha(theme.palette.background.default, theme.palette.mode === "dark" ? 0.82 : 0.78),
+                    backdropFilter: "blur(18px)",
                     color: "text.primary",
                     transition: theme.transitions.create(["left", "width"], {
                         duration: theme.transitions.duration.shorter,
@@ -416,6 +422,7 @@ export function AppLayout() {
                             <IconButton
                                 edge="start"
                                 onClick={() => setDesktopNavCollapsed((current) => !current)}
+                                aria-label={drawerCollapsed ? "Expand menu" : "Collapse menu"}
                                 sx={{ mr: 1.25, border: 1, borderColor: "divider", bgcolor: "background.paper" }}
                             >
                                 {drawerCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}

@@ -2,10 +2,12 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Box, Skeleton, Stack } from "@mui/material";
 import { ProtectedRoute } from "../components/guards/ProtectedRoute";
-import { AppLayout } from "../components/layout/AppLayout";
 import { useAuth } from "../hooks/useAuth";
 import AuthHomePage from "../pages/AuthHomePage";
 
+const AppLayout = lazy(() =>
+    import("../components/layout/AppLayout").then((module) => ({ default: module.AppLayout }))
+);
 const DashboardPage = lazy(() => import("../pages/DashboardPage"));
 const CalendarPage = lazy(() => import("../pages/CalendarPage"));
 const ProjectsPage = lazy(() => import("../pages/ProjectsPage"));
@@ -53,7 +55,9 @@ export function AppRouter() {
                 <Route
                     element={
                         <ProtectedRoute isReady={isReady} isAuthenticated={isAuthenticated}>
-                            <AppLayout />
+                            <Suspense fallback={<PageLoader />}>
+                                <AppLayout />
+                            </Suspense>
                         </ProtectedRoute>
                     }
                 >

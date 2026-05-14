@@ -1,4 +1,6 @@
 import { render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
+import { describe, expect, it } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 

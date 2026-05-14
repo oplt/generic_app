@@ -15,7 +15,7 @@ export function PageHeader({ eyebrow, title, description, actions, meta }: PageH
             sx={(theme) => ({
                 position: "relative",
                 overflow: "hidden",
-                borderRadius: { xs: 4, md: 5 },
+                borderRadius: 4,
                 border: `1px solid ${theme.palette.divider}`,
                 px: { xs: 2.5, md: 4 },
                 py: { xs: 3, md: 4 },
@@ -30,22 +30,22 @@ export function PageHeader({ eyebrow, title, description, actions, meta }: PageH
                 "&::before": {
                     content: '""',
                     position: "absolute",
-                    inset: "auto auto -20% -8%",
-                    width: 240,
-                    height: 240,
-                    borderRadius: "50%",
-                    background: alpha(theme.palette.primary.main, 0.12),
-                    filter: "blur(8px)",
+                    inset: "auto 0 0 0",
+                    height: 3,
+                    background: `linear-gradient(90deg, ${alpha(theme.palette.secondary.main, 0.65)}, ${alpha(
+                        theme.palette.info.main,
+                        0.42
+                    )}, ${alpha(theme.palette.warning.main, 0.48)})`,
                 },
                 "&::after": {
                     content: '""',
                     position: "absolute",
-                    inset: "-10% -6% auto auto",
-                    width: 200,
-                    height: 200,
-                    borderRadius: "50%",
-                    background: alpha(theme.palette.secondary.main, 0.1),
-                    filter: "blur(10px)",
+                    inset: 0,
+                    background:
+                        theme.palette.mode === "dark"
+                            ? "linear-gradient(120deg, rgba(255,255,255,0.05), transparent 44%)"
+                            : "linear-gradient(120deg, rgba(255,255,255,0.72), transparent 46%)",
+                    pointerEvents: "none",
                 },
             })}
         >

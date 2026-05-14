@@ -29,14 +29,23 @@ export function AuthMarketingPanel({
                 <Box>
                     <Typography
                         variant="overline"
-                        sx={{ color: alpha("#F6F6F6", 0.82), display: "block", mb: 1 }}
+                        sx={(theme) => ({
+                            color: alpha(theme.palette.text.primary, theme.palette.mode === "dark" ? 0.82 : 0.68),
+                            display: "block",
+                            mb: 1,
+                        })}
                     >
                         {eyebrow}
                     </Typography>
                     <Typography variant="h3" sx={{ mb: 1.25 }}>
                         {title}
                     </Typography>
-                    <Typography sx={{ color: alpha("#F6F6F6", 0.78), maxWidth: 620 }}>
+                    <Typography
+                        sx={(theme) => ({
+                            color: alpha(theme.palette.text.primary, theme.palette.mode === "dark" ? 0.78 : 0.7),
+                            maxWidth: 620,
+                        })}
+                    >
                         {description}
                     </Typography>
                 </Box>
@@ -52,15 +61,20 @@ export function AuthMarketingPanel({
                         {highlights.map((item) => (
                             <Box
                                 key={item.label}
-                                sx={{
+                                sx={(theme) => ({
                                     p: 2,
                                     borderRadius: 4,
-                                    backgroundColor: alpha("#F6F6F6", 0.12),
-                                    border: `1px solid ${alpha("#F6F6F6", 0.14)}`,
-                                }}
+                                    backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.12 : 0.58),
+                                    border: `1px solid ${alpha(theme.palette.text.primary, theme.palette.mode === "dark" ? 0.14 : 0.08)}`,
+                                })}
                             >
                                 <Typography variant="h5">{item.value}</Typography>
-                                <Typography sx={{ color: alpha("#F6F6F6", 0.74), mt: 0.5 }}>
+                                <Typography
+                                    sx={(theme) => ({
+                                        color: alpha(theme.palette.text.primary, theme.palette.mode === "dark" ? 0.74 : 0.66),
+                                        mt: 0.5,
+                                    })}
+                                >
                                     {item.label}
                                 </Typography>
                             </Box>
@@ -70,20 +84,31 @@ export function AuthMarketingPanel({
             </Stack>
 
             <Stack spacing={1.25}>
-                <Typography variant="subtitle2" sx={{ color: alpha("#F6F6F6", 0.92) }}>
+                <Typography
+                    variant="subtitle2"
+                    sx={(theme) => ({
+                        color: alpha(theme.palette.text.primary, theme.palette.mode === "dark" ? 0.92 : 0.78),
+                    })}
+                >
                     {appName}
                 </Typography>
                 {points.map((point) => (
                     <Box
                         key={point}
-                        sx={{
+                        sx={(theme) => ({
                             p: 1.5,
                             borderRadius: 3,
-                            backgroundColor: alpha("#F6F6F6", 0.08),
-                            border: `1px solid ${alpha("#F6F6F6", 0.12)}`,
-                        }}
+                            backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.08 : 0.45),
+                            border: `1px solid ${alpha(theme.palette.text.primary, theme.palette.mode === "dark" ? 0.12 : 0.08)}`,
+                        })}
                     >
-                        <Typography sx={{ color: alpha("#F6F6F6", 0.78) }}>{point}</Typography>
+                        <Typography
+                            sx={(theme) => ({
+                                color: alpha(theme.palette.text.primary, theme.palette.mode === "dark" ? 0.78 : 0.68),
+                            })}
+                        >
+                            {point}
+                        </Typography>
                     </Box>
                 ))}
             </Stack>

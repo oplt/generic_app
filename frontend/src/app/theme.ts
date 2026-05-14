@@ -3,82 +3,77 @@ import { alpha, createTheme, type PaletteMode } from "@mui/material/styles";
 function buildTheme(mode: PaletteMode) {
     const isDark = mode === "dark";
 
-    // Mistral Orange palette
-    const mistralOrange = "#fa520f";
-    const mistralFlame = "#fb6424";
-    const blockOrange = "#ff8105";
-
-    // Sunshine palette
-    const sunshine700 = "#ffa110";
-    const sunshine500 = "#ffb83e";
-    const sunshine900 = "#ff8a00";
-
-    // Surfaces
-    const warmIvory = "#fffaeb";
-    const cream = "#fff0c2";
-    const mistralBlack = "#1f1f1f";
-    const darkPaper = "#2a2020";
+    const ink = "#0c0a09";
+    const warmInk = "#292524";
+    const canvas = "#f5f5f5";
+    const canvasSoft = "#fafafa";
+    const hairline = "#e7e5e4";
+    const darkCanvas = "#0c0a09";
+    const darkPaper = "#1c1917";
+    const mint = "#5fae9b";
+    const sky = "#527da8";
+    const peach = "#c98262";
 
     const theme = createTheme({
         palette: {
             mode,
             primary: {
-                main: mistralOrange,
-                light: mistralFlame,
-                dark: blockOrange,
-                contrastText: "#ffffff",
+                main: isDark ? "#f5f5f5" : warmInk,
+                light: isDark ? "#ffffff" : "#57534e",
+                dark: isDark ? "#d6d3d1" : ink,
+                contrastText: isDark ? ink : "#ffffff",
             },
             secondary: {
-                main: sunshine700,
-                light: sunshine500,
-                dark: sunshine900,
-                contrastText: "#1f1f1f",
+                main: isDark ? "#a7e5d3" : mint,
+                light: "#c8b8e0",
+                dark: isDark ? "#74c7b4" : "#357e6e",
+                contrastText: ink,
             },
             success: {
-                main: isDark ? "#18E46A" : "#2F8F57",
+                main: isDark ? "#86d8a7" : "#2f8f57",
             },
             warning: {
-                main: sunshine700,
+                main: isDark ? "#f4c5a8" : peach,
             },
             error: {
-                main: isDark ? "#EF4444" : "#C84A37",
+                main: isDark ? "#f87171" : "#dc2626",
             },
             info: {
-                main: isDark ? "#56D8F3" : "#1F7AA7",
+                main: isDark ? "#a8c8e8" : sky,
             },
             background: {
-                default: isDark ? mistralBlack : warmIvory,
-                paper: isDark ? darkPaper : cream,
+                default: isDark ? darkCanvas : canvas,
+                paper: isDark ? darkPaper : canvasSoft,
             },
             text: {
-                primary: isDark ? "#ffffff" : "#1f1f1f",
-                secondary: isDark ? "rgba(255,255,255,0.62)" : "rgba(31,31,31,0.62)",
+                primary: isDark ? "#ffffff" : ink,
+                secondary: isDark ? "#a8a29e" : "#57534e",
             },
-            divider: isDark ? "rgba(255,255,255,0.1)" : "rgba(250,82,15,0.15)",
+            divider: isDark ? "rgba(255,255,255,0.12)" : hairline,
         },
         shape: {
-            borderRadius: 0,
+            borderRadius: 2,
         },
         typography: {
             fontFamily:
-                "'Arial', ui-sans-serif, system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
+                "'Manrope', ui-sans-serif, system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
             h1: {
-                fontSize: "clamp(2rem, 5.13vw, 5.13rem)",
+                fontSize: "clamp(2.8rem, 6vw, 4rem)",
                 fontWeight: 400,
-                letterSpacing: "-2.05px",
-                lineHeight: 1.0,
+                letterSpacing: 0,
+                lineHeight: 1.05,
             },
             h2: {
-                fontSize: "clamp(2rem, 3.5vw, 3.5rem)",
+                fontSize: "clamp(2.25rem, 4vw, 3rem)",
                 fontWeight: 400,
-                letterSpacing: "normal",
-                lineHeight: 0.95,
+                letterSpacing: 0,
+                lineHeight: 1.08,
             },
             h3: {
-                fontSize: "clamp(2rem, 3vw, 3rem)",
+                fontSize: "clamp(2rem, 3vw, 2.65rem)",
                 fontWeight: 400,
-                letterSpacing: "normal",
-                lineHeight: 0.95,
+                letterSpacing: 0,
+                lineHeight: 1.12,
             },
             h4: {
                 fontSize: "2rem",
@@ -117,10 +112,10 @@ function buildTheme(mode: PaletteMode) {
                 fontWeight: 400,
             },
             button: {
-                fontSize: "1rem",
-                fontWeight: 400,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
+                fontSize: "0.92rem",
+                fontWeight: 700,
+                textTransform: "none",
+                letterSpacing: 0,
             },
             overline: {
                 fontSize: "0.72rem",
@@ -153,7 +148,7 @@ function buildTheme(mode: PaletteMode) {
                     body: {
                         minHeight: "100vh",
                         margin: 0,
-                        backgroundColor: isDark ? mistralBlack : warmIvory,
+                        backgroundColor: isDark ? darkCanvas : canvas,
                         color: theme.palette.text.primary,
                         textRendering: "optimizeLegibility",
                         WebkitFontSmoothing: "antialiased",
@@ -172,7 +167,7 @@ function buildTheme(mode: PaletteMode) {
                     root: {
                         backdropFilter: "none",
                         backgroundImage: "none",
-                        borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(250,82,15,0.15)"}`,
+                        borderBottom: `1px solid ${theme.palette.divider}`,
                     },
                 },
             },
@@ -180,10 +175,10 @@ function buildTheme(mode: PaletteMode) {
                 styleOverrides: {
                     root: {
                         backgroundImage: "none",
-                        borderRadius: 0,
+                        borderRadius: 8,
                     },
                     rounded: {
-                        borderRadius: 0,
+                        borderRadius: 8,
                     },
                 },
             },
@@ -193,12 +188,12 @@ function buildTheme(mode: PaletteMode) {
                 },
                 styleOverrides: {
                     root: {
-                        borderRadius: 0,
-                        border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(250,82,15,0.15)"}`,
-                        backgroundColor: isDark ? alpha(darkPaper, 0.95) : cream,
+                        borderRadius: 8,
+                        border: `1px solid ${theme.palette.divider}`,
+                        backgroundColor: theme.palette.background.paper,
                         boxShadow: isDark
-                            ? "0 16px 40px rgba(0,0,0,0.4)"
-                            : "rgba(127,99,21,0.12) -8px 16px 39px, rgba(127,99,21,0.1) -33px 64px 72px, rgba(127,99,21,0.06) -73px 144px 97px",
+                            ? "0 18px 50px rgba(0,0,0,0.32)"
+                            : "0 18px 44px rgba(28,25,23,0.06)",
                     },
                 },
             },
@@ -210,19 +205,20 @@ function buildTheme(mode: PaletteMode) {
                     root: {
                         minHeight: 44,
                         paddingInline: 18,
-                        borderRadius: 0,
-                        fontWeight: 400,
+                        borderRadius: 999,
+                        fontWeight: 700,
                     },
                     contained: {
-                        backgroundColor: mistralBlack,
-                        color: "#ffffff",
+                        backgroundColor: isDark ? "#f5f5f5" : warmInk,
+                        color: isDark ? ink : "#ffffff",
                         "&:hover": {
-                            backgroundColor: isDark ? "#3a3a3a" : "#2e2e2e",
+                            backgroundColor: isDark ? "#d6d3d1" : ink,
+                            color: isDark ? ink : "#ffffff",
                         },
                     },
                     outlined: {
-                        borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(250,82,15,0.15)",
-                        backgroundColor: isDark ? alpha(darkPaper, 0.86) : cream,
+                        borderColor: theme.palette.divider,
+                        backgroundColor: isDark ? alpha(darkPaper, 0.86) : alpha("#ffffff", 0.76),
                     },
                     text: {
                         color: theme.palette.text.primary,
@@ -238,8 +234,8 @@ function buildTheme(mode: PaletteMode) {
             MuiChip: {
                 styleOverrides: {
                     root: {
-                        borderRadius: 0,
-                        fontWeight: 400,
+                        borderRadius: 999,
+                        fontWeight: 700,
                     },
                     outlined: {
                         borderColor: alpha(theme.palette.text.primary, isDark ? 0.12 : 0.1),
@@ -249,7 +245,7 @@ function buildTheme(mode: PaletteMode) {
             MuiOutlinedInput: {
                 styleOverrides: {
                     root: {
-                        borderRadius: 0,
+                        borderRadius: 8,
                         backgroundColor: isDark
                             ? alpha(darkPaper, 0.18)
                             : alpha("#ffffff", 0.9),
@@ -262,7 +258,7 @@ function buildTheme(mode: PaletteMode) {
                         },
                     },
                     notchedOutline: {
-                        borderColor: "hsl(240, 5.9%, 90%)",
+                        borderColor: theme.palette.divider,
                     },
                     input: {
                         paddingBlock: 14,
@@ -279,7 +275,7 @@ function buildTheme(mode: PaletteMode) {
             MuiAlert: {
                 styleOverrides: {
                     root: {
-                        borderRadius: 0,
+                        borderRadius: 8,
                     },
                     standardInfo: {
                         backgroundColor: alpha(theme.palette.primary.main, isDark ? 0.14 : 0.08),
@@ -298,24 +294,24 @@ function buildTheme(mode: PaletteMode) {
                     paper: {
                         borderRadius: 0,
                         borderRight: "none",
-                        backgroundColor: isDark ? darkPaper : cream,
+                        backgroundColor: isDark ? darkPaper : canvasSoft,
                     },
                 },
             },
             MuiListItemButton: {
                 styleOverrides: {
                     root: {
-                        borderRadius: 0,
+                        borderRadius: 8,
                         minHeight: 48,
                         "&.Mui-selected": {
-                            backgroundColor: alpha(theme.palette.primary.main, isDark ? 0.18 : 0.1),
-                            color: theme.palette.primary.main,
+                            backgroundColor: alpha(theme.palette.secondary.main, isDark ? 0.2 : 0.16),
+                            color: theme.palette.text.primary,
                             "& .MuiListItemIcon-root": {
-                                color: theme.palette.primary.main,
+                                color: theme.palette.secondary.dark,
                             },
                         },
                         "&:hover": {
-                            backgroundColor: alpha(theme.palette.primary.main, isDark ? 0.12 : 0.06),
+                            backgroundColor: alpha(theme.palette.secondary.main, isDark ? 0.12 : 0.08),
                         },
                     },
                 },
@@ -323,16 +319,16 @@ function buildTheme(mode: PaletteMode) {
             MuiTableCell: {
                 styleOverrides: {
                     head: {
-                        fontWeight: 400,
+                        fontWeight: 700,
                         color: theme.palette.text.secondary,
-                        backgroundColor: alpha(theme.palette.primary.main, isDark ? 0.1 : 0.04),
+                        backgroundColor: alpha(theme.palette.secondary.main, isDark ? 0.1 : 0.08),
                     },
                 },
             },
             MuiTooltip: {
                 styleOverrides: {
                     tooltip: {
-                        borderRadius: 0,
+                        borderRadius: 6,
                         backgroundColor: alpha(theme.palette.text.primary, 0.9),
                         color: theme.palette.background.paper,
                         fontSize: "0.78rem",

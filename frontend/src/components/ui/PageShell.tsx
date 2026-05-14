@@ -13,7 +13,7 @@ export function PageShell({ children, maxWidth = "xl", sx }: PageShellProps) {
                 {
                     position: "relative",
                     px: { xs: 2, md: 3 },
-                    py: { xs: 3, md: 4 },
+                    py: { xs: 2.5, md: 4 },
                 },
                 ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
             ]}
