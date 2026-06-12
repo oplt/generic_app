@@ -32,6 +32,7 @@ import {
     type DatabaseSetting,
 } from "../api/settings";
 import { EmptyState } from "../components/ui/EmptyState";
+import { AdminSettingsTabs } from "../components/layout/AdminSettingsTabs";
 import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -388,6 +389,7 @@ function AdminSettingsContent({
                     </>
                 }
             />
+            <AdminSettingsTabs />
 
             <Box
                 sx={{

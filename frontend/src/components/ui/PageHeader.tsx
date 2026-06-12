@@ -15,36 +15,34 @@ export function PageHeader({ eyebrow, title, description, actions, meta }: PageH
             sx={(theme) => ({
                 position: "relative",
                 overflow: "hidden",
-                borderRadius: 4,
+                borderRadius: 6,
                 border: `1px solid ${theme.palette.divider}`,
                 px: { xs: 2.5, md: 4 },
                 py: { xs: 3, md: 4 },
-                background: `linear-gradient(180deg, ${alpha(theme.palette.background.paper, 0.96)} 0%, ${alpha(
-                    theme.palette.background.paper,
-                    0.88
-                )} 100%)`,
+                backgroundColor: theme.palette.background.paper,
                 boxShadow:
                     theme.palette.mode === "dark"
-                        ? "0 24px 60px rgba(2, 6, 23, 0.42)"
-                        : "0 22px 46px rgba(15, 23, 42, 0.08)",
+                        ? "0 18px 50px rgba(0, 0, 0, 0.28)"
+                        : "0 4px 16px rgba(28, 25, 23, 0.04)",
                 "&::before": {
                     content: '""',
                     position: "absolute",
-                    inset: "auto 0 0 0",
-                    height: 3,
-                    background: `linear-gradient(90deg, ${alpha(theme.palette.secondary.main, 0.65)}, ${alpha(
+                    width: { xs: 220, md: 340 },
+                    height: { xs: 220, md: 340 },
+                    right: { xs: -90, md: -80 },
+                    top: { xs: -100, md: -130 },
+                    borderRadius: "50%",
+                    background: `radial-gradient(circle, ${alpha(theme.palette.secondary.main, 0.42)} 0%, ${alpha(
                         theme.palette.info.main,
-                        0.42
-                    )}, ${alpha(theme.palette.warning.main, 0.48)})`,
+                        0.18
+                    )} 42%, transparent 70%)`,
+                    filter: "blur(3px)",
                 },
                 "&::after": {
                     content: '""',
                     position: "absolute",
                     inset: 0,
-                    background:
-                        theme.palette.mode === "dark"
-                            ? "linear-gradient(120deg, rgba(255,255,255,0.05), transparent 44%)"
-                            : "linear-gradient(120deg, rgba(255,255,255,0.72), transparent 46%)",
+                    backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.18 : 0.28),
                     pointerEvents: "none",
                 },
             })}

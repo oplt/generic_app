@@ -10,9 +10,11 @@ function buildTheme(mode: PaletteMode) {
     const hairline = "#e7e5e4";
     const darkCanvas = "#0c0a09";
     const darkPaper = "#1c1917";
-    const mint = "#5fae9b";
-    const sky = "#527da8";
-    const peach = "#c98262";
+    const surfaceStrong = "#f0efed";
+    const hairlineStrong = "#d6d3d1";
+    const mint = "#a7e5d3";
+    const sky = "#a8c8e8";
+    const peach = "#f4c5a8";
 
     const theme = createTheme({
         palette: {
@@ -24,9 +26,9 @@ function buildTheme(mode: PaletteMode) {
                 contrastText: isDark ? ink : "#ffffff",
             },
             secondary: {
-                main: isDark ? "#a7e5d3" : mint,
+                main: mint,
                 light: "#c8b8e0",
-                dark: isDark ? "#74c7b4" : "#357e6e",
+                dark: "#6ab8a5",
                 contrastText: ink,
             },
             success: {
@@ -52,46 +54,46 @@ function buildTheme(mode: PaletteMode) {
             divider: isDark ? "rgba(255,255,255,0.12)" : hairline,
         },
         shape: {
-            borderRadius: 2,
+            borderRadius: 4,
         },
         typography: {
             fontFamily:
-                "'Manrope', ui-sans-serif, system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
+                "'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
             h1: {
-                fontSize: "clamp(2.8rem, 6vw, 4rem)",
-                fontWeight: 400,
-                letterSpacing: 0,
-                lineHeight: 1.05,
-            },
-            h2: {
-                fontSize: "clamp(2.25rem, 4vw, 3rem)",
-                fontWeight: 400,
+                fontSize: "3rem",
+                fontWeight: 500,
                 letterSpacing: 0,
                 lineHeight: 1.08,
             },
-            h3: {
-                fontSize: "clamp(2rem, 3vw, 2.65rem)",
-                fontWeight: 400,
+            h2: {
+                fontSize: "2.5rem",
+                fontWeight: 500,
                 letterSpacing: 0,
                 lineHeight: 1.12,
             },
-            h4: {
+            h3: {
                 fontSize: "2rem",
-                fontWeight: 400,
-                letterSpacing: "normal",
-                lineHeight: 1.15,
+                fontWeight: 500,
+                letterSpacing: 0,
+                lineHeight: 1.16,
             },
-            h5: {
-                fontSize: "1.875rem",
-                fontWeight: 400,
+            h4: {
+                fontSize: "1.75rem",
+                fontWeight: 500,
                 letterSpacing: "normal",
                 lineHeight: 1.2,
             },
-            h6: {
-                fontSize: "1.5rem",
-                fontWeight: 400,
+            h5: {
+                fontSize: "1.25rem",
+                fontWeight: 500,
                 letterSpacing: "normal",
-                lineHeight: 1.33,
+                lineHeight: 1.35,
+            },
+            h6: {
+                fontSize: "1.125rem",
+                fontWeight: 500,
+                letterSpacing: "normal",
+                lineHeight: 1.44,
             },
             subtitle1: {
                 fontSize: "1rem",
@@ -105,22 +107,24 @@ function buildTheme(mode: PaletteMode) {
                 fontSize: "1rem",
                 lineHeight: 1.5,
                 fontWeight: 400,
+                letterSpacing: "0.01em",
             },
             body2: {
-                fontSize: "0.9rem",
-                lineHeight: 1.5,
+                fontSize: "0.9375rem",
+                lineHeight: 1.47,
                 fontWeight: 400,
+                letterSpacing: "0.01em",
             },
             button: {
-                fontSize: "0.92rem",
-                fontWeight: 700,
+                fontSize: "0.9375rem",
+                fontWeight: 500,
                 textTransform: "none",
                 letterSpacing: 0,
             },
             overline: {
-                fontSize: "0.72rem",
-                fontWeight: 400,
-                letterSpacing: "0.14em",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                letterSpacing: "0.08em",
                 textTransform: "uppercase",
             },
             caption: {
@@ -175,10 +179,10 @@ function buildTheme(mode: PaletteMode) {
                 styleOverrides: {
                     root: {
                         backgroundImage: "none",
-                        borderRadius: 8,
+                        borderRadius: 16,
                     },
                     rounded: {
-                        borderRadius: 8,
+                        borderRadius: 16,
                     },
                 },
             },
@@ -188,12 +192,12 @@ function buildTheme(mode: PaletteMode) {
                 },
                 styleOverrides: {
                     root: {
-                        borderRadius: 8,
+                        borderRadius: 16,
                         border: `1px solid ${theme.palette.divider}`,
                         backgroundColor: theme.palette.background.paper,
                         boxShadow: isDark
-                            ? "0 18px 50px rgba(0,0,0,0.32)"
-                            : "0 18px 44px rgba(28,25,23,0.06)",
+                            ? "0 18px 50px rgba(0,0,0,0.28)"
+                            : "0 4px 16px rgba(28,25,23,0.04)",
                     },
                 },
             },
@@ -203,10 +207,10 @@ function buildTheme(mode: PaletteMode) {
                 },
                 styleOverrides: {
                     root: {
-                        minHeight: 44,
-                        paddingInline: 18,
+                        minHeight: 40,
+                        paddingInline: 20,
                         borderRadius: 999,
-                        fontWeight: 700,
+                        fontWeight: 500,
                     },
                     contained: {
                         backgroundColor: isDark ? "#f5f5f5" : warmInk,
@@ -217,13 +221,12 @@ function buildTheme(mode: PaletteMode) {
                         },
                     },
                     outlined: {
-                        borderColor: theme.palette.divider,
-                        backgroundColor: isDark ? alpha(darkPaper, 0.86) : alpha("#ffffff", 0.76),
+                        borderColor: isDark ? alpha("#ffffff", 0.22) : hairlineStrong,
+                        backgroundColor: "transparent",
                     },
                     text: {
                         color: theme.palette.text.primary,
-                        paddingTop: "8px",
-                        paddingBottom: 0,
+                        minHeight: 40,
                     },
                     sizeSmall: {
                         minHeight: 36,
@@ -235,7 +238,7 @@ function buildTheme(mode: PaletteMode) {
                 styleOverrides: {
                     root: {
                         borderRadius: 999,
-                        fontWeight: 700,
+                        fontWeight: 600,
                     },
                     outlined: {
                         borderColor: alpha(theme.palette.text.primary, isDark ? 0.12 : 0.1),
@@ -247,7 +250,7 @@ function buildTheme(mode: PaletteMode) {
                     root: {
                         borderRadius: 8,
                         backgroundColor: isDark
-                            ? alpha(darkPaper, 0.18)
+                            ? alpha(darkPaper, 0.72)
                             : alpha("#ffffff", 0.9),
                         transition: theme.transitions.create(["border-color", "box-shadow", "background-color"]),
                         "&:hover .MuiOutlinedInput-notchedOutline": {
@@ -268,7 +271,7 @@ function buildTheme(mode: PaletteMode) {
             MuiInputLabel: {
                 styleOverrides: {
                     root: {
-                        fontWeight: 400,
+                        fontWeight: 500,
                     },
                 },
             },
@@ -293,7 +296,7 @@ function buildTheme(mode: PaletteMode) {
                 styleOverrides: {
                     paper: {
                         borderRadius: 0,
-                        borderRight: "none",
+                        borderRight: `1px solid ${theme.palette.divider}`,
                         backgroundColor: isDark ? darkPaper : canvasSoft,
                     },
                 },
@@ -304,14 +307,14 @@ function buildTheme(mode: PaletteMode) {
                         borderRadius: 8,
                         minHeight: 48,
                         "&.Mui-selected": {
-                            backgroundColor: alpha(theme.palette.secondary.main, isDark ? 0.2 : 0.16),
+                            backgroundColor: isDark ? alpha("#ffffff", 0.08) : surfaceStrong,
                             color: theme.palette.text.primary,
                             "& .MuiListItemIcon-root": {
-                                color: theme.palette.secondary.dark,
+                                color: theme.palette.text.primary,
                             },
                         },
                         "&:hover": {
-                            backgroundColor: alpha(theme.palette.secondary.main, isDark ? 0.12 : 0.08),
+                            backgroundColor: isDark ? alpha("#ffffff", 0.06) : alpha(warmInk, 0.05),
                         },
                     },
                 },
@@ -321,7 +324,7 @@ function buildTheme(mode: PaletteMode) {
                     head: {
                         fontWeight: 700,
                         color: theme.palette.text.secondary,
-                        backgroundColor: alpha(theme.palette.secondary.main, isDark ? 0.1 : 0.08),
+                        backgroundColor: isDark ? alpha("#ffffff", 0.04) : surfaceStrong,
                     },
                 },
             },

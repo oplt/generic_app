@@ -21,7 +21,6 @@ import {
     useMediaQuery,
 } from "@mui/material";
 import {
-    AdminPanelSettings as AdminIcon,
     CalendarMonth as CalendarIcon,
     ChevronLeft as ChevronLeftIcon,
     ChevronRight as ChevronRightIcon,
@@ -207,7 +206,6 @@ export function AppLayout() {
     const navItems = useMemo<NavItem[]>(
         () => [
             { label: "Dashboard", icon: <DashboardIcon />, path: "/dashboard", group: "workspace" },
-            { label: "Calendar", icon: <CalendarIcon />, path: "/calendar", group: "workspace" },
             { label: coreDomainPlural, icon: <ProjectsIcon />, path: "/projects", group: "workspace" },
             ...(hasUserPlatformModule
                 ? [{ label: "Platform", icon: <PlatformIcon />, path: "/platform", group: "workspace" as const }]
@@ -215,25 +213,19 @@ export function AppLayout() {
             ...(hasAiModule
                 ? [{ label: "AI Studio", icon: <AiStudioIcon />, path: "/ai", group: "workspace" as const }]
                 : []),
-            {
-                label: "Notifications",
-                icon: <NotificationsIcon />,
-                path: "/notifications",
-                group: "workspace",
-                badge: unreadCount || undefined,
-            },
-            { label: "Profile", icon: <ProfileIcon />, path: "/profile", group: "workspace" },
-            { label: "Users", icon: <AdminIcon />, path: "/admin/users", adminOnly: true, group: "admin" },
-            { label: "Platform Admin", icon: <PlatformIcon />, path: "/admin/platform", adminOnly: true, group: "admin" },
             { label: "Settings", icon: <SettingsIcon />, path: "/admin/settings", adminOnly: true, group: "admin" },
         ],
-        [coreDomainPlural, hasAiModule, hasUserPlatformModule, unreadCount]
+        [coreDomainPlural, hasAiModule, hasUserPlatformModule]
     );
 
     const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
     const currentItem = visibleNavItems.find((item) =>
         item.path === "/dashboard" ? location.pathname === item.path : location.pathname.startsWith(item.path)
     );
+    const adminRouteLabel =
+        location.pathname.startsWith("/admin/users") ? "Users" :
+        location.pathname.startsWith("/admin/platform") ? "Platform Admin" :
+        undefined;
     const avatarLabel = getInitials(currentUser?.full_name, currentUser?.email);
 
     function handleNavigate(path: string) {
@@ -261,10 +253,11 @@ export function AppLayout() {
                         py: drawerCollapsed ? 1.75 : 2.25,
                         mb: 2,
                         border: `1px solid ${currentTheme.palette.divider}`,
-                        background:
-                            currentTheme.palette.mode === "dark"
-                                ? `linear-gradient(155deg, ${alpha("#ffffff", 0.08)} 0%, ${alpha(currentTheme.palette.secondary.main, 0.12)} 100%)`
-                                : `linear-gradient(155deg, ${alpha("#ffffff", 0.86)} 0%, ${alpha(currentTheme.palette.secondary.main, 0.16)} 100%)`,
+                        backgroundColor: currentTheme.palette.background.paper,
+                        backgroundImage: `radial-gradient(circle at 85% 15%, ${alpha(
+                            currentTheme.palette.secondary.main,
+                            currentTheme.palette.mode === "dark" ? 0.18 : 0.28
+                        )}, transparent 42%)`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: drawerCollapsed ? "center" : "flex-start",
@@ -405,7 +398,6 @@ export function AppLayout() {
                     borderBottom: 1,
                     borderColor: "divider",
                     backgroundColor: alpha(theme.palette.background.default, theme.palette.mode === "dark" ? 0.82 : 0.78),
-                    backdropFilter: "blur(18px)",
                     color: "text.primary",
                     transition: theme.transitions.create(["left", "width"], {
                         duration: theme.transitions.duration.shorter,
@@ -434,9 +426,33 @@ export function AppLayout() {
                             {appName}
                         </Typography>
                         <Typography variant="h6" noWrap>
-                            {currentItem?.label ?? "Workspace"}
+                            {currentItem?.label ?? adminRouteLabel ?? "Workspace"}
                         </Typography>
                     </Box>
+                    <Stack direction="row" spacing={1} sx={{ mr: 1 }}>
+                        <Tooltip title="Calendar">
+                            <IconButton
+                                size="small"
+                                aria-label="Open calendar"
+                                onClick={() => handleNavigate("/calendar")}
+                                sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper" }}
+                            >
+                                <CalendarIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Notifications">
+                            <IconButton
+                                size="small"
+                                aria-label="Open notifications"
+                                onClick={() => handleNavigate("/notifications")}
+                                sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper" }}
+                            >
+                                <Badge badgeContent={unreadCount || undefined} color="error">
+                                    <NotificationsIcon fontSize="small" />
+                                </Badge>
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
                     <ThemeToggle />
                 </Toolbar>
             </AppBar>

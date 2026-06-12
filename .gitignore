@@ -352,11 +352,6 @@ commands.txt
 backend/.env
 
 
-TODO.txt
-
-
-backend/video/recordings
-backend/logs
 frontend/build
 frontend/dist
 frontend/node_modules

@@ -37,6 +37,7 @@ import {
     type SubscriptionPlan,
 } from "../api/platform";
 import { useSnackbar } from "../app/snackbarContext";
+import { AdminSettingsTabs } from "../components/layout/AdminSettingsTabs";
 import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -285,6 +286,7 @@ function AdminPlatformContent({
                     </>
                 }
             />
+            <AdminSettingsTabs />
 
             <Box
                 sx={{

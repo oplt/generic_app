@@ -25,6 +25,7 @@ export function SectionCard({
                     borderRadius: 4,
                     border: 1,
                     borderColor: "divider",
+                    boxShadow: "none",
                 },
                 ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
             ]}

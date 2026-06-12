@@ -15,9 +15,7 @@ export function AuthShell({ sideContent, children }: AuthShellProps) {
                 alignItems: "center",
                 px: { xs: 2, md: 3 },
                 py: { xs: 3, md: 4 },
-                background: theme.palette.mode === "dark"
-                    ? "linear-gradient(180deg, #0c0a09 0%, #1c1917 100%)"
-                    : "linear-gradient(180deg, #f5f5f5 0%, #fafafa 100%)",
+                backgroundColor: theme.palette.background.default,
             })}
         >
             <Container maxWidth="xl" sx={{ px: "0 !important" }}>
@@ -36,21 +34,15 @@ export function AuthShell({ sideContent, children }: AuthShellProps) {
                             overflow: "hidden",
                             position: "relative",
                             color: theme.palette.mode === "dark" ? "#ffffff" : "#0c0a09",
-                            background:
+                            backgroundColor: theme.palette.background.paper,
+                            backgroundImage:
                                 theme.palette.mode === "dark"
-                                    ? "linear-gradient(145deg, #292524 0%, #1c1917 62%, #0c0a09 100%)"
-                                    : "linear-gradient(145deg, #ffffff 0%, #f0efed 56%, #dcebe6 100%)",
+                                    ? "radial-gradient(circle at 18% 18%, rgba(167, 229, 211, 0.22), transparent 34%), radial-gradient(circle at 86% 72%, rgba(200, 184, 224, 0.18), transparent 38%)"
+                                    : "radial-gradient(circle at 18% 18%, rgba(167, 229, 211, 0.5), transparent 34%), radial-gradient(circle at 86% 72%, rgba(244, 197, 168, 0.36), transparent 38%)",
                             boxShadow:
                                 theme.palette.mode === "dark"
-                                    ? "0 24px 70px rgba(0, 0, 0, 0.48)"
-                                    : "0 28px 70px rgba(41, 37, 36, 0.08)",
-                            "&::before": {
-                                content: '""',
-                                position: "absolute",
-                                inset: "auto 0 0 0",
-                                height: 4,
-                                background: "linear-gradient(90deg, #a7e5d3, #f4c5a8, #c8b8e0, #a8c8e8)",
-                            },
+                                    ? "0 18px 50px rgba(0, 0, 0, 0.3)"
+                                    : "0 4px 16px rgba(28, 25, 23, 0.04)",
                             "&::after": {
                                 content: '""',
                                 position: "absolute",

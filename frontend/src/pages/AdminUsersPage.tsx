@@ -24,6 +24,7 @@ import {
 import { Search as SearchIcon, PeopleAlt as PeopleAltIcon } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
 import { listAdminUsers, updateUserStatus } from "../api/admin";
+import { AdminSettingsTabs } from "../components/layout/AdminSettingsTabs";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
@@ -88,6 +89,7 @@ export default function AdminUsersPage() {
                 }
                 meta={<Chip label={`${data?.total ?? 0} total users`} variant="outlined" />}
             />
+            <AdminSettingsTabs />
 
             <Box
                 sx={{
