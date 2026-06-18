@@ -13,6 +13,9 @@ celery_app.conf.update(
     task_default_queue=settings.CELERY_TASK_DEFAULT_QUEUE,
     task_routes={
         "backend.workers.tasks.send_email_task": {"queue": settings.CELERY_EMAIL_QUEUE},
+        "backend.workers.tasks.index_rag_document_task": {
+            "queue": settings.CELERY_TASK_DEFAULT_QUEUE
+        },
     },
     task_serializer="json",
     accept_content=["json"],

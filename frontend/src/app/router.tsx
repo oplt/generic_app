@@ -15,6 +15,7 @@ const ProjectDetailPage = lazy(() => import("../pages/ProjectDetailPage"));
 const PlatformPage = lazy(() => import("../pages/PlatformPage"));
 const ProfilePage = lazy(() => import("../pages/ProfilePage"));
 const NotificationsPage = lazy(() => import("../pages/NotificationsPage"));
+const ObservabilityPage = lazy(() => import("../pages/ObservabilityPage"));
 const ResetPasswordPage = lazy(() => import("../pages/ResetPasswordPage"));
 const VerifyEmailPage = lazy(() => import("../pages/VerifyEmailPage"));
 const AdminUsersPage = lazy(() => import("../pages/AdminUsersPage"));
@@ -67,6 +68,7 @@ export function AppRouter() {
                     <Route path="/projects/:projectId" element={<SuspensePage><ProjectDetailPage /></SuspensePage>} />
                     <Route path="/platform" element={<SuspensePage><PlatformPage /></SuspensePage>} />
                     <Route path="/ai" element={<SuspensePage><AiStudioPage /></SuspensePage>} />
+                    <Route path="/observability" element={<SuspensePage><ObservabilityPage /></SuspensePage>} />
                     <Route path="/profile" element={<SuspensePage><ProfilePage /></SuspensePage>} />
                     <Route path="/notifications" element={<SuspensePage><NotificationsPage /></SuspensePage>} />
                     <Route

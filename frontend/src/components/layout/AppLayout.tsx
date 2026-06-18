@@ -31,6 +31,7 @@ import {
     LightMode as LightModeIcon,
     Logout as LogoutIcon,
     Menu as MenuIcon,
+    MonitorHeart as ObservabilityIcon,
     SmartToy as AiStudioIcon,
     Notifications as NotificationsIcon,
     Person as ProfileIcon,
@@ -213,6 +214,7 @@ export function AppLayout() {
             ...(hasAiModule
                 ? [{ label: "AI Studio", icon: <AiStudioIcon />, path: "/ai", group: "workspace" as const }]
                 : []),
+            { label: "Observability", icon: <ObservabilityIcon />, path: "/observability", group: "workspace" },
             { label: "Settings", icon: <SettingsIcon />, path: "/admin/settings", adminOnly: true, group: "admin" },
         ],
         [coreDomainPlural, hasAiModule, hasUserPlatformModule]

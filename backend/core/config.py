@@ -73,6 +73,22 @@ class Settings(BaseSettings):
     SENTRY_TRACES_SAMPLE_RATE: float = 0.2
     OTLP_ENDPOINT: str = ""   # e.g. http://localhost:4317
     OTLP_INSECURE: bool = True
+    OTEL_SERVICE_NAME: str = "fastapi-backend"
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
+    OTEL_EXPORTER_OTLP_PROTOCOL: str = "http/protobuf"
+    OTEL_TRACES_EXPORTER: str = "none"
+    GRAFANA_PUBLIC_URL: str = "http://localhost:3001"
+    PROMETHEUS_PUBLIC_URL: str = "http://localhost:9090"
+    TEMPO_PUBLIC_URL: str = "http://localhost:3200"
+    GRAFANA_APP_OVERVIEW_DASHBOARD_PATH: str = "/d/fastapi-overview/fastapi-overview"
+    GRAFANA_API_DASHBOARD_PATH: str = "/d/fastapi-overview/fastapi-overview"
+    GRAFANA_FRONTEND_DASHBOARD_PATH: str = ""
+    GRAFANA_DATABASE_DASHBOARD_PATH: str = ""
+    GRAFANA_CACHE_DASHBOARD_PATH: str = ""
+    GRAFANA_WORKERS_DASHBOARD_PATH: str = ""
+    GRAFANA_SCHEDULED_TASKS_DASHBOARD_PATH: str = ""
+    GRAFANA_ERRORS_DASHBOARD_PATH: str = "/d/fastapi-overview/fastapi-overview"
+    GRAFANA_TEMPO_EXPLORE_PATH: str = "/explore"
 
     # Object storage (S3-compatible, e.g. AWS S3 or MinIO)
     STORAGE_BUCKET: str = ""
@@ -101,6 +117,32 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_BASE_URL: str = "https://api.anthropic.com/v1"
     ANTHROPIC_DEFAULT_MODEL: str = "claude-3-5-sonnet-latest"
+
+    # Mem0 / agent memory
+    MEM0_MODE: str = "hosted"
+    MEM0_API_KEY: str = ""
+    MEM0_ORG_ID: str = ""
+    MEM0_PROJECT_ID: str = ""
+    MEM0_BASE_URL: str = ""
+    MEMORY_ENABLED: bool = True
+    MEMORY_WRITE_ENABLED: bool = True
+    MEMORY_AUDIT_ENABLED: bool = True
+    MEMORY_DEFAULT_LIMIT: int = 10
+    MEMORY_MIN_CONFIDENCE: float = 0.65
+    MEMORY_SESSION_TTL_DAYS: int = 30
+
+    # RAG
+    RAG_ENABLED: bool = True
+    RAG_VECTOR_BACKEND: str = "pgvector"
+    RAG_EMBEDDING_PROVIDER: str = "local"
+    RAG_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    RAG_CHUNK_SIZE: int = 1000
+    RAG_CHUNK_OVERLAP: int = 150
+    RAG_TOP_K: int = 5
+    RAG_SCORE_THRESHOLD: float = 0.3
+    RAG_MAX_CONTEXT_TOKENS: int = 6000
+    RAG_ALLOWED_FILE_TYPES: str = "pdf,txt,md,docx,csv"
+    RAG_MAX_FILE_BYTES: int = 10 * 1024 * 1024
 
     CORS_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
 

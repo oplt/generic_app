@@ -8,9 +8,9 @@ from backend.core.config import settings
 from backend.core.error_handler import register_exception_handlers
 from backend.core.logging import setup_logging
 from backend.core.storage import object_storage
-from backend.core.telemetry import setup_telemetry
 from backend.db.session import SessionLocal, engine
 from backend.modules.platform.service import PlatformService
+from backend.observability import setup_observability
 
 from .middleware.correlation_id import CorrelationIdMiddleware
 from .middleware.csrf import CSRFMiddleware
@@ -25,7 +25,7 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_telemetry(app)
+    setup_observability(app)
     await object_storage.ensure_bucket()
     async with SessionLocal() as db:
         platform_service = PlatformService(db)

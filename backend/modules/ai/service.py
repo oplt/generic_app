@@ -380,6 +380,7 @@ class AiService:
         review_required: bool,
         evaluation_dataset_id: str | None = None,
         evaluation_case_id: str | None = None,
+        additional_system_context: str | None = None,
     ):
         template, version = await self._resolve_prompt_version(
             user,
@@ -404,6 +405,10 @@ class AiService:
             }
 
         rendered_system_prompt = _render_template(version.system_prompt, variables)
+        if additional_system_context:
+            rendered_system_prompt = (
+                f"{rendered_system_prompt.rstrip()}\n\n{additional_system_context}"
+            )
         rendered_user_prompt = _render_template(version.user_prompt_template, variables)
         run = await self.repo.create_run(
             user_id=user.id,

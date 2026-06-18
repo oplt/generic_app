@@ -357,4 +357,5 @@ frontend/dist
 frontend/node_modules
 .gitnexus
 
-
+.observability-data/
+.observability-logs/

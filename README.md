@@ -63,6 +63,15 @@ cd frontend
 npm run dev
 ```
 
+Or start the full local development stack, including Prometheus, Grafana, and Tempo:
+
+```bash
+make local-dev
+```
+
+Observability setup and verification steps are documented in
+[observability/README.md](observability/README.md).
+
 ## Notes
 
 - Local object storage uses MinIO on `http://localhost:9000` and its console on `http://localhost:9001`.
@@ -84,3 +93,10 @@ npm run dev
   - `SENTRY_TRACES_SAMPLE_RATE`
   - `OTLP_ENDPOINT`
   - `OTLP_INSECURE`
+  - `OTEL_SERVICE_NAME`
+  - `OTEL_EXPORTER_OTLP_ENDPOINT`
+  - `OTEL_EXPORTER_OTLP_PROTOCOL`
+  - `OTEL_TRACES_EXPORTER`
+  - `GRAFANA_PUBLIC_URL`
+  - `PROMETHEUS_PUBLIC_URL`
+  - `TEMPO_PUBLIC_URL`
