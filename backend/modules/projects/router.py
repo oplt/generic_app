@@ -3,6 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
+from backend.core.pagination import (
+    PaginatedResponse,
+    PaginationParams,
+    paginated_response,
+    pagination_params,
+)
 from backend.modules.identity_access.models import User
 from backend.modules.projects.models import Project, ProjectTask
 from backend.modules.projects.schemas import (
@@ -52,14 +58,17 @@ def _task_to_response(task: ProjectTask, assignee: User | None) -> ProjectTaskRe
     )
 
 
-@router.get("", response_model=list[ProjectResponse])
+@router.get("", response_model=PaginatedResponse[ProjectResponse])
 async def list_projects(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = ProjectsService(db)
-    projects = await service.list_projects(current_user.id)
-    return [_project_to_response(project) for project in projects]
+    projects, total = await service.list_projects(
+        current_user.id, limit=pagination.limit, offset=pagination.offset
+    )
+    return paginated_response(projects, total=total, limit=pagination.limit, offset=pagination.offset)
 
 
 @router.post("", response_model=ProjectResponse, status_code=201)
@@ -84,15 +93,26 @@ async def get_project(
     return _project_to_response(project)
 
 
-@router.get("/{project_id}/tasks", response_model=list[ProjectTaskResponse])
+@router.get("/{project_id}/tasks", response_model=PaginatedResponse[ProjectTaskResponse])
 async def list_project_tasks(
     project_id: str,
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = ProjectsService(db)
-    tasks = await service.list_tasks(current_user.id, project_id)
-    return [_task_to_response(task, assignee) for task, assignee in tasks]
+    tasks, total = await service.list_tasks(
+        current_user.id,
+        project_id,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return paginated_response(
+        [_task_to_response(task, assignee) for task, assignee in tasks],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("/{project_id}/tasks", response_model=ProjectTaskResponse, status_code=201)

@@ -39,8 +39,7 @@ async def get_profile(
     current_user: User = Depends(get_current_user),
 ):
     service = ProfileService(db)
-    profile = await service.get_profile(current_user.id)
-    return _to_response(profile)
+    return await service.get_profile_response(current_user.id)
 
 
 @router.put("", response_model=ProfileResponse)

@@ -15,6 +15,8 @@ export const forgotPasswordSchema = z.object({
     email: z.string().email("Enter a valid email"),
 });
 
+export const resendVerificationSchema = forgotPasswordSchema;
+
 export const signUpSchema = z.object({
     full_name: z.string().optional(),
     email: z.string().email("Enter a valid email"),

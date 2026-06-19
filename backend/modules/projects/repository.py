@@ -4,6 +4,7 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from backend.core.pagination import DEFAULT_PAGE_LIMIT
 from backend.modules.identity_access.models import User
 from backend.modules.projects.models import Project, ProjectTask
 
@@ -18,20 +19,36 @@ class ProjectsRepository:
         await self.db.flush()
         return project
 
-    async def list_accessible_by_user(self, user_id: str) -> list[Project]:
+    async def list_accessible_by_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[Project], int]:
+        access_filter = or_(
+            Project.owner_id == user_id,
+            ProjectTask.assignee_id == user_id,
+        )
+        id_stmt = (
+            select(Project.id)
+            .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
+            .where(access_filter)
+            .distinct()
+        )
+        total = int(
+            await self.db.scalar(select(func.count()).select_from(id_stmt.subquery())) or 0
+        )
         result = await self.db.execute(
             select(Project)
             .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
-            .where(
-                or_(
-                    Project.owner_id == user_id,
-                    ProjectTask.assignee_id == user_id,
-                )
-            )
+            .where(access_filter)
             .distinct()
             .order_by(Project.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
-        return list(result.scalars().all())
+        return list(result.scalars().all()), total
 
     async def get_by_id_for_user(self, project_id: str, user_id: str) -> Project | None:
         result = await self.db.execute(
@@ -48,6 +65,27 @@ class ProjectsRepository:
         )
         return result.scalar_one_or_none()
 
+    async def filter_accessible_project_ids(
+        self,
+        user_id: str,
+        project_ids: set[str],
+    ) -> set[str]:
+        if not project_ids:
+            return set()
+        result = await self.db.execute(
+            select(Project.id)
+            .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
+            .where(
+                Project.id.in_(project_ids),
+                or_(
+                    Project.owner_id == user_id,
+                    ProjectTask.assignee_id == user_id,
+                ),
+            )
+            .distinct()
+        )
+        return set(result.scalars().all())
+
     async def get_task_by_id(self, project_id: str, task_id: str) -> ProjectTask | None:
         result = await self.db.execute(
             select(ProjectTask).where(
@@ -58,8 +96,12 @@ class ProjectsRepository:
         return result.scalar_one_or_none()
 
     async def list_tasks_with_assignees(
-        self, project_id: str
-    ) -> list[tuple[ProjectTask, User | None]]:
+        self,
+        project_id: str,
+        *,
+        limit: int | None = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[tuple[ProjectTask, User | None]], int]:
         assignee = aliased(User)
         status_order = case(
             (ProjectTask.status == "backlog", 0),
@@ -69,13 +111,24 @@ class ProjectsRepository:
             (ProjectTask.status == "done", 4),
             else_=99,
         )
-        result = await self.db.execute(
+        total = int(
+            await self.db.scalar(
+                select(func.count())
+                .select_from(ProjectTask)
+                .where(ProjectTask.project_id == project_id)
+            )
+            or 0
+        )
+        stmt = (
             select(ProjectTask, assignee)
             .outerjoin(assignee, ProjectTask.assignee_id == assignee.id)
             .where(ProjectTask.project_id == project_id)
             .order_by(status_order, ProjectTask.position.asc(), ProjectTask.created_at.asc())
         )
-        return list(result.all())
+        if limit is not None:
+            stmt = stmt.offset(offset).limit(limit)
+        result = await self.db.execute(stmt)
+        return list(result.all()), total
 
     async def get_task_with_assignee(
         self,

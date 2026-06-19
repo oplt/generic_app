@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -16,6 +17,14 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed_password: str) -> bool:
     return pwd_context.verify(password, hashed_password)
+
+
+async def hash_password_async(password: str) -> str:
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def verify_password_async(password: str, hashed_password: str) -> bool:
+    return await asyncio.to_thread(verify_password, password, hashed_password)
 
 
 def create_access_token(subject: str, session_id: str) -> str:

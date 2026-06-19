@@ -1,13 +1,19 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ObservabilityPage from "./ObservabilityPage";
 import { getObservabilityLinks, getObservabilityStatus } from "../features/observability/api";
 import { useAuth } from "../hooks/useAuth";
+import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
 
 vi.mock("../hooks/useAuth", () => ({
     useAuth: vi.fn(() => ({ isAdmin: true })),
+}));
+
+vi.mock("../hooks/usePlatformMetadata", () => ({
+    usePlatformMetadata: vi.fn(() => ({ data: { module_catalog: [] } })),
 }));
 
 vi.mock("../features/observability/api", () => ({
@@ -56,7 +62,9 @@ function renderPage() {
 
     return render(
         <QueryClientProvider client={queryClient}>
-            <ObservabilityPage />
+            <MemoryRouter initialEntries={["/observability"]}>
+                <ObservabilityPage />
+            </MemoryRouter>
         </QueryClientProvider>
     );
 }
@@ -78,7 +86,6 @@ describe("ObservabilityPage", () => {
 
         renderPage();
 
-        expect(screen.getByText("Observability")).toBeInTheDocument();
         expect(screen.getByText("System health")).toBeInTheDocument();
     });
 

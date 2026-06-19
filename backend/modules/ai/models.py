@@ -60,6 +60,12 @@ class AiPromptVersion(Base):
 
 
 class AiDocument(Base):
+    """Legacy ORM mapping for ``ai_documents`` (unused when ``RAG_ENABLED=true``).
+
+    Document ingestion and retrieval use ``rag_documents`` / ``rag_chunks`` instead.
+    Kept for Alembic metadata until a drop-table migration removes the legacy tables.
+    """
+
     __tablename__ = "ai_documents"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
@@ -84,6 +90,8 @@ class AiDocument(Base):
 
 
 class AiDocumentChunk(Base):
+    """Legacy ORM mapping for ``ai_document_chunks`` (superseded by ``rag_chunks``)."""
+
     __tablename__ = "ai_document_chunks"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))

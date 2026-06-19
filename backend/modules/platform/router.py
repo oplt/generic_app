@@ -4,6 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.deps.admin import get_admin_user
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
+from backend.core.pagination import (
+    PaginatedResponse,
+    PaginationParams,
+    paginated_response,
+    pagination_params,
+)
 from backend.modules.audit.repository import AuditRepository
 from backend.modules.identity_access.models import User
 from backend.modules.platform.schemas import (
@@ -183,14 +189,24 @@ async def select_subscription_plan(
     return _subscription_to_response(subscription, plan)
 
 
-@router.get("/api-keys", response_model=list[ApiKeyResponse])
+@router.get("/api-keys", response_model=PaginatedResponse[ApiKeyResponse])
 async def list_api_keys(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = PlatformService(db)
-    keys = await service.list_api_keys_for_user(current_user)
-    return [_api_key_to_response(item) for item in keys]
+    keys, total = await service.list_api_keys_for_user(
+        current_user,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return paginated_response(
+        [_api_key_to_response(item) for item in keys],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("/api-keys", response_model=ApiKeyCreateResponse, status_code=201)
@@ -216,14 +232,24 @@ async def revoke_api_key(
     return _api_key_to_response(api_key)
 
 
-@router.get("/webhooks", response_model=list[WebhookEndpointResponse])
+@router.get("/webhooks", response_model=PaginatedResponse[WebhookEndpointResponse])
 async def list_webhooks(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = PlatformService(db)
-    webhooks = await service.list_webhooks_for_user(current_user)
-    return [_webhook_to_response(item) for item in webhooks]
+    webhooks, total = await service.list_webhooks_for_user(
+        current_user,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return paginated_response(
+        [_webhook_to_response(item) for item in webhooks],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("/webhooks", response_model=WebhookEndpointCreateResponse, status_code=201)

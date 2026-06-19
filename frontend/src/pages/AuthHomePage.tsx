@@ -14,7 +14,6 @@ import {
     Typography,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
-import { alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import { forgotPassword, signIn, signUp } from "../api/auth";
 import { AuthMarketingPanel } from "../components/auth/AuthMarketingPanel";
@@ -288,7 +287,7 @@ export default function AuthHomePage() {
         >
             <Stack spacing={3}>
                 <Box>
-                    <Typography variant="overline" color="primary.main">
+                    <Typography variant="overline" color="text.secondary" sx={{ display: "block" }}>
                         {appName}
                     </Typography>
                     <Typography variant="h4" sx={{ mt: 0.5 }}>
@@ -304,12 +303,11 @@ export default function AuthHomePage() {
                 <Box
                     sx={(theme) => ({
                         p: 0.5,
-                        borderRadius: 999,
+                        borderRadius: 1,
                         display: "grid",
                         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                        gap: 0.75,
-                        backgroundColor:
-                            alpha(theme.palette.text.primary, theme.palette.mode === "dark" ? 0.12 : 0.05),
+                        gap: 0.5,
+                        backgroundColor: theme.palette.mode === "dark" ? "action.hover" : "var(--tesla-light-ash)",
                     })}
                 >
                     <Button

@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
 from backend.modules.admin.router import router as admin_router
+from backend.modules.ai.agent_router import router as agent_router
 from backend.modules.ai.router import router as ai_router
-from backend.modules.ai_agent.api.router import router as ai_agent_router
 from backend.modules.calendar.router import router as calendar_router
 from backend.modules.identity_access.router import router as auth_router
 from backend.modules.memory.api.routes import router as memory_router
@@ -19,7 +19,7 @@ api_router = APIRouter(prefix="/api/v1")
 
 api_router.include_router(auth_router, prefix="/auth", tags=["auth"])
 api_router.include_router(ai_router, prefix="/ai", tags=["ai"])
-api_router.include_router(ai_agent_router, prefix="/agent", tags=["agent"])
+api_router.include_router(agent_router, prefix="/agent", tags=["agent"])
 api_router.include_router(memory_router, prefix="/memory", tags=["memory"])
 api_router.include_router(rag_router, prefix="/rag", tags=["rag"])
 api_router.include_router(calendar_router, prefix="/calendar", tags=["calendar"])

@@ -39,7 +39,7 @@ async def _log_admin_settings_action(
 
 @router.get("/config", response_model=ConfigSettingsResponse)
 async def get_config_settings(_: User = Depends(get_admin_user)):
-    return SettingsService.list_config_entries()
+    return await SettingsService.list_config_entries()
 
 
 @router.put("/config", response_model=ConfigSettingsResponse)
@@ -49,7 +49,7 @@ async def update_config_settings(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_admin_user),
 ):
-    response = SettingsService.update_config_entries(payload.items)
+    response = await SettingsService.update_config_entries(payload.items)
     await _log_admin_settings_action(
         db=db,
         request=request,

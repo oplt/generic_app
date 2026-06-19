@@ -1,7 +1,6 @@
 import { Box, Paper, Skeleton, Stack, Typography } from "@mui/material";
-import { alpha, useTheme } from "@mui/material/styles";
-
-type AccentColor = "primary" | "secondary" | "success" | "warning" | "error" | "info";
+import { alpha } from "@mui/material/styles";
+import { colors, fonts, radii } from "../../app/designTokens";
 
 type StatCardProps = {
     label: string;
@@ -9,7 +8,7 @@ type StatCardProps = {
     description?: React.ReactNode;
     icon: React.ReactNode;
     loading?: boolean;
-    color?: AccentColor;
+    color?: "primary" | "secondary" | "success" | "warning" | "error" | "info";
 };
 
 export function StatCard({
@@ -20,50 +19,55 @@ export function StatCard({
     loading = false,
     color = "primary",
 }: StatCardProps) {
-    const theme = useTheme();
-    const accent = theme.palette[color].main;
-
     return (
         <Paper
-            sx={{
+            sx={(theme) => ({
                 p: 2.5,
-                borderRadius: 4,
-                border: 1,
-                borderColor: "divider",
+                borderRadius: `${radii.card}px`,
+                border: "none",
                 minHeight: "100%",
-                backgroundColor: "background.paper",
+                backgroundColor:
+                    theme.palette.mode === "dark" ? theme.palette.background.paper : colors.lightAsh,
                 boxShadow: "none",
-            }}
+            })}
         >
             <Stack spacing={2}>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
-                    <Box>
-                        <Typography variant="body2" color="text.secondary">
-                            {label}
-                        </Typography>
-                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                        {label}
+                    </Typography>
                     <Box
-                        sx={{
-                            width: 44,
-                            height: 44,
+                        sx={(theme) => ({
+                            width: 40,
+                            height: 40,
                             display: "grid",
                             placeItems: "center",
-                            borderRadius: 4,
-                            color: accent,
-                            backgroundColor: alpha(accent, theme.palette.mode === "dark" ? 0.16 : 0.1),
-                        }}
+                            borderRadius: `${radii.button}px`,
+                            color: `${color}.main`,
+                            backgroundColor: alpha(
+                                theme.palette[color].main,
+                                theme.palette.mode === "dark" ? 0.18 : 0.1
+                            ),
+                        })}
                     >
                         {icon}
                     </Box>
                 </Stack>
                 {loading ? (
                     <Stack spacing={0.75}>
-                        <Skeleton variant="text" width={120} height={42} />
+                        <Skeleton variant="text" width={120} height={36} />
                         <Skeleton variant="text" width="70%" />
                     </Stack>
                 ) : (
                     <Stack spacing={0.75}>
-                        <Typography variant="h4">{value}</Typography>
+                        <Typography
+                            variant="h4"
+                            sx={{
+                                fontFamily: fonts.display,
+                            }}
+                        >
+                            {value}
+                        </Typography>
                         {description && (
                             <Typography variant="body2" color="text.secondary">
                                 {description}

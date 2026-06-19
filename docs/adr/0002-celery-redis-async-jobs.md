@@ -24,7 +24,12 @@ Configuration is driven through:
 - `CELERY_TASK_DEFAULT_QUEUE`
 - `CELERY_EMAIL_QUEUE`
 
-If Celery eager mode is enabled, queued email work runs inline for lightweight local execution and test scenarios.
+If Celery eager mode is enabled, queued work runs inside the API process for lightweight local execution and test scenarios:
+
+- Email tasks use `asyncio.create_task` when the API event loop is already running, otherwise a one-shot `asyncio.run` in the caller thread.
+- Document indexing tasks spawn a daemon background thread that runs `asyncio.run` so upload/index HTTP handlers return immediately without blocking the request loop.
+
+Set `CELERY_TASK_ALWAYS_EAGER=false` and run dedicated Celery workers in production.
 
 ## Consequences
 

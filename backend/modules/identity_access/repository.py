@@ -60,20 +60,27 @@ class IdentityRepository:
         await self.db.flush()
 
     async def revoke_all_refresh_sessions_for_user(self, user_id: str) -> None:
-        sessions = await self.list_active_sessions(user_id)
+        sessions = await self.list_active_sessions(user_id, limit=None)
         for session in sessions:
             session.is_revoked = True
         await self.db.flush()
 
-    async def list_active_sessions(self, user_id: str) -> list[RefreshSession]:
+    async def list_active_sessions(
+        self, user_id: str, *, limit: int | None = 50
+    ) -> list[RefreshSession]:
         now = datetime.now(UTC)
-        result = await self.db.execute(
-            select(RefreshSession).where(
+        stmt = (
+            select(RefreshSession)
+            .where(
                 RefreshSession.user_id == user_id,
                 RefreshSession.is_revoked.is_(False),
                 RefreshSession.expires_at > now,
             )
+            .order_by(RefreshSession.created_at.desc())
         )
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
     async def get_session_by_id(self, session_id: str) -> RefreshSession | None:

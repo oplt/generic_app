@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from backend.modules.memory.domain.models import MemoryItem
 
 
@@ -42,10 +40,6 @@ class MemoryConsolidator:
                 result.append(challenger)
             result.append(winner)
         return result
-
-    def touch_last_seen(self, item: MemoryItem) -> MemoryItem:
-        item.metadata.last_seen_at = datetime.now(UTC)
-        return item
 
     def _similarity_key(self, content: str) -> str:
         normalized = " ".join(content.lower().split())

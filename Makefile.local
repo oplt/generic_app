@@ -1,6 +1,7 @@
 .PHONY: \
 	local-dev \
 	local-dev-no-observability \
+	db-migrate \
 	kill-dev \
 	kill-app-processes \
 	kill-celery \
@@ -21,8 +22,8 @@
 # Local development configuration
 # -----------------------------------------------------------------------------
 
-PYTHON ?= $(if $(VIRTUAL_ENV),$(VIRTUAL_ENV)/bin/python,$(if $(wildcard $(CURDIR)/.venv/bin/python),$(CURDIR)/.venv/bin/python,python3))
-HONCHO ?= $(if $(VIRTUAL_ENV),$(VIRTUAL_ENV)/bin/honcho,$(if $(wildcard $(CURDIR)/.venv/bin/honcho),$(CURDIR)/.venv/bin/honcho,honcho))
+PYTHON ?= $(if $(VIRTUAL_ENV),$(VIRTUAL_ENV)/bin/python,$(if $(wildcard $(CURDIR)/.venv/bin/python),$(CURDIR)/.venv/bin/python,$(if $(wildcard $(CURDIR)/backend/.venv/bin/python),$(CURDIR)/backend/.venv/bin/python,python3)))
+HONCHO ?= $(if $(VIRTUAL_ENV),$(VIRTUAL_ENV)/bin/honcho,$(if $(wildcard $(CURDIR)/.venv/bin/honcho),$(CURDIR)/.venv/bin/honcho,$(if $(wildcard $(CURDIR)/backend/.venv/bin/honcho),$(CURDIR)/backend/.venv/bin/honcho,honcho)))
 
 OBS_DATA_DIR ?= .observability-data
 OBS_LOG_DIR ?= .observability-logs
@@ -276,7 +277,11 @@ observability-status:
 
 kill-dev: kill-celery kill-app-processes kill-ports
 
-local-dev: check-local-tools kill-dev start-observability-stack
+db-migrate:
+	@echo "[db] applying pending migrations..."
+	@cd backend && $(PYTHON) -m alembic upgrade head
+
+local-dev: check-local-tools kill-dev db-migrate start-observability-stack
 	$(HONCHO) -f Procfile.dev start $(DEV_PROCS)
 
 local-dev-no-observability:

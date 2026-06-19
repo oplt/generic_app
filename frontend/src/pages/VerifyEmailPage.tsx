@@ -4,6 +4,7 @@ import { Link as RouterLink, useSearchParams } from "react-router-dom";
 import { resendVerification, verifyEmail } from "../api/auth";
 import { AuthMarketingPanel } from "../components/auth/AuthMarketingPanel";
 import { AuthShell } from "../components/auth/AuthShell";
+import { resendVerificationSchema } from "../features/auth/schemas";
 import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
 
 export default function VerifyEmailPage() {
@@ -29,15 +30,16 @@ export default function VerifyEmailPage() {
     }, [token]);
 
     async function handleResend() {
-        if (!email) {
-            setResendError("Enter your email address to resend the verification message.");
+        const parsed = resendVerificationSchema.safeParse({ email: email.trim() });
+        if (!parsed.success) {
+            setResendError(parsed.error.issues[0]?.message ?? "Enter a valid email address.");
             return;
         }
 
         setResending(true);
         setResendError("");
         try {
-            await resendVerification({ email });
+            await resendVerification({ email: parsed.data.email });
             setResendDone(true);
         } catch (error) {
             setResendError(error instanceof Error ? error.message : "Failed to resend verification email.");
@@ -110,10 +112,16 @@ export default function VerifyEmailPage() {
                             label="Email"
                             type="email"
                             value={email}
-                            onChange={(event) => setEmail(event.target.value)}
+                            onChange={(event) => {
+                                setEmail(event.target.value);
+                                setResendError("");
+                            }}
+                            error={Boolean(resendError) && !resendDone}
+                            helperText={
+                                resendError && !resendDone ? resendError : "Use the same address you registered with."
+                            }
                             fullWidth
                         />
-                        {resendError && <Alert severity="error">{resendError}</Alert>}
                         {resendDone && <Alert severity="success">A new verification email has been sent.</Alert>}
                         {!resendDone && (
                             <Button variant="contained" disabled={resending} onClick={handleResend}>

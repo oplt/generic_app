@@ -1,0 +1,309 @@
+# Repository Improvement Report
+
+Generated from deep repository analysis (backend modules, frontend, AI/RAG/memory stack, caching, tests, ADR 0003). Priority items 1–5, 10, frontend UX (#4), performance, caching, ADR 0003 boundary ports, UI/UX pass, RAG algorithm fixes, and dead-code cleanup have been implemented; remaining items tracked below.
+
+## Executive Summary
+
+`generic_app` is a well-structured modular monolith (FastAPI + React) with meaningful recent investment in RAG (pgvector), memory (Mem0), caching (`backend/lib/*_cache.py`), pagination, and observability. Recent fixes include prompt-version resolution, background evaluation runs, non-blocking auth/settings I/O, durable RAG indexing via object storage, batched pgvector writes, bounded/paginated session/calendar/memory queries, and performance tuning (HTTP client reuse, provider retries, evaluation bulk insert, concurrent memory writes).
+
+Remaining high-impact work:
+
+1. **Unify RAG context assembly** across agent, `/ai/runs`, and `/rag/ask`.
+2. **Extend degradation flags** to agent runs and `/ai/runs` (RAG `/retrieve` and `/ask` now expose structured outcomes).
+3. **Consolidate orchestration** (`agent_service`, `prompt_context_builder`, `rag_answer_service`) behind one composed layer.
+
+Overall state: **solid foundation, medium technical debt**. AI/RAG quality can improve incrementally (reranking, unified prompt assembly) without a rewrite.
+
+---
+
+## Priority Improvements
+
+### 1. Unify retrieval-augmented context assembly
+- **Category:** Architecture / AI
+- **Severity:** High
+- **Effort:** Large
+- **Risk:** Medium
+- **Files or modules affected:** `backend/modules/ai/application/prompt_context_builder.py`, `backend/modules/rag/application/rag_answer_service.py`, `backend/modules/rag/application/rag_context_builder.py`, `backend/modules/ai/service.py` (`run_prompt`, `retrieve_chunks`), `backend/modules/ai/models.py` (`AiDocument`, `AiDocumentChunk`)
+- **Current problem:** Three divergent paths (agent, `/ai/runs`, `/rag/ask`) format context differently. Legacy `/ai/documents*` still delegates through `LegacyAiDocumentService` when RAG is enabled.
+- **Recommended solution:** Single `PromptContextService`; route all RAG-enabled retrieval through `RagContextBuilder`; converge agent and run endpoints on the same assembly contract.
+- **Expected benefit:** Fewer bugs, easier testing, clearer module ownership.
+
+### 2. Extend structured degradation to agent and legacy run paths
+- **Category:** AI / Reliability
+- **Severity:** Medium
+- **Effort:** Medium
+- **Risk:** Low
+- **Files or modules affected:** `backend/modules/ai/application/agent_service.py`, `backend/modules/ai/router.py`, agent API schemas
+- **Current problem:** RAG `/retrieve` and `/ask` now return `RetrievalOutcome` / degradation flags; agent runs and `/ai/runs` still hide memory/retrieval failures behind empty context.
+- **Recommended solution:** Reuse `RetrievalOutcome` and `memory_degraded` in agent responses; metric counters on agent path.
+- **Expected benefit:** Consistent observability across all LLM entry points.
+
+**Done (RAG ask/retrieve):** `RetrievalOutcome`, `/rag/retrieve` wrapper response, `/rag/ask` degradation fields, Prometheus counters (`rag_retrieval_degraded_total`, `rag_retrieval_no_match_total`, `rag_injection_chunks_filtered_total`, `rag_json_fallback_total`).
+
+---
+
+## Performance and Speed Improvements
+
+Completed items (Argon2/settings I/O off event loop, Celery evaluation runs, calendar parallel fetch, batched pgvector writes, session list cap, observability HTTP client reuse, provider retries, evaluation bulk insert, memory turn writes with bounded concurrency, task reorder notification gather) are removed below.
+
+### Heavy operations on request/response paths
+
+| Location | Problem | Severity | Fix | Risk |
+|----------|---------|----------|-----|------|
+| `backend/modules/rag/api/routes.py` — `ask_rag` | Retrieve + memory + LLM + query logging in one request | High | Optional async job or streaming; at minimum strict timeouts | Medium |
+| `backend/modules/ai/agent_router.py` — `create_agent_run` | LLM + optional `process_turn_memories` after response | High | Queue memory extraction post-response | Medium |
+| `backend/modules/rag/application/document_ingestion_service.py` — `delete_document` | Vector delete + S3 delete + Redis pattern invalidation blocks DELETE | Medium | Soft-delete + async cleanup worker | Medium |
+| `backend/api/main.py` — `lifespan()` + `platform/service.py` — `ensure_defaults()` | Many sequential DB round-trips on every API worker boot | Medium | One-time seed migration or bulk upsert | Low |
+
+### Database inefficiencies
+
+| Location | Problem | Severity | Fix | Risk |
+|----------|---------|----------|-----|------|
+| `backend/modules/rag/infrastructure/repositories.py` — `similarity_search_json_fallback` | Loads up to 5000 rows, scores in Python | Medium | Ensure pgvector prod-ready; monitor fallback metric | Low |
+| `backend/core/pagination.py` — `paginate_scalars` | COUNT + SELECT on every paginated list | Low | Optional skip-total mode for infinite scroll | Low |
+
+**Positive patterns in use:** `prompt_context_builder.py` and `rag_answer_service.py` use `asyncio.gather` for memory + RAG context; memory search parallelizes per level; evaluation cases run concurrently with bounded semaphore.
+
+---
+
+## Caching Improvements
+
+### Existing cache infrastructure (keep and extend)
+
+| Cache | Location | TTL | Invalidation |
+|-------|----------|-----|--------------|
+| Platform config, flags, email templates | `backend/core/cache.py` + `platform/service.py` | Configurable via settings | `invalidate_platform_cache()` on writes |
+| Settings DB rows | `settings/service.py` | Redis + local TTL | Key delete on mutation |
+| Observability status | `observability/service.py` | Short TTL | Time-based |
+| Embeddings (indexing) | `backend/lib/embedding_cache.py` | 600s | TTL; skip texts > 4000 chars; keys include model + dimensions |
+| Query embeddings (retrieval) | `backend/lib/embedding_cache.py` via `embed_retrieval_queries` | 3600s | TTL; model + dimensions in key |
+| Retrieval results | `backend/lib/retrieval_cache.py` | 180s | `invalidate_retrieval_cache_for_document()` on index/delete |
+| Memory search | `backend/lib/memory_search_cache.py` | 60s | Per-user invalidation on writes |
+| User profile snapshot | `backend/lib/resource_cache.py` + `profile/service.py` | 90s | Invalidate on profile/avatar mutations |
+| Project list | `backend/lib/resource_cache.py` + `projects/service.py` | 30s | Invalidate on project create (per user) |
+| Calendar items | `backend/lib/resource_cache.py` + `calendar/service.py` | 60s | Invalidate on calendar/task due-date mutations |
+| User directory | `backend/lib/resource_cache.py` + `users/service.py` | 60s | Invalidate on user profile name updates |
+
+### Remaining recommendations
+
+| What to cache | Notes |
+|---------------|-------|
+| Subscription plans list | Small table; OK uncached |
+| Notifications list | Real-time expectations — avoid long TTL |
+| Static platform metadata CDN | Example nginx snippet in `infra/nginx/frontend.conf.example`; use short TTL or ETag for flags |
+
+### Cache invalidation
+
+- **`cache_delete_pattern`:** Now deletes in batches during `scan_iter` to reduce large single deletes. Key versioning for retrieval keys remains optional if wildcard scans become hot.
+- **Local + Redis dual layer:** Invalidation clears both layers via `cache_delete` (unchanged).
+
+### Frontend alignment
+
+- `frontend/src/config/queryTiming.ts` — `userProfile` 90s, `projects` 30s, `calendar`/`userDirectory` 60s, `platformMetadata` 300s; notifications keep 30s stale + 60s poll.
+
+---
+
+## Architectural Improvements
+
+ADR 0003 boundary work is done: `GenerationPort`, `ProjectAccessPort`, and `PlatformReadPort` in `backend/lib/`; shared `RequestModel` in `backend/core/schemas.py`; observability decoupled from `User`; dead AI vector repo methods and `AI_DOCUMENT_*` settings removed. See `docs/adr/0003-module-dependency-graph.md` and `tests/test_architecture_ports.py`.
+
+### Remaining
+
+| Item | Notes |
+|------|-------|
+| Orchestration triangle | `agent_service`, `prompt_context_builder`, and `rag_answer_service` still each compose retrieval + memory + generation — designate one orchestrator or thin composed layer |
+| Large file splits | Backend: `platform/service.py`, `ai/service.py`, `ai/router.py`, `memory/application/memory_service.py`, `rag/infrastructure/repositories.py`. Frontend: `DashboardCalendar.tsx`, `AdminPlatformPage.tsx`, `AiStudioPage.tsx`, `ProjectDetailPage.tsx` |
+| `import-linter` CI | Enforce ADR 0003 dependency graph in CI (optional follow-up) |
+| God services | Unified orchestrator + smaller services would further reduce test mocking surface |
+
+---
+
+## UI/UX Improvements
+
+Completed in this pass: loading/error/empty states (Profile, Platform plans, AiStudio secondary queries, ProjectDetail split loading, DashboardCalendar retry + field errors), form validation (VerifyEmail, Platform API keys, ProjectDetail title, DashboardCalendar per-field), accessibility (NotificationListItem aria-label, AdminUsers Switch labels, ProjectDetail keyboard move, PageHeader h1, AppLayout notification badge isolation), responsive fixes (DashboardCalendar week scroll + theme colors, ProjectDetail kanban horizontal scroll), styling (StatCard color prop + card radius, theme outlined buttons in dark mode).
+
+### Remaining
+
+| Area | Notes |
+|------|-------|
+| QueryBoundary | Still manual on `ProjectDetailPage`, `ObservabilityPage`, `AiStudioPage` (section-level alerts), `PlatformPage` |
+| `queryKeys` inline | `AdminPlatformPage`, `AdminSettingsPage`, `ObservabilityPage`, `DashboardCalendar` |
+| Form validation | Full Zod + react-hook-form on `ProjectDetailPage` task form; section schemas on `AiStudioPage` |
+| `AiStudioPage` mobile | Long stacked page — section tabs or anchor nav |
+| Re-renders | `DashboardCalendar` drawer extraction + day cell memoization; `AiStudioPage` section components |
+| Border radius drift | Align `SectionCard`/`StatCard`/list rows to `designTokens.radii` consistently |
+| Font tokens | Replace duplicated display font strings with `designTokens.fonts.display` across pages |
+
+---
+
+## Algorithm and AI Logic Improvements
+
+Completed in this pass:
+
+- **`RetrievalOutcome`** — structured retrieval results with `degraded`, `degradation_reason`, `no_matches`, `injection_chunks_filtered`
+- **PgVector fallback** — empty indexed search retries relaxed threshold, then JSON fallback; metrics on fallback usage
+- **Injection filtering** — chunks flagged `prompt_injection_suspected` at ingestion are excluded at retrieval
+- **RAG answer prompt layout** — reference context in system prompt; user message is the question only (`AiService.run_rag_answer`)
+- **Citation instructions** — default prompt cites `[Source N]` labels aligned with `RagContextBuilder`
+- **Chunking alignment** — `langchain_text_splitters` uses `estimate_tokens` (len/4) matching context trim budget
+- **Memory status** — `build_prompt_context_with_status` / `recall_for_prompt` returns degraded flag (wired into `/rag/ask`)
+
+### Remaining
+
+| Area | Notes |
+|------|-------|
+| Hybrid search / reranking | Optional cross-encoder rerank or tsvector + vector fusion |
+| JSON fallback bias | `repositories.py` still orders by `updated_at DESC`; monitor `rag_json_fallback_total` |
+| Structure-aware chunking | Section/page-aware PDF/DOCX splitters |
+| Unified context assembly | Converge agent, `/ai/runs`, and `/rag/ask` on one `PromptContextService` |
+| Legacy `run_prompt` retrieval | Deprecate divergent format when `RAG_ENABLED=true` |
+| Memory tuning | Smaller per-level k + global rerank; optional LLM extraction |
+| Agent docs/metrics | Document single-turn agent; add agent latency metrics |
+| Evaluation | RAG-grounded eval datasets with expected chunk IDs; citation hit rate |
+| Ingestion retry | Celery retry policy for FAILED indexing jobs |
+
+**Positive (unchanged):** `RAG_UNTRUSTED_CONTEXT_RULE`, memory ranking/consolidation, provider retries in `ai/providers.py`, parallel memory level search in `recall()`.
+
+---
+
+## Blocking, Dead, or Unnecessary Code
+
+Completed cleanup:
+
+- **Removed dead `AiRepository` document CRUD** — production uses `RagRepository` via `LegacyAiDocumentService`; moved `filter_document_ids_for_user` test to `modules/rag/tests/test_permissions.py`
+- **`AI_DOCUMENT_*` settings** — already removed from config/admin metadata
+- **`ai_agent` module** — already deleted; no remaining imports
+- **`_pending_content` dict** — already removed from `rag/workers.py` (object storage path in use)
+- **`backend/workers/rag_indexing.py` shim** — removed; `workers/tasks.py` imports from `modules/rag/workers` directly
+- **`rag/workers.py` logging** — success/failure logs around `index_document_sync`
+
+### Remaining (requires migration or larger refactor)
+
+| Item | Notes |
+|------|-------|
+| `ai_documents` / `ai_document_chunks` tables | ORM models kept for Alembic metadata with deprecation docstrings; add drop-table migration when ready |
+| `AiService.run_prompt` retrieval formatting | Still uses legacy `[title #index]` string vs `RagContextBuilder` `[Source N]` — unify via shared `PromptContextService` |
+| Optional dep audit | Run `uv pip check` / frontend `depcheck` when convenient |
+
+---
+
+## Reliability, Testing, and Observability Improvements
+
+### Error handling and retries
+
+**Fixed:** RAG retrieval structured outcomes + metrics; RAG ask memory/retrieval degradation flags; provider backoff retries (`_post_with_retry`).
+
+| Gap | Location | Fix |
+|-----|----------|-----|
+| Agent run degradation hidden | `agent_service.py` | Surface retrieval/memory flags like `/rag/ask` |
+| Settings `.env` write races | `settings/service.py` | File lock or worker-only writes |
+| Webhook failures unlogged | `platform/service.py` | Log at WARNING with correlation ID |
+| Ingestion FAILED without retry | `document_ingestion_service.py` | Celery retry policy |
+
+### Logging quality
+
+**Good:** Structured logging in RAG answer, memory, mem0 client, agent paths.
+
+**Gaps:**
+
+- Zero logging in `platform/service.py`, `projects/`, `settings/` for mutations.
+- No startup `validate_memory_config()` mirroring `validate_rag_config()` in `api/main.py`.
+
+### Observability
+
+**Present:** RAG metrics (`rag/infrastructure/metrics.py`), memory metrics, Grafana dashboard (`observability/grafana/dashboards/fastapi-overview.json`), Sentry/tracing hooks.
+
+**Gaps:**
+
+- No AI/agent run latency histograms.
+- Observability module imports `User` (ADR violation) — **fixed:** uses `is_admin` flag.
+
+### Input validation
+
+- FastAPI + Pydantic schemas widely used (good).
+- Admin AI Studio forms lack backend-adjacent frontend validation for JSON config blobs.
+- Calendar date range lacks max span validation.
+
+### Security-sensitive code
+
+- JWT weak-secret rejection at startup (good).
+- `RAG_UNTRUSTED_CONTEXT_RULE` and injection detection at ingest (good).
+- Rate limiting in `backend/core/rate_limit.py` — verify applied to `/rag/ask` and `/agent/runs` under load (**assumption:** check router dependencies).
+- Settings admin can write `.env` synchronously — audit trail and locking needed.
+
+### Test coverage
+
+**Well covered:** RAG ingestion/retrieval/answer/permissions, memory ranking/consolidation, cache/pagination, retrieval cache, AI consolidation tests, frontend `QueryBoundary.test.tsx`, e2e `auth-rag.spec.ts`.
+
+**Missing or thin:**
+
+| Area | Gap |
+|------|-----|
+| `calendar`, `profile`, `users`, `notifications`, `projects`, `admin` | No module-level tests |
+| `identity_access` | Mostly integration via `test_api_auth.py` |
+| `platform/service.py` | Cache tests only — no webhook/plan/flag logic tests |
+| Memory HTTP API | No route tests for `/api/v1/memory/*` |
+| RAG Celery workers | No tests for `queue_document_indexing` path |
+| `AiService` evaluation/review | No dedicated tests beyond concurrency |
+| Frontend pages 700–1300 lines | Minimal unit coverage |
+
+### Documentation gaps
+
+- ADR 0003 documents dependency graph (good).
+- `AGENTS.md` documents RAG-only ingestion (good).
+- Missing: deprecation timeline for `/ai/documents*` and `ai_documents` tables.
+- Missing: operational runbook for pgvector fallback and Mem0 degraded mode.
+
+### Deployment risks
+
+- In-memory `_pending_content` breaks multi-worker Celery.
+- Sequential startup seeds slow cold starts with many API replicas.
+- Redis `cache_delete_pattern` under heavy delete load.
+
+---
+
+## Suggested Implementation Roadmap
+
+### Phase 1: Quick Wins (1–2 weeks, low risk)
+
+1. Remove dead `AI_DOCUMENT_*` from settings admin metadata or map to `RAG_*` aliases.
+
+### Phase 2: Structural Improvements (2–4 weeks, medium risk)
+
+1. Extract `GenerationPort` and `ProjectAccessPort`; fix schema imports to `core.schemas`.
+2. Delete dead `AiRepository` document/vector methods; plan `ai_documents` table deprecation.
+3. Unify prompt context assembly (`RagContextBuilder` + single orchestrator).
+4. Structured degradation flags for retrieval and memory in API responses.
+5. Split `platform/service.py` and `ai/service.py` by subdomain.
+6. Add `validate_memory_config()` at startup; begin `import-linter` CI rule per ADR 0003.
+
+### Phase 3: Advanced Improvements (4+ weeks, higher effort)
+
+1. Optional reranker or hybrid retrieval in `rag/application/`.
+2. Align chunking with token budget; structure-aware splitters.
+3. RAG/memory evaluation harness with faithfulness and citation metrics.
+4. Provider retry policies and Celery ingestion retry with backoff.
+5. Queue document delete cleanup and post-turn memory extraction.
+6. Real multi-step agent loop (optional) or rename API to reflect single-turn semantics.
+7. Split mega frontend components (`DashboardCalendar`, `AiStudioPage`, `AdminPlatformPage`).
+8. Operational dashboards for retrieval fallback rate, cache hit ratio, agent degradation events.
+
+---
+
+## Final Recommendations
+
+**Do first (this week):** Delete dead AI document/vector code and align `AI_DOCUMENT_*` settings metadata with `RAG_*` runtime config.
+
+**Do next (this sprint):** Extract generation/project ports per ADR 0003, unify RAG context assembly, and add structured degradation flags for retrieval and memory.
+
+**Strategic direction:** Treat ADR 0003 as enforceable — extract ports, unify the three RAG execution paths, and surface degradation in API responses.
+
+**Completed (removed from Priority Improvements):** prompt-version tuple unpacking; background evaluation runs; Argon2/settings I/O off event loop; batched pgvector embedding writes; durable RAG indexing via object storage; session/calendar/memory query bounds and calendar parallel fetch; frontend `QueryBoundary`/`queryKeys` standardization with optimistic notification/admin/webhook mutations and accessibility fixes; performance quick wins (observability HTTP client reuse, AI provider retries, evaluation bulk insert, bounded concurrent memory writes, parallel task reorder notifications); caching layer extensions (query embedding TTL, profile/project/calendar/directory Redis caches, batched pattern deletes, frontend stale-time alignment); ADR 0003 ports (generation, project access, platform read), observability `is_admin` decoupling, dead AI vector repo cleanup, `RAG_*` settings metadata.
+
+**Avoid over-engineering:** Do not introduce a second vector store, a full ReAct agent framework, or a microservice split. The modular monolith with `backend/lib/` shared helpers is the right shape; the work is consolidation, caching discipline, and moving heavy I/O off the request thread.
+
+**Verify assumptions:** Load-test auth and `/rag/ask` under concurrency; confirm rate limits on AI endpoints; run deptry on backend dependencies; measure Redis `scan_iter` cost during bulk document deletes in staging.
+
+---
+
+*Report scope: `/home/polat/Desktop/Projects/generic_app` — backend (FastAPI, Celery, pgvector, Redis), frontend (React, Vite, TanStack Query), observability stack. Analysis method: module exploration, targeted code reads, pattern grep, cross-reference with ADR 0003 and AGENTS.md.*

@@ -3,6 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
+from backend.core.pagination import (
+    PaginatedResponse,
+    PaginationParams,
+    paginated_response,
+    pagination_params,
+)
 from backend.modules.identity_access.models import User
 from backend.modules.notifications.repository import NotificationsRepository
 from backend.modules.notifications.schemas import (
@@ -14,20 +20,30 @@ from backend.modules.notifications.schemas import (
 router = APIRouter()
 
 
-@router.get("", response_model=list[NotificationResponse])
+@router.get("", response_model=PaginatedResponse[NotificationResponse])
 async def list_notifications(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     repo = NotificationsRepository(db)
-    items = await repo.list_for_user(current_user.id)
-    return [
-        NotificationResponse(
-            id=n.id, type=n.type, title=n.title, body=n.body,
-            is_read=n.is_read, created_at=n.created_at,
-        )
-        for n in items
-    ]
+    items, total = await repo.list_for_user(
+        current_user.id,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return paginated_response(
+        [
+            NotificationResponse(
+                id=n.id, type=n.type, title=n.title, body=n.body,
+                is_read=n.is_read, created_at=n.created_at,
+            )
+            for n in items
+        ],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.patch("/{notification_id}/read", status_code=204)

@@ -99,13 +99,13 @@ def _parse_with_langchain_loader(file_path: str, loader_name: str) -> list[Parse
         return []
 
 
-async def load_documents_from_bytes(
+def _parse_bytes_sync(
     *,
     content: bytes,
     filename: str,
     content_type: str,
 ) -> list[ParsedDocument]:
-    """Parse file bytes into ParsedDocument list. LangChain loaders used as fallback."""
+    """Parse raw bytes into documents. CPU-bound — use ``load_documents_from_bytes``."""
     suffix = Path(filename).suffix.lower().lstrip(".")
     if suffix in {"txt", "md", "markdown"} or content_type.startswith("text/"):
         return _parse_txt_or_md(content)
@@ -120,13 +120,25 @@ async def load_documents_from_bytes(
     }:
         return _parse_docx(content)
 
-    def _try_langchain() -> list[ParsedDocument]:
-        with tempfile.NamedTemporaryFile(suffix=f".{suffix}", delete=False) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
-        try:
-            return _parse_with_langchain_loader(tmp_path, suffix)
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
+    with tempfile.NamedTemporaryFile(suffix=f".{suffix}", delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+    try:
+        return _parse_with_langchain_loader(tmp_path, suffix)
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
-    return await asyncio.to_thread(_try_langchain)
+
+async def load_documents_from_bytes(
+    *,
+    content: bytes,
+    filename: str,
+    content_type: str,
+) -> list[ParsedDocument]:
+    """Parse file bytes into ParsedDocument list off the event loop thread."""
+    return await asyncio.to_thread(
+        _parse_bytes_sync,
+        content=content,
+        filename=filename,
+        content_type=content_type,
+    )

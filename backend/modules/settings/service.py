@@ -1,9 +1,20 @@
+import asyncio
 from collections.abc import Iterable
+from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.cache import (
+    SETTINGS_CONFIG_ENTRIES_CACHE_KEY,
+    SETTINGS_DATABASE_CACHE_KEY,
+    cache_get_or_load_json,
+    get_local_cached_json,
+    invalidate_settings_config_cache,
+    invalidate_settings_related_caches,
+    set_local_cached_json,
+)
 from backend.core.config import ENV_FILE, Settings, settings
 from backend.modules.settings.models import AppSetting
 from backend.modules.settings.repository import SettingsRepository
@@ -168,20 +179,24 @@ CONFIG_FIELD_METADATA: dict[str, dict[str, Any]] = {
         "description": "Label used for the built-in local heuristic model.",
         "requires_restart": False,
     },
-    "AI_DOCUMENT_MAX_BYTES": {
-        "description": "Maximum source document size for AI ingestion.",
+    "RAG_MAX_FILE_BYTES": {
+        "description": "Maximum source document size for RAG ingestion.",
         "requires_restart": False,
     },
-    "AI_DOCUMENT_CHUNK_SIZE": {
-        "description": "Chunk size in characters for document ingestion.",
+    "RAG_CHUNK_SIZE": {
+        "description": "Chunk size in characters for RAG document ingestion.",
         "requires_restart": False,
     },
-    "AI_DOCUMENT_CHUNK_OVERLAP": {
-        "description": "Chunk overlap in characters for document ingestion.",
+    "RAG_CHUNK_OVERLAP": {
+        "description": "Chunk overlap in characters for RAG document ingestion.",
         "requires_restart": False,
     },
     "AI_MAX_OUTPUT_TOKENS": {
         "description": "Maximum output tokens requested from AI providers.",
+        "requires_restart": False,
+    },
+    "AI_EVALUATION_CONCURRENCY": {
+        "description": "Maximum number of evaluation cases to run in parallel.",
         "requires_restart": False,
     },
     "OPENAI_API_KEY": {
@@ -238,7 +253,16 @@ class SettingsService:
         self.repo = SettingsRepository(db)
 
     async def list_database_settings(self) -> list[AppSetting]:
-        return await self.repo.list_all()
+        cached = await cache_get_or_load_json(
+            SETTINGS_DATABASE_CACHE_KEY,
+            ttl_seconds=settings.CACHE_SETTINGS_TTL_SECONDS,
+            loader=self._load_database_settings_for_cache,
+        )
+        return [self._setting_from_cache(item) for item in cached]
+
+    async def _load_database_settings_for_cache(self) -> list[dict]:
+        rows = await self.repo.list_all()
+        return [self._setting_to_cache(row) for row in rows]
 
     async def create_database_setting(
         self, key: str, value: str, description: str | None
@@ -252,6 +276,7 @@ class SettingsService:
         setting = await self.repo.create(key=key, value=value, description=description)
         await self.db.commit()
         await self.db.refresh(setting)
+        await invalidate_settings_related_caches(key)
         return setting
 
     async def update_database_setting(self, setting_id: str, updates: dict[str, Any]) -> AppSetting:
@@ -264,6 +289,7 @@ class SettingsService:
 
         await self.db.commit()
         await self.db.refresh(setting)
+        await invalidate_settings_related_caches(setting.key)
         return setting
 
     async def delete_database_setting(self, setting_id: str) -> None:
@@ -271,11 +297,45 @@ class SettingsService:
         if not setting:
             raise HTTPException(status_code=404, detail="Database setting not found")
 
+        setting_key = setting.key
         await self.repo.delete(setting)
         await self.db.commit()
+        await invalidate_settings_related_caches(setting_key)
+
+    @staticmethod
+    def _setting_to_cache(setting: AppSetting) -> dict:
+        return {
+            "id": setting.id,
+            "key": setting.key,
+            "value": setting.value,
+            "description": setting.description,
+            "updated_at": setting.updated_at.isoformat(),
+        }
+
+    @staticmethod
+    def _setting_from_cache(payload: dict) -> AppSetting:
+        data = dict(payload)
+        updated_at = data.get("updated_at")
+        if isinstance(updated_at, str):
+            data["updated_at"] = datetime.fromisoformat(updated_at)
+        return AppSetting(**data)
 
     @classmethod
-    def list_config_entries(cls) -> ConfigSettingsResponse:
+    async def list_config_entries(cls) -> ConfigSettingsResponse:
+        cached = get_local_cached_json(SETTINGS_CONFIG_ENTRIES_CACHE_KEY)
+        if cached is not None:
+            return ConfigSettingsResponse.model_validate(cached)
+
+        response = await asyncio.to_thread(cls._build_config_entries)
+        set_local_cached_json(
+            SETTINGS_CONFIG_ENTRIES_CACHE_KEY,
+            response.model_dump(mode="json"),
+            ttl_seconds=settings.CACHE_SETTINGS_TTL_SECONDS,
+        )
+        return response
+
+    @classmethod
+    def _build_config_entries(cls) -> ConfigSettingsResponse:
         env_entries = cls._read_env_entries()
         items: list[ConfigEntryResponse] = []
         known_fields = Settings.model_fields
@@ -310,7 +370,9 @@ class SettingsService:
         return ConfigSettingsResponse(items=items, notice=CONFIG_NOTICE)
 
     @classmethod
-    def update_config_entries(cls, updates: Iterable[ConfigEntryUpdate]) -> ConfigSettingsResponse:
+    def _update_config_entries_sync(
+        cls, updates: Iterable[ConfigEntryUpdate]
+    ) -> ConfigSettingsResponse:
         update_items = list(updates)
         seen_keys: set[str] = set()
         raw_updates: dict[str, str] = {}
@@ -346,7 +408,14 @@ class SettingsService:
         for key in Settings.model_fields:
             setattr(settings, key, getattr(validated, key))
 
-        return cls.list_config_entries()
+        invalidate_settings_config_cache()
+        return cls._build_config_entries()
+
+    @classmethod
+    async def update_config_entries(
+        cls, updates: Iterable[ConfigEntryUpdate]
+    ) -> ConfigSettingsResponse:
+        return await asyncio.to_thread(cls._update_config_entries_sync, list(updates))
 
     @staticmethod
     def _get_value_type(key: str) -> str:

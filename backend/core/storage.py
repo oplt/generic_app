@@ -15,6 +15,10 @@ class ObjectStorageError(RuntimeError):
     pass
 
 
+AVATAR_CACHE_CONTROL = "public, max-age=31536000, immutable"
+PRIVATE_UPLOAD_CACHE_CONTROL = "private, max-age=3600"
+
+
 class ObjectStorage:
     @property
     def is_configured(self) -> bool:
@@ -79,20 +83,29 @@ class ObjectStorage:
         except Exception as exc:
             logger.warning("failed to ensure storage bucket %s: %s", settings.STORAGE_BUCKET, exc)
 
-    async def upload_bytes(self, *, object_key: str, body: bytes, content_type: str) -> str:
+    async def upload_bytes(
+        self,
+        *,
+        object_key: str,
+        body: bytes,
+        content_type: str,
+        cache_control: str = AVATAR_CACHE_CONTROL,
+    ) -> str:
         if not self.is_configured:
             raise StorageNotConfiguredError(
                 "Object storage is not configured. Set STORAGE_BUCKET and storage credentials."
             )
 
         def _upload() -> None:
-            self._client.put_object(
-                Bucket=settings.STORAGE_BUCKET,
-                Key=object_key,
-                Body=body,
-                ContentType=content_type,
-                CacheControl="public, max-age=31536000, immutable",
-            )
+            put_kwargs: dict[str, str] = {
+                "Bucket": settings.STORAGE_BUCKET,
+                "Key": object_key,
+                "Body": body,
+                "ContentType": content_type,
+            }
+            if cache_control:
+                put_kwargs["CacheControl"] = cache_control
+            self._client.put_object(**put_kwargs)
 
         try:
             await asyncio.to_thread(_upload)

@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, type Paginated } from "./client";
 
 export type ModuleCatalogItem = {
     key: string;
@@ -191,8 +191,11 @@ export async function updateAdminPlan(
     });
 }
 
+import type { Paginated } from "./client";
+
 export async function listApiKeys(): Promise<ApiKey[]> {
-    return apiFetch("/platform/api-keys");
+    const page = await apiFetch<Paginated<ApiKey>>("/platform/api-keys");
+    return page.items;
 }
 
 export async function createApiKey(name: string): Promise<CreatedApiKey> {
@@ -209,7 +212,8 @@ export async function revokeApiKey(apiKeyId: string): Promise<ApiKey> {
 }
 
 export async function listWebhooks(): Promise<WebhookEndpoint[]> {
-    return apiFetch("/platform/webhooks");
+    const page = await apiFetch<Paginated<WebhookEndpoint>>("/platform/webhooks");
+    return page.items;
 }
 
 export async function createWebhook(payload: {

@@ -12,10 +12,6 @@ INJECTION_PATTERNS: tuple[re.Pattern[str], ...] = (
 
 
 class RagPolicyService:
-    def sanitize_chunk_for_display(self, content: str) -> str:
-        """Flag suspicious content but keep snippet for citation (model gets full rule set)."""
-        return content
-
     def contains_prompt_injection(self, content: str) -> bool:
         return any(pattern.search(content) for pattern in INJECTION_PATTERNS)
 

@@ -27,15 +27,16 @@ export function ObservabilityShortcutCard({
 
     return (
         <Paper
-            sx={{
+            sx={(theme) => ({
                 p: 2.5,
-                borderRadius: 4,
-                border: 1,
-                borderColor: "divider",
+                borderRadius: 1,
+                border: "none",
                 boxShadow: "none",
                 minHeight: 218,
                 display: "flex",
-            }}
+                backgroundColor:
+                    theme.palette.mode === "dark" ? theme.palette.background.paper : "var(--tesla-light-ash)",
+            })}
         >
             <Stack spacing={2} sx={{ width: "100%" }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1.5}>
@@ -52,7 +53,7 @@ export function ObservabilityShortcutCard({
                         <span />
                     )}
                     <Button
-                        variant="outlined"
+                        variant="contained"
                         endIcon={<OpenInNewIcon />}
                         disabled={Boolean(disabledReason) || !url}
                         onClick={() => {

@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from time import perf_counter
 
-from backend.core.config import settings
-from backend.modules.ai.providers import AiProviderRegistry, ProviderGenerateRequest
+from backend.lib.generation_port import AiServiceGenerationPort, GenerationPort
+from backend.lib.project_access import ProjectAccessPort, SqlAlchemyProjectAccessPort
+from backend.modules.identity_access.models import User
 from backend.modules.memory.application.memory_service import MemoryService
 from backend.modules.memory.domain.models import MemorySearchRequest
 from backend.modules.memory.infrastructure.memory_config import MemoryConfig
-from backend.modules.projects.repository import ProjectsRepository
 from backend.modules.rag.application.citation_service import CitationService
 from backend.modules.rag.application.rag_context_builder import RagContextBuilder
 from backend.modules.rag.application.retrieval_service import RetrievalService
@@ -33,16 +34,16 @@ class RagAnswerService:
         self.retrieval = RetrievalService(db, self.config)
         self.context_builder = RagContextBuilder(CitationService())
         self.repo = RagRepository(db)
-        self.projects_repo = ProjectsRepository(db)
+        self.project_access: ProjectAccessPort = SqlAlchemyProjectAccessPort(db)
         self.memory = MemoryService(db)
         self.memory_config = MemoryConfig.from_settings()
-        self.providers = AiProviderRegistry()
+        self.generation: GenerationPort = AiServiceGenerationPort(db)
 
     async def answer(
         self,
         query: str,
         *,
-        user_id: str,
+        user: User,
         project_id: str | None,
         run_id: str | None = None,
         agent_id: str | None = None,
@@ -52,27 +53,18 @@ class RagAnswerService:
         if not self.config.enabled:
             raise HTTPException(status_code=503, detail="RAG is disabled")
 
+        user_id = user.id
         if project_id:
-            project = await self.projects_repo.get_by_id_for_user(project_id, user_id)
-            if not project:
-                metrics.rag_permission_denied_total.inc()
-                raise HTTPException(status_code=403, detail="Project access denied")
+            await self.project_access.ensure_project_access(user_id, project_id)
 
         started = perf_counter()
         filters = {"document_ids": document_ids} if document_ids else None
-        chunks = await self.retrieval.retrieve(
-            query,
-            user_id=user_id,
-            project_id=project_id,
-            filters=filters,
-        )
-        citations = self.context_builder.citations.build_citations(chunks)
-        document_context = self.context_builder.build_document_context_block(chunks)
 
-        memory_context = ""
-        if self.memory_config.enabled:
+        async def _load_memory_context() -> tuple[str, bool]:
+            if not self.memory_config.enabled:
+                return "", False
             try:
-                memory_context = await self.memory.build_prompt_context(
+                return await self.memory.build_prompt_context_with_status(
                     MemorySearchRequest(
                         user_id=user_id,
                         agent_id=agent_id or "default",
@@ -83,8 +75,30 @@ class RagAnswerService:
                 )
             except Exception:
                 logger.exception("Memory context degraded during RAG answer")
+                return "", True
 
-        if not chunks:
+        retrieval_outcome, (memory_context, memory_degraded) = await asyncio.gather(
+            self.retrieval.retrieve(
+                query,
+                user_id=user_id,
+                project_id=project_id,
+                filters=filters,
+            ),
+            _load_memory_context(),
+        )
+        chunks = retrieval_outcome.chunks
+        retrieval_degraded = retrieval_outcome.degraded
+        degradation_reason = retrieval_outcome.degradation_reason
+        if memory_degraded and not degradation_reason:
+            degradation_reason = "memory_recall_failed"
+        bounded_chunks = self.context_builder.trim_chunks_to_token_budget(
+            chunks,
+            max_tokens=self.config.max_context_tokens,
+        )
+        citations = self.context_builder.citations.build_citations(bounded_chunks)
+        document_context = self.context_builder.build_document_context_block(bounded_chunks)
+
+        if not bounded_chunks:
             latency_ms = int((perf_counter() - started) * 1000)
             metrics.rag_answer_latency_ms.observe(latency_ms)
             await self._log_query(
@@ -105,56 +119,51 @@ class RagAnswerService:
                 model_name="none",
                 latency_ms=latency_ms,
                 no_context_found=True,
+                ai_run_id=None,
+                retrieval_degraded=retrieval_degraded,
+                memory_degraded=memory_degraded,
+                degradation_reason=degradation_reason,
             )
 
-        combined_context = self.context_builder.build_combined_context(
+        reference_context = self.context_builder.assemble_agent_system_context(
             memory_context=memory_context or None,
             document_context=document_context,
-            user_question=query,
-        )
+        ) or ""
+        chunk_ids = [c.chunk_id for c in bounded_chunks]
 
-        provider = self.providers.get(settings.AI_DEFAULT_PROVIDER)
-        model_name = (
-            settings.OPENAI_DEFAULT_MODEL
-            if provider.key == "openai"
-            else settings.AI_LOCAL_MODEL_NAME
-        )
-        result = await provider.generate(
-            ProviderGenerateRequest(
-                model=model_name,
-                system_prompt=(
-                    "You are a helpful assistant. Answer using only the provided context "
-                    "when relevant. Cite sources by filename when possible."
-                ),
-                user_prompt=combined_context,
-                response_format="text",
-                temperature=0.2,
-            )
+        ai_run = await self.generation.run_rag_answer(
+            user,
+            query=query,
+            combined_context=reference_context,
+            retrieved_chunk_ids=chunk_ids,
         )
 
         latency_ms = int((perf_counter() - started) * 1000)
         metrics.rag_answer_latency_ms.observe(latency_ms)
-        chunk_ids = [c.chunk_id for c in chunks]
 
         await self._log_query(
             user_id=user_id,
             project_id=project_id,
             organization_id=organization_id,
             query=query,
-            answer=result.output_text,
+            answer=ai_run.output_text or "",
             chunk_ids=chunk_ids,
-            model_name=result.model,
+            model_name=ai_run.model_name,
             latency_ms=latency_ms,
         )
 
         return RagAnswer(
             query=query,
-            answer=result.output_text,
+            answer=ai_run.output_text or "",
             citations=citations,
             retrieved_chunk_ids=chunk_ids,
-            model_name=result.model,
+            model_name=ai_run.model_name,
             latency_ms=latency_ms,
             no_context_found=False,
+            ai_run_id=ai_run.id,
+            retrieval_degraded=retrieval_degraded,
+            memory_degraded=memory_degraded,
+            degradation_reason=degradation_reason,
         )
 
     async def _log_query(

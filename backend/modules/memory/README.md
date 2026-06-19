@@ -26,9 +26,10 @@ backend/modules/memory/
   application/      # MemoryService, router, extractor, consolidator, context builder
   infrastructure/   # Mem0 adapter, audit/registry repos, metrics
   api/              # /api/v1/memory routes
-backend/modules/ai_agent/
+backend/modules/ai/
   application/      # AgentService — recall before LLM, extract after
-  api/              # /api/v1/agent/runs
+  agent_router.py   # /api/v1/agent/runs
+  router.py         # /api/v1/ai/* prompts, runs, legacy document routes
 ```
 
 ## Configuration
@@ -66,8 +67,8 @@ Set `MEMORY_ENABLED=false` or leave `MEM0_API_KEY` empty to run chat without mem
 
 1. Authenticated user hits `POST /api/v1/agent/runs`.
 2. `AgentService` resolves `user.id`, `agent_id`, `run_id`, optional `project_id`.
-3. `MemoryContextBuilder` recalls ranked memories and injects a **Relevant remembered context** block into the system prompt.
-4. `AiService.run_prompt` executes the LLM call.
+3. `AgentPromptContextBuilder` (in `backend/modules/ai/application/`) performs **one** memory recall via `MemoryService.recall_for_prompt`, loads RAG document context in parallel, and assembles the system prompt block.
+4. `AiService.run_prompt` executes the LLM call (no duplicate document retrieval when RAG is enabled).
 5. `MemoryExtractor` + `MemoryPolicyService` decide what to persist; `MemoryRouter` picks the layer.
 6. Audit rows written to `memory_audit_logs`; references in `memory_registry`.
 

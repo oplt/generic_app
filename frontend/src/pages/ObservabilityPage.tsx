@@ -38,8 +38,8 @@ import type {
 import { buildGrafanaUrl, buildTempoExploreUrl, openExternalUrl } from "../features/observability/urlBuilders";
 import { useAuth } from "../hooks/useAuth";
 import { EmptyState } from "../components/ui/EmptyState";
-import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
+import { SettingsTabs } from "../components/layout/SettingsTabs";
 import { SectionCard } from "../components/ui/SectionCard";
 
 type HealthKey =
@@ -251,26 +251,23 @@ export default function ObservabilityPage() {
 
     return (
         <PageShell maxWidth="xl">
-            <PageHeader
-                eyebrow="Operations"
-                title="Observability"
-                description="Monitor application health, API performance, background jobs, infrastructure signals, traces, and alerts."
-                actions={
-                    <Button
-                        variant="contained"
-                        startIcon={<OpenInNewIcon />}
-                        disabled={!technicalAccess || !links?.dashboards.application_overview.url}
-                        onClick={() => {
-                            const url = dashboardUrl(links, "application_overview", context);
-                            if (url) {
-                                openExternalUrl(url);
-                            }
-                        }}
-                    >
-                        Open Grafana
-                    </Button>
-                }
-            />
+            <SettingsTabs />
+
+            <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+                <Button
+                    variant="contained"
+                    startIcon={<OpenInNewIcon />}
+                    disabled={!technicalAccess || !links?.dashboards.application_overview.url}
+                    onClick={() => {
+                        const url = dashboardUrl(links, "application_overview", context);
+                        if (url) {
+                            openExternalUrl(url);
+                        }
+                    }}
+                >
+                    Open Grafana
+                </Button>
+            </Stack>
 
             {linksQuery.isError && (
                 <Alert severity="warning">

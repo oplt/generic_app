@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 
-from backend.modules.projects.repository import ProjectsRepository
+from backend.lib.project_access import ProjectAccessPort, SqlAlchemyProjectAccessPort
 from backend.modules.rag.application.chunking_service import ChunkingService
 from backend.modules.rag.application.document_parser_service import DocumentParserService
 from backend.modules.rag.application.embedding_service import EmbeddingService
@@ -14,6 +15,8 @@ from backend.modules.rag.infrastructure.file_storage_adapter import FileStorageA
 from backend.modules.rag.infrastructure.rag_config import RagConfig
 from backend.modules.rag.infrastructure.repositories import RagRepository
 from backend.modules.rag.infrastructure.vector_store_adapter import build_vector_store
+from backend.modules.rag.workers import queue_document_indexing
+from backend.lib.retrieval_cache import invalidate_retrieval_cache_for_document
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +28,7 @@ class DocumentIngestionService:
         self.db = db
         self.config = config or RagConfig.from_settings()
         self.repo = RagRepository(db)
-        self.projects_repo = ProjectsRepository(db)
+        self.project_access: ProjectAccessPort = SqlAlchemyProjectAccessPort(db)
         self.parser = DocumentParserService()
         self.chunker = ChunkingService(self.config)
         self.embeddings = EmbeddingService(self.config)
@@ -42,6 +45,7 @@ class DocumentIngestionService:
         content_type: str,
         project_id: str | None = None,
         organization_id: str | None = None,
+        metadata: dict | None = None,
     ):
         if not self.config.enabled:
             raise HTTPException(status_code=503, detail="RAG is disabled")
@@ -71,7 +75,7 @@ class DocumentIngestionService:
             project_id=project_id,
             organization_id=organization_id,
             source_type="upload",
-            metadata={"size_bytes": len(content)},
+            metadata={"size_bytes": len(content), **(metadata or {})},
         )
         job = await self.repo.create_ingestion_job(
             document_id=document.id,
@@ -85,7 +89,7 @@ class DocumentIngestionService:
 
         return document, job, content
 
-    async def index_document(
+    async def enqueue_document_indexing(
         self,
         *,
         document_id: str,
@@ -93,19 +97,49 @@ class DocumentIngestionService:
         file_content: bytes | None = None,
         is_admin: bool = False,
     ):
-        document = await self.repo.get_document(document_id)
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-        if document.user_id != user_id and not is_admin:
-            raise HTTPException(status_code=403, detail="You cannot index this document")
-        if document.project_id:
-            await self._ensure_project_access(user_id, document.project_id)
-
+        document = await self._get_document_for_indexing(
+            document_id=document_id,
+            user_id=user_id,
+            is_admin=is_admin,
+        )
         job = await self.repo.create_ingestion_job(
             document_id=document.id,
             user_id=user_id,
             project_id=document.project_id,
         )
+        await self.db.commit()
+        await self.db.refresh(job)
+        queue_document_indexing(
+            document_id=document.id,
+            user_id=user_id,
+            job_id=job.id,
+        )
+        return job
+
+    async def index_document(
+        self,
+        *,
+        document_id: str,
+        user_id: str,
+        file_content: bytes | None = None,
+        is_admin: bool = False,
+        job_id: str | None = None,
+    ):
+        document = await self._get_document_for_indexing(
+            document_id=document_id,
+            user_id=user_id,
+            is_admin=is_admin,
+        )
+        if job_id:
+            job = await self.repo.get_ingestion_job(job_id)
+            if not job or job.document_id != document.id:
+                raise HTTPException(status_code=404, detail="Ingestion job not found")
+        else:
+            job = await self.repo.create_ingestion_job(
+                document_id=document.id,
+                user_id=user_id,
+                project_id=document.project_id,
+            )
         await self.repo.update_ingestion_job(
             job, status=IngestionJobStatus.RUNNING, started=True
         )
@@ -143,6 +177,21 @@ class DocumentIngestionService:
                 project_id=document.project_id,
                 organization_id=document.organization_id,
             )
+            injection_flags = 0
+            for chunk in chunks:
+                if self.policy.contains_prompt_injection(chunk.content):
+                    chunk.metadata = {
+                        **chunk.metadata,
+                        "prompt_injection_suspected": True,
+                    }
+                    injection_flags += 1
+            if injection_flags:
+                logger.warning(
+                    "Suspected prompt injection in %s chunk(s) for document=%s user=%s",
+                    injection_flags,
+                    document.id,
+                    document.user_id,
+                )
             metrics.rag_chunk_count.observe(len(chunks))
 
             await self.repo.update_document_status(document, DocumentStatus.EMBEDDING)
@@ -167,15 +216,21 @@ class DocumentIngestionService:
                     for c in chunks
                 ],
             )
-            await self.vector_store.upsert_chunks(chunks)
 
             await self.repo.update_document_status(document, DocumentStatus.INDEXED)
+            metadata = json.loads(document.metadata_json or "{}")
+            metadata["chunk_count"] = len(chunk_rows)
+            document.metadata_json = json.dumps(metadata, ensure_ascii=True)
             await self.repo.update_ingestion_job(
                 job, status=IngestionJobStatus.COMPLETED, finished=True
             )
             document.updated_at = datetime.now(UTC)
             await self.db.commit()
             await self.db.refresh(document)
+            await invalidate_retrieval_cache_for_document(
+                user_id=document.user_id,
+                project_id=document.project_id,
+            )
             return document, chunk_rows, job
         except HTTPException:
             raise
@@ -205,9 +260,26 @@ class DocumentIngestionService:
         await self.storage.delete_document(document.storage_path)
         await self.repo.soft_delete_document(document)
         await self.db.commit()
+        await invalidate_retrieval_cache_for_document(
+            user_id=document.user_id,
+            project_id=document.project_id,
+        )
+
+    async def _get_document_for_indexing(
+        self,
+        *,
+        document_id: str,
+        user_id: str,
+        is_admin: bool,
+    ):
+        document = await self.repo.get_document(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        if document.user_id != user_id and not is_admin:
+            raise HTTPException(status_code=403, detail="You cannot index this document")
+        if document.project_id:
+            await self._ensure_project_access(user_id, document.project_id)
+        return document
 
     async def _ensure_project_access(self, user_id: str, project_id: str) -> None:
-        project = await self.projects_repo.get_by_id_for_user(project_id, user_id)
-        if not project:
-            metrics.rag_permission_denied_total.inc()
-            raise HTTPException(status_code=403, detail="Project access denied")
+        await self.project_access.ensure_project_access(user_id, project_id)

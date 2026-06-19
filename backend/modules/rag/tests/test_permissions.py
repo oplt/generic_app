@@ -18,8 +18,10 @@ class PermissionTest(unittest.IsolatedAsyncioTestCase):
         )
         service.policy = MagicMock()
         service.policy.is_allowed_file_type.return_value = True
-        service.projects_repo = MagicMock()
-        service.projects_repo.get_by_id_for_user = AsyncMock(return_value=None)
+        service.project_access = MagicMock()
+        service.project_access.ensure_project_access = AsyncMock(
+            side_effect=HTTPException(status_code=403, detail="Forbidden")
+        )
         service.storage = MagicMock()
 
         with self.assertRaises(HTTPException) as ctx:
@@ -54,3 +56,22 @@ class PermissionTest(unittest.IsolatedAsyncioTestCase):
                 is_admin=False,
             )
         self.assertEqual(ctx.exception.status_code, 403)
+
+
+class RagRepositoryDocumentAccessTest(unittest.IsolatedAsyncioTestCase):
+    async def test_filter_document_ids_for_user_returns_only_owned_ids(self):
+        from backend.modules.rag.infrastructure.repositories import RagRepository
+
+        db = AsyncMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = ["doc-1"]
+        db.execute = AsyncMock(return_value=result)
+        repo = RagRepository(db)
+
+        allowed = await repo.filter_document_ids_for_user(
+            "user-a",
+            ["doc-1", "doc-2"],
+        )
+
+        self.assertEqual(allowed, ["doc-1"])
+        db.execute.assert_awaited_once()

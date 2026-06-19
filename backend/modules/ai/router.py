@@ -3,6 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
+from backend.core.pagination import (
+    PaginatedResponse,
+    PaginationParams,
+    paginated_response,
+    pagination_params,
+)
+from backend.modules.ai.serializers import run_to_response
 from backend.modules.ai.schemas import (
     AiChunkMatchResponse,
     AiDocumentCreate,
@@ -78,33 +85,6 @@ def _document_to_response(document) -> AiDocumentResponse:
     )
 
 
-def _run_to_response(run) -> AiRunResponse:
-    return AiRunResponse(
-        id=run.id,
-        prompt_template_id=run.prompt_template_id,
-        prompt_version_id=run.prompt_version_id,
-        provider_key=run.provider_key,
-        model_name=run.model_name,
-        status=run.status,
-        response_format=run.response_format,
-        variables=run.variables_json,
-        retrieval_query=run.retrieval_query,
-        retrieved_chunk_ids=run.retrieved_chunk_ids_json,
-        input_messages=run.input_messages_json,
-        output_text=run.output_text,
-        output_json=run.output_json,
-        latency_ms=run.latency_ms,
-        input_tokens=run.input_tokens,
-        output_tokens=run.output_tokens,
-        total_tokens=run.total_tokens,
-        estimated_cost_micros=run.estimated_cost_micros,
-        error_message=run.error_message,
-        review_status=run.review_status,
-        created_at=run.created_at,
-        completed_at=run.completed_at,
-    )
-
-
 def _review_to_response(review) -> AiReviewItemResponse:
     return AiReviewItemResponse.model_validate(review)
 
@@ -141,7 +121,7 @@ async def get_overview(
         prompt_templates=[
             _prompt_template_to_response(item) for item in overview["prompt_templates"]
         ],
-        recent_runs=[_run_to_response(item) for item in overview["recent_runs"]],
+        recent_runs=[run_to_response(item) for item in overview["recent_runs"]],
         documents=[_document_to_response(item) for item in overview["documents"]],
         datasets=[_dataset_to_response(item) for item in overview["datasets"]],
     )
@@ -152,14 +132,22 @@ async def list_providers():
     return AiService.list_provider_descriptors()
 
 
-@router.get("/prompts", response_model=list[AiPromptTemplateResponse])
+@router.get("/prompts", response_model=PaginatedResponse[AiPromptTemplateResponse])
 async def list_prompt_templates(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    templates = await service.list_prompt_templates(current_user)
-    return [_prompt_template_to_response(item) for item in templates]
+    templates, total = await service.list_prompt_templates(
+        current_user, limit=pagination.limit, offset=pagination.offset
+    )
+    return paginated_response(
+        [_prompt_template_to_response(item) for item in templates],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("/prompts", response_model=AiPromptTemplateResponse, status_code=201)
@@ -191,15 +179,29 @@ async def update_prompt_template(
     return _prompt_template_to_response(template)
 
 
-@router.get("/prompts/{template_id}/versions", response_model=list[AiPromptVersionResponse])
+@router.get(
+    "/prompts/{template_id}/versions",
+    response_model=PaginatedResponse[AiPromptVersionResponse],
+)
 async def list_prompt_versions(
     template_id: str,
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    versions = await service.list_prompt_versions(current_user, template_id)
-    return [_prompt_version_to_response(item) for item in versions]
+    versions, total = await service.list_prompt_versions(
+        current_user,
+        template_id,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return paginated_response(
+        [_prompt_version_to_response(item) for item in versions],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post(
@@ -239,16 +241,25 @@ async def update_prompt_version(
     return _prompt_version_to_response(version)
 
 
-@router.get("/documents", response_model=list[AiDocumentResponse])
+@router.get("/documents", response_model=PaginatedResponse[AiDocumentResponse])
 async def list_documents(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    return [_document_to_response(item) for item in await service.list_documents(current_user)]
+    documents, total = await service.list_documents(
+        current_user, limit=pagination.limit, offset=pagination.offset
+    )
+    return paginated_response(
+        [_document_to_response(item) for item in documents],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
-@router.post("/documents", response_model=AiDocumentResponse, status_code=201)
+@router.post("/documents", response_model=AiDocumentResponse, status_code=202)
 async def create_document(
     payload: AiDocumentCreate,
     db: AsyncSession = Depends(get_db),
@@ -266,7 +277,7 @@ async def create_document(
     return _document_to_response(document)
 
 
-@router.post("/documents/upload", response_model=AiDocumentResponse, status_code=201)
+@router.post("/documents/upload", response_model=AiDocumentResponse, status_code=202)
 async def upload_document(
     file: UploadFile = File(...),
     description: str | None = Form(default=None),
@@ -294,13 +305,22 @@ async def retrieve_chunks(
     return [AiChunkMatchResponse(**item) for item in matches]
 
 
-@router.get("/runs", response_model=list[AiRunResponse])
+@router.get("/runs", response_model=PaginatedResponse[AiRunResponse])
 async def list_runs(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    return [_run_to_response(item) for item in await service.list_runs(current_user)]
+    runs, total = await service.list_runs(
+        current_user, limit=pagination.limit, offset=pagination.offset
+    )
+    return paginated_response(
+        [run_to_response(item) for item in runs],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("/runs", response_model=AiRunResponse, status_code=201)
@@ -320,16 +340,25 @@ async def create_run(
         top_k=payload.top_k,
         review_required=payload.review_required,
     )
-    return _run_to_response(run)
+    return run_to_response(run)
 
 
-@router.get("/reviews", response_model=list[AiReviewItemResponse])
+@router.get("/reviews", response_model=PaginatedResponse[AiReviewItemResponse])
 async def list_reviews(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    return [_review_to_response(item) for item in await service.list_reviews(current_user)]
+    reviews, total = await service.list_reviews(
+        current_user, limit=pagination.limit, offset=pagination.offset
+    )
+    return paginated_response(
+        [_review_to_response(item) for item in reviews],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("/runs/{run_id}/reviews", response_model=AiReviewItemResponse, status_code=201)
@@ -356,15 +385,26 @@ async def decide_review(
     return _review_to_response(review)
 
 
-@router.get("/runs/{run_id}/feedback", response_model=list[AiFeedbackResponse])
+@router.get("/runs/{run_id}/feedback", response_model=PaginatedResponse[AiFeedbackResponse])
 async def list_feedback(
     run_id: str,
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    feedback_items = await service.list_feedback(current_user, run_id)
-    return [_feedback_to_response(item) for item in feedback_items]
+    feedback_items, total = await service.list_feedback(
+        current_user,
+        run_id,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return paginated_response(
+        [_feedback_to_response(item) for item in feedback_items],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("/runs/{run_id}/feedback", response_model=AiFeedbackResponse, status_code=201)
@@ -385,13 +425,22 @@ async def create_feedback(
     return _feedback_to_response(feedback)
 
 
-@router.get("/evaluation-datasets", response_model=list[AiEvaluationDatasetResponse])
+@router.get("/evaluation-datasets", response_model=PaginatedResponse[AiEvaluationDatasetResponse])
 async def list_datasets(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    return [_dataset_to_response(item) for item in await service.list_datasets(current_user)]
+    datasets, total = await service.list_datasets(
+        current_user, limit=pagination.limit, offset=pagination.offset
+    )
+    return paginated_response(
+        [_dataset_to_response(item) for item in datasets],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("/evaluation-datasets", response_model=AiEvaluationDatasetResponse, status_code=201)
@@ -421,16 +470,27 @@ async def update_dataset(
 
 @router.get(
     "/evaluation-datasets/{dataset_id}/cases",
-    response_model=list[AiEvaluationCaseResponse],
+    response_model=PaginatedResponse[AiEvaluationCaseResponse],
 )
 async def list_dataset_cases(
     dataset_id: str,
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    cases = await service.list_dataset_cases(current_user, dataset_id)
-    return [_dataset_case_to_response(item) for item in cases]
+    cases, total = await service.list_dataset_cases(
+        current_user,
+        dataset_id,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return paginated_response(
+        [_dataset_case_to_response(item) for item in cases],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post(
@@ -449,20 +509,28 @@ async def create_dataset_case(
     return _dataset_case_to_response(case)
 
 
-@router.get("/evaluation-runs", response_model=list[AiEvaluationRunResponse])
+@router.get("/evaluation-runs", response_model=PaginatedResponse[AiEvaluationRunResponse])
 async def list_evaluation_runs(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    runs = await service.list_evaluation_runs(current_user)
-    return [AiEvaluationRunResponse.model_validate(run) for run in runs]
+    runs, total = await service.list_evaluation_runs(
+        current_user, limit=pagination.limit, offset=pagination.offset
+    )
+    return paginated_response(
+        [AiEvaluationRunResponse.model_validate(run) for run in runs],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post(
     "/evaluation-datasets/{dataset_id}/run",
     response_model=AiEvaluationRunResponse,
-    status_code=201,
+    status_code=202,
 )
 async def run_evaluation(
     dataset_id: str,
@@ -471,7 +539,7 @@ async def run_evaluation(
     current_user: User = Depends(get_current_user),
 ):
     service = AiService(db)
-    evaluation_run = await service.run_evaluation(
+    evaluation_run = await service.queue_evaluation(
         current_user, dataset_id, payload.prompt_version_id
     )
     return AiEvaluationRunResponse.model_validate(evaluation_run)

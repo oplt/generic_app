@@ -1,6 +1,7 @@
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_scalars
 from backend.modules.notifications.models import Notification, NotificationPreference
 
 
@@ -25,14 +26,19 @@ class NotificationsRepository:
         await self.db.flush()
         return notification
 
-    async def list_for_user(self, user_id: str) -> list[Notification]:
-        result = await self.db.execute(
+    async def list_for_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[Notification], int]:
+        stmt = (
             select(Notification)
             .where(Notification.user_id == user_id)
             .order_by(Notification.created_at.desc())
-            .limit(50)
         )
-        return list(result.scalars().all())
+        return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
     async def get_by_id(self, notification_id: str) -> Notification | None:
         result = await self.db.execute(

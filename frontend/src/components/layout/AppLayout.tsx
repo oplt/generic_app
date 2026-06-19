@@ -3,11 +3,9 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
     AppBar,
     Avatar,
-    Badge,
     Box,
     Button,
     Chip,
-    Divider,
     Drawer,
     IconButton,
     List,
@@ -26,26 +24,22 @@ import {
     ChevronRight as ChevronRightIcon,
     Dashboard as DashboardIcon,
     DarkMode as DarkModeIcon,
-    Extension as PlatformIcon,
     FolderOpen as ProjectsIcon,
     LightMode as LightModeIcon,
     Logout as LogoutIcon,
     Menu as MenuIcon,
-    MonitorHeart as ObservabilityIcon,
-    SmartToy as AiStudioIcon,
     Notifications as NotificationsIcon,
-    Person as ProfileIcon,
     Settings as SettingsIcon,
     SettingsBrightness as SystemModeIcon,
 } from "@mui/icons-material";
-import { alpha, useTheme } from "@mui/material/styles";
-import { useQuery } from "@tanstack/react-query";
+import { useTheme } from "@mui/material/styles";
+import { colors } from "../../app/designTokens";
 import { useColorMode } from "../../app/colorModeContext";
-import { getNotifications } from "../../api/notifications";
-import { getProfile } from "../../api/profile";
-import { getMe } from "../../api/users";
 import { useAuth } from "../../hooks/useAuth";
 import { usePlatformMetadata } from "../../hooks/usePlatformMetadata";
+import { useUserProfile } from "../../hooks/useUserProfile";
+import { NotificationNavBadge } from "./NotificationNavBadge";
+import { getSettingsHubLabel, isSettingsHubPath, useSettingsTabs } from "./SettingsTabs";
 import { getInitials } from "../../utils/formatters";
 
 const DRAWER_WIDTH = 288;
@@ -55,9 +49,8 @@ type NavItem = {
     label: string;
     icon: ReactNode;
     path: string;
-    adminOnly?: boolean;
-    badge?: number;
-    group: "workspace" | "admin";
+    group: "workspace";
+    isSelected?: (pathname: string) => boolean;
 };
 
 function ThemeToggle() {
@@ -77,7 +70,6 @@ function ThemeToggle() {
                 onClick={cycle}
                 size="small"
                 aria-label="Cycle color theme"
-                sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper" }}
             >
                 {icon}
             </IconButton>
@@ -105,20 +97,22 @@ function NavBlock({
     return (
         <Stack spacing={1}>
             {!collapsed && (
-                <Typography variant="overline" color="text.secondary" sx={{ px: 1.5 }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ px: 2 }}>
                     {title}
                 </Typography>
             )}
             <List disablePadding sx={{ display: "grid", gap: 0.75 }}>
                 {items.map((item) => {
-                    const selected =
-                        item.path === "/dashboard"
-                            ? currentPath === item.path
-                            : currentPath.startsWith(item.path);
+                    const selected = item.isSelected
+                        ? item.isSelected(currentPath)
+                        : item.path === "/dashboard"
+                          ? currentPath === item.path
+                          : currentPath.startsWith(item.path);
                     const itemButton = (
                         <ListItemButton
                             key={item.path}
                             selected={selected}
+                            aria-current={selected ? "page" : undefined}
                             onClick={() => onNavigate(item.path)}
                             sx={
                                 collapsed
@@ -136,13 +130,7 @@ function NavBlock({
                                     justifyContent: "center",
                                 }}
                             >
-                                {item.badge ? (
-                                    <Badge badgeContent={item.badge} color="error">
-                                        {item.icon}
-                                    </Badge>
-                                ) : (
-                                    item.icon
-                                )}
+                                {item.icon}
                             </ListItemIcon>
                             {!collapsed && (
                                 <ListItemText
@@ -172,62 +160,54 @@ function NavBlock({
 export function AppLayout() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [desktopNavCollapsed, setDesktopNavCollapsed] = useState(false);
-    const { logout, isAdmin } = useAuth();
+    const { logout, currentUser } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down("md"));
     const { data: platformMetadata } = usePlatformMetadata();
-
-    const { data: currentUser } = useQuery({
-        queryKey: ["me"],
-        queryFn: getMe,
-    });
-    const { data: notifications } = useQuery({
-        queryKey: ["notifications"],
-        queryFn: getNotifications,
-        refetchInterval: 60_000,
-    });
-    const { data: profile } = useQuery({
-        queryKey: ["profile"],
-        queryFn: getProfile,
-        staleTime: 5 * 60_000,
-    });
-
-    const unreadCount = notifications?.filter((notification) => !notification.is_read).length ?? 0;
+    const { data: profile } = useUserProfile();
+    const settingsTabs = useSettingsTabs();
     const appName = platformMetadata?.app_name ?? "Your App";
     const coreDomainPlural = platformMetadata?.core_domain_plural ?? "Projects";
-    const hasUserPlatformModule =
-        platformMetadata?.module_catalog.some((item) => item.user_visible && item.enabled) ?? false;
-    const hasAiModule =
-        platformMetadata?.module_catalog.some((item) => item.key === "ai" && item.enabled) ?? false;
     const drawerCollapsed = !isMobile && desktopNavCollapsed;
     const desktopDrawerWidth = drawerCollapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH;
+
+    const settingsNavItem = useMemo<NavItem>(
+        () => ({
+            label: "Settings",
+            icon: <SettingsIcon />,
+            path: "/profile",
+            group: "workspace",
+            isSelected: (pathname) => isSettingsHubPath(pathname, settingsTabs),
+        }),
+        [settingsTabs]
+    );
 
     const navItems = useMemo<NavItem[]>(
         () => [
             { label: "Dashboard", icon: <DashboardIcon />, path: "/dashboard", group: "workspace" },
             { label: coreDomainPlural, icon: <ProjectsIcon />, path: "/projects", group: "workspace" },
-            ...(hasUserPlatformModule
-                ? [{ label: "Platform", icon: <PlatformIcon />, path: "/platform", group: "workspace" as const }]
-                : []),
-            ...(hasAiModule
-                ? [{ label: "AI Studio", icon: <AiStudioIcon />, path: "/ai", group: "workspace" as const }]
-                : []),
-            { label: "Observability", icon: <ObservabilityIcon />, path: "/observability", group: "workspace" },
-            { label: "Settings", icon: <SettingsIcon />, path: "/admin/settings", adminOnly: true, group: "admin" },
         ],
-        [coreDomainPlural, hasAiModule, hasUserPlatformModule]
+        [coreDomainPlural]
     );
 
-    const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
-    const currentItem = visibleNavItems.find((item) =>
-        item.path === "/dashboard" ? location.pathname === item.path : location.pathname.startsWith(item.path)
-    );
-    const adminRouteLabel =
-        location.pathname.startsWith("/admin/users") ? "Users" :
-        location.pathname.startsWith("/admin/platform") ? "Platform Admin" :
-        undefined;
+    const visibleNavItems = navItems;
+    const settingsSelected = settingsNavItem.isSelected?.(location.pathname) ?? false;
+    const currentItem =
+        settingsSelected
+            ? settingsNavItem
+            : visibleNavItems.find((item) =>
+                  item.path === "/dashboard"
+                      ? location.pathname === item.path
+                      : location.pathname.startsWith(item.path)
+              );
+    const pageTitle =
+        getSettingsHubLabel(location.pathname, settingsTabs) ??
+        currentItem?.label ??
+        (location.pathname.startsWith("/calendar") ? "Calendar" : undefined) ??
+        (location.pathname.startsWith("/notifications") ? "Notifications" : undefined) ??
+        "Workspace";
     const avatarLabel = getInitials(currentUser?.full_name, currentUser?.email);
 
     function handleNavigate(path: string) {
@@ -249,37 +229,38 @@ export function AppLayout() {
                 disableHoverListener={!drawerCollapsed}
             >
                 <Box
-                    sx={(currentTheme) => ({
-                        borderRadius: 4,
+                    sx={{
                         px: drawerCollapsed ? 1 : 2,
                         py: drawerCollapsed ? 1.75 : 2.25,
                         mb: 2,
-                        border: `1px solid ${currentTheme.palette.divider}`,
-                        backgroundColor: currentTheme.palette.background.paper,
-                        backgroundImage: `radial-gradient(circle at 85% 15%, ${alpha(
-                            currentTheme.palette.secondary.main,
-                            currentTheme.palette.mode === "dark" ? 0.18 : 0.28
-                        )}, transparent 42%)`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: drawerCollapsed ? "center" : "flex-start",
                         textAlign: drawerCollapsed ? "center" : "left",
-                    })}
+                    }}
                 >
                     {drawerCollapsed ? (
-                        <Typography variant="h6" sx={{ lineHeight: 1 }}>
+                        <Typography
+                            variant="h6"
+                            sx={{
+                                lineHeight: 1,
+                                fontFamily: "'Universal Sans Display', -apple-system, Arial, sans-serif",
+                                letterSpacing: "0.12em",
+                            }}
+                        >
                             {appName.trim().charAt(0).toUpperCase() || "W"}
                         </Typography>
                     ) : (
                         <Box>
-                            <Typography variant="overline" sx={{ color: "primary.main" }}>
-                                Workspace
-                            </Typography>
-                            <Typography variant="h6" sx={{ mt: 0.5 }}>
+                            <Typography
+                                variant="h6"
+                                sx={{
+                                    fontFamily: "'Universal Sans Display', -apple-system, Arial, sans-serif",
+                                    letterSpacing: "0.12em",
+                                    textTransform: "uppercase",
+                                }}
+                            >
                                 {appName}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                                A sharper control center for your team, customers, and operations.
                             </Typography>
                             {platformMetadata?.module_pack && (
                                 <Chip
@@ -297,92 +278,94 @@ export function AppLayout() {
             <Stack spacing={drawerCollapsed ? 1 : 2}>
                 <NavBlock
                     title="Product"
-                    items={visibleNavItems.filter((item) => item.group === "workspace")}
+                    items={visibleNavItems}
                     currentPath={location.pathname}
                     onNavigate={handleNavigate}
                     collapsed={drawerCollapsed}
                 />
-                {isAdmin && drawerCollapsed && <Divider sx={{ mx: 1.5 }} />}
-                {isAdmin && (
-                    <NavBlock
-                        title="Administration"
-                        items={visibleNavItems.filter((item) => item.group === "admin")}
-                        currentPath={location.pathname}
-                        onNavigate={handleNavigate}
-                        collapsed={drawerCollapsed}
-                    />
-                )}
             </Stack>
 
             <Box sx={{ flexGrow: 1 }} />
 
-            <Box
-                sx={(currentTheme) => ({
-                    p: drawerCollapsed ? 1.25 : 2,
-                    borderRadius: 4,
-                    border: `1px solid ${currentTheme.palette.divider}`,
-                    backgroundColor: alpha(currentTheme.palette.background.paper, 0.78),
-                })}
-            >
+            <Box sx={{ p: drawerCollapsed ? 1.25 : 2 }}>
                 <Stack spacing={1.5} alignItems={drawerCollapsed ? "center" : "stretch"}>
-                    <Stack
-                        direction={drawerCollapsed ? "column" : "row"}
-                        spacing={1.5}
-                        alignItems="center"
-                        justifyContent="center"
-                        sx={{ width: "100%" }}
-                    >
-                        <Avatar
-                            src={profile?.avatar_url ?? undefined}
-                            sx={{ width: drawerCollapsed ? 40 : 44, height: drawerCollapsed ? 40 : 44 }}
-                        >
-                            {avatarLabel}
-                        </Avatar>
-                        {!drawerCollapsed && (
-                            <Box sx={{ minWidth: 0 }}>
-                                <Typography variant="subtitle2" noWrap>
-                                    {currentUser?.full_name ?? "Your profile"}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary" noWrap>
-                                    {currentUser?.email ?? "Signed in"}
-                                </Typography>
-                            </Box>
-                        )}
-                    </Stack>
                     {drawerCollapsed ? (
-                        <Stack spacing={1}>
-                            <Tooltip title="Manage profile" placement="right">
-                                <IconButton
-                                    onClick={() => handleNavigate("/profile")}
-                                    sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper" }}
-                                >
-                                    <ProfileIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Sign out" placement="right">
-                                <IconButton
-                                    onClick={() => void handleSignOut()}
-                                    sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper" }}
-                                >
-                                    <LogoutIcon fontSize="small" />
-                                </IconButton>
-                            </Tooltip>
-                        </Stack>
-                    ) : (
-                        <Stack spacing={1}>
-                            <Button variant="outlined" fullWidth onClick={() => handleNavigate("/profile")}>
-                                Manage profile
-                            </Button>
-                            <Button
-                                variant="text"
-                                color="inherit"
-                                fullWidth
-                                startIcon={<LogoutIcon />}
-                                onClick={() => void handleSignOut()}
+                        <Tooltip title="Settings" placement="right">
+                            <IconButton
+                                aria-label="Settings"
+                                aria-current={settingsSelected ? "page" : undefined}
+                                onClick={() => handleNavigate(settingsNavItem.path)}
+                                color={settingsSelected ? "primary" : "default"}
                             >
-                                Sign out
-                            </Button>
-                        </Stack>
+                                <SettingsIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    ) : (
+                        <ListItemButton
+                            selected={settingsSelected}
+                            aria-current={settingsSelected ? "page" : undefined}
+                            onClick={() => handleNavigate(settingsNavItem.path)}
+                            sx={{ borderRadius: 2 }}
+                        >
+                            <ListItemIcon sx={{ minWidth: 40 }}>{settingsNavItem.icon}</ListItemIcon>
+                            <ListItemText
+                                primary={settingsNavItem.label}
+                                secondary={settingsSelected ? "Current section" : undefined}
+                                secondaryTypographyProps={{ sx: { fontSize: "0.74rem" } }}
+                            />
+                        </ListItemButton>
+                    )}
+                    <Tooltip title="Profile" placement="right" disableHoverListener={!drawerCollapsed}>
+                        <ListItemButton
+                            selected={location.pathname.startsWith("/profile")}
+                            aria-label="Open profile settings"
+                            onClick={() => handleNavigate("/profile")}
+                            sx={{
+                                borderRadius: 2,
+                                px: drawerCollapsed ? 1 : 2,
+                                py: drawerCollapsed ? 1 : 1.25,
+                                justifyContent: drawerCollapsed ? "center" : "flex-start",
+                            }}
+                        >
+                            <ListItemIcon
+                                sx={{
+                                    minWidth: drawerCollapsed ? "auto" : 52,
+                                    justifyContent: "center",
+                                }}
+                            >
+                                <Avatar
+                                    src={profile?.avatar_url ?? undefined}
+                                    sx={{ width: drawerCollapsed ? 40 : 44, height: drawerCollapsed ? 40 : 44 }}
+                                >
+                                    {avatarLabel}
+                                </Avatar>
+                            </ListItemIcon>
+                            {!drawerCollapsed && (
+                                <ListItemText
+                                    primary={currentUser?.full_name ?? "Your profile"}
+                                    secondary={currentUser?.email ?? "Signed in"}
+                                    primaryTypographyProps={{ noWrap: true }}
+                                    secondaryTypographyProps={{ noWrap: true }}
+                                />
+                            )}
+                        </ListItemButton>
+                    </Tooltip>
+                    {drawerCollapsed ? (
+                        <Tooltip title="Sign out" placement="right">
+                            <IconButton aria-label="Sign out" onClick={() => void handleSignOut()}>
+                                <LogoutIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    ) : (
+                        <Button
+                            variant="text"
+                            color="inherit"
+                            fullWidth
+                            startIcon={<LogoutIcon />}
+                            onClick={() => void handleSignOut()}
+                        >
+                            Sign out
+                        </Button>
                     )}
                 </Stack>
             </Box>
@@ -394,21 +377,29 @@ export function AppLayout() {
             <AppBar
                 position="fixed"
                 elevation={0}
+                color="inherit"
                 sx={{
                     left: { md: `${desktopDrawerWidth}px` },
                     width: { md: `calc(100% - ${desktopDrawerWidth}px)` },
-                    borderBottom: 1,
-                    borderColor: "divider",
-                    backgroundColor: alpha(theme.palette.background.default, theme.palette.mode === "dark" ? 0.82 : 0.78),
+                    backgroundColor:
+                        theme.palette.mode === "dark"
+                            ? theme.palette.background.paper
+                            : colors.frostedGlass,
+                    backdropFilter: "blur(12px)",
                     color: "text.primary",
-                    transition: theme.transitions.create(["left", "width"], {
+                    transition: theme.transitions.create(["left", "width", "background-color"], {
                         duration: theme.transitions.duration.shorter,
                     }),
                 }}
             >
-                <Toolbar sx={{ minHeight: { xs: 72, md: 80 }, px: { xs: 2, md: 3 } }}>
+                <Toolbar sx={{ minHeight: { xs: 56, md: 64 }, px: { xs: 2, md: 3 } }}>
                     {isMobile ? (
-                        <IconButton edge="start" onClick={() => setDrawerOpen(true)} sx={{ mr: 1.25 }}>
+                        <IconButton
+                            edge="start"
+                            onClick={() => setDrawerOpen(true)}
+                            sx={{ mr: 1.25 }}
+                            aria-label="Open navigation menu"
+                        >
                             <MenuIcon />
                         </IconButton>
                     ) : (
@@ -417,7 +408,7 @@ export function AppLayout() {
                                 edge="start"
                                 onClick={() => setDesktopNavCollapsed((current) => !current)}
                                 aria-label={drawerCollapsed ? "Expand menu" : "Collapse menu"}
-                                sx={{ mr: 1.25, border: 1, borderColor: "divider", bgcolor: "background.paper" }}
+                                sx={{ mr: 1.25 }}
                             >
                                 {drawerCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
                             </IconButton>
@@ -428,34 +419,34 @@ export function AppLayout() {
                             {appName}
                         </Typography>
                         <Typography variant="h6" noWrap>
-                            {currentItem?.label ?? adminRouteLabel ?? "Workspace"}
+                            {pageTitle}
                         </Typography>
                     </Box>
-                    <Stack direction="row" spacing={1} sx={{ mr: 1 }}>
+                    <Stack direction="row" spacing={0.25} alignItems="center">
                         <Tooltip title="Calendar">
                             <IconButton
-                                size="small"
                                 aria-label="Open calendar"
-                                onClick={() => handleNavigate("/calendar")}
-                                sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper" }}
+                                size="small"
+                                onClick={() => navigate("/calendar")}
+                                color={location.pathname.startsWith("/calendar") ? "primary" : "default"}
                             >
                                 <CalendarIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
                         <Tooltip title="Notifications">
                             <IconButton
-                                size="small"
                                 aria-label="Open notifications"
-                                onClick={() => handleNavigate("/notifications")}
-                                sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper" }}
+                                size="small"
+                                onClick={() => navigate("/notifications")}
+                                color={location.pathname.startsWith("/notifications") ? "primary" : "default"}
                             >
-                                <Badge badgeContent={unreadCount || undefined} color="error">
+                                <NotificationNavBadge>
                                     <NotificationsIcon fontSize="small" />
-                                </Badge>
+                                </NotificationNavBadge>
                             </IconButton>
                         </Tooltip>
+                        <ThemeToggle />
                     </Stack>
-                    <ThemeToggle />
                 </Toolbar>
             </AppBar>
 
@@ -494,7 +485,7 @@ export function AppLayout() {
                 sx={{
                     minHeight: "100vh",
                     ml: { md: `${desktopDrawerWidth}px` },
-                    pt: { xs: "72px", md: "80px" },
+                    pt: { xs: "56px", md: "64px" },
                     transition: theme.transitions.create("margin-left", {
                         duration: theme.transitions.duration.shorter,
                     }),

@@ -43,10 +43,14 @@ import {
 } from "../api/ai";
 import { useSnackbar } from "../app/snackbarContext";
 import { EmptyState } from "../components/ui/EmptyState";
-import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
+import { SettingsTabs } from "../components/layout/SettingsTabs";
+import { QueryErrorAlert } from "../components/ui/QueryBoundary";
 import { SectionCard } from "../components/ui/SectionCard";
 import { StatCard } from "../components/ui/StatCard";
+import { useMutationErrorToast } from "../hooks/useMutationErrorToast";
+import { invalidateAiOverview, queryKeys } from "../config/queryKeys";
+import { QUERY_STALE_TIMES } from "../config/queryTiming";
 import { formatCurrency, formatDateTime } from "../utils/formatters";
 
 function parseJsonObject(value: string, fallback: Record<string, unknown> = {}) {
@@ -67,17 +71,43 @@ function formatCostMicros(micros: number) {
 export default function AiStudioPage() {
     const queryClient = useQueryClient();
     const { showToast } = useSnackbar();
-    const { data: overview, isLoading } = useQuery({
-        queryKey: ["ai", "overview"],
+    const toastMutationError = useMutationErrorToast();
+    const {
+        data: overview,
+        isLoading,
+        isError,
+        error,
+        refetch,
+    } = useQuery({
+        queryKey: queryKeys.ai.overview,
         queryFn: getAiOverview,
+        staleTime: QUERY_STALE_TIMES.aiOverview,
     });
-    const { data: reviews = [] } = useQuery({
-        queryKey: ["ai", "reviews"],
+    const {
+        data: reviews = [],
+        isLoading: reviewsLoading,
+        isError: reviewsIsError,
+        error: reviewsError,
+        refetch: refetchReviews,
+    } = useQuery({
+        queryKey: queryKeys.ai.reviews,
         queryFn: listAiReviews,
+        staleTime: QUERY_STALE_TIMES.aiReviews,
     });
-    const { data: evaluationRuns = [] } = useQuery({
-        queryKey: ["ai", "evaluation-runs"],
+    const {
+        data: evaluationRuns = [],
+        isLoading: evaluationRunsLoading,
+        isError: evaluationRunsIsError,
+        error: evaluationRunsError,
+        refetch: refetchEvaluationRuns,
+    } = useQuery({
+        queryKey: queryKeys.ai.evaluationRuns,
         queryFn: listAiEvaluationRuns,
+        staleTime: QUERY_STALE_TIMES.aiEvaluationRuns,
+        refetchInterval: (query) => {
+            const runs = query.state.data ?? [];
+            return runs.some((run) => run.status === "running") ? 3_000 : false;
+        },
     });
 
     const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -129,15 +159,29 @@ export default function AiStudioPage() {
     const recentRuns = overview?.recent_runs ?? [];
     const providers = overview?.providers ?? [];
 
-    const { data: selectedTemplateVersions = [] } = useQuery({
-        queryKey: ["ai", "prompt-versions", selectedTemplateId],
+    const {
+        data: selectedTemplateVersions = [],
+        isLoading: versionsLoading,
+        isError: versionsIsError,
+        error: versionsError,
+        refetch: refetchVersions,
+    } = useQuery({
+        queryKey: queryKeys.ai.promptVersions(selectedTemplateId),
         queryFn: () => listPromptVersions(selectedTemplateId),
         enabled: selectedTemplateId.length > 0,
+        staleTime: QUERY_STALE_TIMES.aiPromptVersions,
     });
-    const { data: selectedDatasetCases = [] } = useQuery({
-        queryKey: ["ai", "dataset-cases", selectedDatasetId],
+    const {
+        data: selectedDatasetCases = [],
+        isLoading: datasetCasesLoading,
+        isError: datasetCasesIsError,
+        error: datasetCasesError,
+        refetch: refetchDatasetCases,
+    } = useQuery({
+        queryKey: queryKeys.ai.datasetCases(selectedDatasetId),
         queryFn: () => listAiDatasetCases(selectedDatasetId),
         enabled: selectedDatasetId.length > 0,
+        staleTime: QUERY_STALE_TIMES.aiDatasetCases,
     });
 
     const templateKeyOptions = promptTemplates.map((template) => ({
@@ -150,9 +194,10 @@ export default function AiStudioPage() {
         mutationFn: createPromptTemplate,
         onSuccess: async () => {
             setTemplateForm({ key: "", name: "", description: "" });
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
+            await invalidateAiOverview(queryClient);
             showToast({ message: "Prompt template created.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to create prompt template."),
     });
     const createVersionMutation = useMutation({
         mutationFn: ({
@@ -163,18 +208,22 @@ export default function AiStudioPage() {
             payload: Parameters<typeof createPromptVersion>[1];
         }) => createPromptVersion(templateId, payload),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
-            await queryClient.invalidateQueries({ queryKey: ["ai", "prompt-versions", selectedTemplateId] });
+            await invalidateAiOverview(queryClient);
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.ai.promptVersions(selectedTemplateId),
+            });
             showToast({ message: "Prompt version created.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to create prompt version."),
     });
     const activateVersionMutation = useMutation({
         mutationFn: ({ templateId, versionId }: { templateId: string; versionId: string }) =>
             updatePromptTemplate(templateId, { active_version_id: versionId }),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
+            await invalidateAiOverview(queryClient);
             showToast({ message: "Active prompt version updated.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to update active prompt version."),
     });
     const publishVersionMutation = useMutation({
         mutationFn: ({
@@ -187,42 +236,48 @@ export default function AiStudioPage() {
             isPublished: boolean;
         }) => updatePromptVersion(templateId, versionId, { is_published: isPublished }),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["ai", "prompt-versions", selectedTemplateId] });
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.ai.promptVersions(selectedTemplateId),
+            });
             showToast({ message: "Prompt version updated.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to update prompt version."),
     });
     const createTextDocumentMutation = useMutation({
         mutationFn: createAiDocument,
         onSuccess: async () => {
             setTextDocumentForm({ title: "", description: "", content: "", content_type: "text/plain" });
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
-            showToast({ message: "Document ingested.", severity: "success" });
+            await invalidateAiOverview(queryClient);
+            showToast({ message: "Document queued for indexing.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to ingest document."),
     });
     const uploadDocumentMutation = useMutation({
         mutationFn: ({ file, description }: { file: File; description?: string }) =>
             uploadAiDocument(file, description),
         onSuccess: async () => {
             setUploadDescription("");
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
-            showToast({ message: "Document uploaded and chunked.", severity: "success" });
+            await invalidateAiOverview(queryClient);
+            showToast({ message: "Document uploaded and queued for indexing.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to upload document."),
     });
     const createRunMutation = useMutation({
         mutationFn: createAiRun,
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
-            await queryClient.invalidateQueries({ queryKey: ["ai", "reviews"] });
+            await invalidateAiOverview(queryClient);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.ai.reviews });
             showToast({ message: "AI run completed.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to run prompt."),
     });
     const createReviewMutation = useMutation({
         mutationFn: (runId: string) => createAiReview(runId),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["ai", "reviews"] });
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.ai.reviews });
             showToast({ message: "Review requested.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to create review."),
     });
     const decideReviewMutation = useMutation({
         mutationFn: ({
@@ -237,10 +292,10 @@ export default function AiStudioPage() {
             corrected_output?: string;
         }) => decideAiReview(reviewId, { status, reviewer_notes, corrected_output }),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["ai", "reviews"] });
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.ai.reviews });
             showToast({ message: "Review decision saved.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to save review decision."),
     });
     const createFeedbackMutation = useMutation({
         mutationFn: ({
@@ -257,15 +312,17 @@ export default function AiStudioPage() {
         onSuccess: async () => {
             showToast({ message: "Feedback saved.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to save feedback."),
     });
     const createDatasetMutation = useMutation({
         mutationFn: createAiDataset,
         onSuccess: async (dataset) => {
             setDatasetForm({ name: "", description: "" });
             setSelectedDatasetId(dataset.id);
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
+            await invalidateAiOverview(queryClient);
             showToast({ message: "Evaluation dataset created.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to create evaluation dataset."),
     });
     const createDatasetCaseMutation = useMutation({
         mutationFn: ({
@@ -276,18 +333,21 @@ export default function AiStudioPage() {
             payload: Parameters<typeof createAiDatasetCase>[1];
         }) => createAiDatasetCase(datasetId, payload),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["ai", "dataset-cases", selectedDatasetId] });
+            await queryClient.invalidateQueries({
+                queryKey: queryKeys.ai.datasetCases(selectedDatasetId),
+            });
             showToast({ message: "Evaluation case added.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to add evaluation case."),
     });
     const runEvaluationMutation = useMutation({
         mutationFn: ({ datasetId, promptVersionId }: { datasetId: string; promptVersionId: string }) =>
             runAiEvaluation(datasetId, promptVersionId),
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["ai", "evaluation-runs"] });
-            await queryClient.invalidateQueries({ queryKey: ["ai"] });
-            showToast({ message: "Evaluation run completed.", severity: "success" });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.ai.evaluationRuns });
+            showToast({ message: "Evaluation started. Results will update when complete.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to run evaluation."),
     });
 
     function parseVariableDefinitions(rawNames: string) {
@@ -308,26 +368,43 @@ export default function AiStudioPage() {
 
     if (isLoading) {
         return (
-            <Box sx={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
-                <Skeleton variant="rounded" width="92%" height={520} sx={{ borderRadius: 6 }} />
-            </Box>
+            <PageShell maxWidth="xl">
+                <SettingsTabs />
+                <Box
+                    sx={{
+                        display: "grid",
+                        gap: 2,
+                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" },
+                    }}
+                >
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <Skeleton key={index} variant="rounded" height={120} sx={{ borderRadius: 3 }} />
+                    ))}
+                </Box>
+                <Stack spacing={2} sx={{ mt: 2 }}>
+                    <Skeleton variant="rounded" height={320} sx={{ borderRadius: 3 }} />
+                    <Skeleton variant="rounded" height={280} sx={{ borderRadius: 3 }} />
+                </Stack>
+            </PageShell>
+        );
+    }
+
+    if (isError || !overview) {
+        return (
+            <PageShell maxWidth="xl">
+                <SettingsTabs />
+                <QueryErrorAlert
+                    error={error ?? new Error("Failed to load AI studio overview.")}
+                    fallback="Failed to load AI studio overview."
+                    onRetry={() => void refetch()}
+                />
+            </PageShell>
         );
     }
 
     return (
         <PageShell maxWidth="xl">
-            <PageHeader
-                eyebrow="AI platform"
-                title="AI Studio"
-                description="Manage prompt versions, retrieval documents, review queues, evaluation datasets, and reusable AI run telemetry from one place."
-                meta={
-                    <>
-                        <Chip label={`${providers.length} providers`} variant="outlined" />
-                        <Chip label={`${recentRuns.length} recent runs`} variant="outlined" />
-                        <Chip label={`${documents.length} documents`} variant="outlined" />
-                    </>
-                }
-            />
+            <SettingsTabs />
 
             <Box
                 sx={{
@@ -634,7 +711,20 @@ export default function AiStudioPage() {
                             >
                                 {createVersionMutation.isPending ? "Saving..." : "Create prompt version"}
                             </Button>
-                            {selectedTemplateVersions.length > 0 && (
+                            {selectedTemplateId && versionsIsError && (
+                                <QueryErrorAlert
+                                    error={versionsError}
+                                    fallback="Failed to load prompt versions."
+                                    onRetry={() => void refetchVersions()}
+                                />
+                            )}
+                            {selectedTemplateId && versionsLoading ? (
+                                <Stack spacing={1.25}>
+                                    {Array.from({ length: 2 }).map((_, index) => (
+                                        <Skeleton key={index} variant="rounded" height={96} sx={{ borderRadius: 3 }} />
+                                    ))}
+                                </Stack>
+                            ) : selectedTemplateVersions.length > 0 ? (
                                 <Stack spacing={1.25}>
                                     {selectedTemplateVersions.map((version) => (
                                         <Box key={version.id} sx={(theme) => ({ p: 2, borderRadius: 4, border: `1px solid ${theme.palette.divider}` })}>
@@ -667,7 +757,7 @@ export default function AiStudioPage() {
                                         </Box>
                                     ))}
                                 </Stack>
-                            )}
+                            ) : null}
                         </Stack>
                     </SectionCard>
 
@@ -720,7 +810,20 @@ export default function AiStudioPage() {
                         <Stack spacing={2}>
                             <Stack spacing={1.25}>
                                 <Typography variant="subtitle2">Review queue</Typography>
-                                {reviews.length > 0 ? (
+                                {reviewsIsError && (
+                                    <QueryErrorAlert
+                                        error={reviewsError}
+                                        fallback="Failed to load review queue."
+                                        onRetry={() => void refetchReviews()}
+                                    />
+                                )}
+                                {reviewsLoading ? (
+                                    <Stack spacing={1.25}>
+                                        {Array.from({ length: 2 }).map((_, index) => (
+                                            <Skeleton key={index} variant="rounded" height={140} sx={{ borderRadius: 3 }} />
+                                        ))}
+                                    </Stack>
+                                ) : reviews.length > 0 ? (
                                     reviews.map((review) => (
                                         <Box key={review.id} sx={(theme) => ({ p: 2, borderRadius: 4, border: `1px solid ${theme.palette.divider}` })}>
                                             <Stack spacing={1}>
@@ -825,9 +928,22 @@ export default function AiStudioPage() {
                                     disabled={runEvaluationMutation.isPending || !selectedDatasetId || !runForm.prompt_version_id}
                                     onClick={() => runEvaluationMutation.mutate({ datasetId: selectedDatasetId, promptVersionId: runForm.prompt_version_id })}
                                 >
-                                    {runEvaluationMutation.isPending ? "Evaluating..." : "Run evaluation"}
+                                    {runEvaluationMutation.isPending ? "Starting..." : "Run evaluation"}
                                 </Button>
-                                {selectedDatasetCases.length > 0 && (
+                                {selectedDatasetId && datasetCasesIsError && (
+                                    <QueryErrorAlert
+                                        error={datasetCasesError}
+                                        fallback="Failed to load dataset cases."
+                                        onRetry={() => void refetchDatasetCases()}
+                                    />
+                                )}
+                                {selectedDatasetId && datasetCasesLoading ? (
+                                    <Stack spacing={1}>
+                                        {Array.from({ length: 2 }).map((_, index) => (
+                                            <Skeleton key={index} variant="rounded" height={72} sx={{ borderRadius: 2 }} />
+                                        ))}
+                                    </Stack>
+                                ) : selectedDatasetCases.length > 0 ? (
                                     <Stack spacing={1}>
                                         {selectedDatasetCases.map((item) => (
                                             <Box key={item.id} sx={(theme) => ({ p: 1.5, borderRadius: 3, border: `1px solid ${theme.palette.divider}` })}>
@@ -842,16 +958,45 @@ export default function AiStudioPage() {
                                             </Box>
                                         ))}
                                     </Stack>
+                                ) : null}
+                                {evaluationRunsIsError && (
+                                    <QueryErrorAlert
+                                        error={evaluationRunsError}
+                                        fallback="Failed to load evaluation runs."
+                                        onRetry={() => void refetchEvaluationRuns()}
+                                    />
                                 )}
-                                {evaluationRuns.length > 0 && (
+                                {evaluationRunsLoading ? (
+                                    <Stack spacing={1}>
+                                        {Array.from({ length: 2 }).map((_, index) => (
+                                            <Skeleton key={index} variant="rounded" height={56} sx={{ borderRadius: 2 }} />
+                                        ))}
+                                    </Stack>
+                                ) : evaluationRuns.length > 0 ? (
                                     <Stack spacing={1}>
                                         {evaluationRuns.map((run) => (
-                                            <Alert key={run.id} severity={run.passed_cases === run.total_cases ? "success" : "warning"}>
-                                                {formatDateTime(run.created_at)}: {run.passed_cases}/{run.total_cases} passed, average score {run.average_score}
+                                            <Alert
+                                                key={run.id}
+                                                severity={
+                                                    run.status === "running"
+                                                        ? "info"
+                                                        : run.status === "failed"
+                                                          ? "error"
+                                                          : run.passed_cases === run.total_cases
+                                                            ? "success"
+                                                            : "warning"
+                                                }
+                                            >
+                                                {formatDateTime(run.created_at)}:{" "}
+                                                {run.status === "running"
+                                                    ? `Running (${run.total_cases} cases)...`
+                                                    : run.status === "failed"
+                                                      ? "Evaluation failed"
+                                                      : `${run.passed_cases}/${run.total_cases} passed, average score ${run.average_score}`}
                                             </Alert>
                                         ))}
                                     </Stack>
-                                )}
+                                ) : null}
                             </Stack>
                         </Stack>
                     </SectionCard>

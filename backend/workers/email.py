@@ -44,7 +44,9 @@ async def send_email(
 
 
 def send_email_sync(*, to: str, subject: str, html_body: str, text_body: str | None = None) -> None:
-    asyncio.run(
+    from backend.workers.async_dispatch import run_async_in_sync_context
+
+    run_async_in_sync_context(
         send_email(
             to=to,
             subject=subject,

@@ -27,6 +27,19 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str
     REDIS_URL: str
+    CACHE_ENABLED: bool = True
+    CACHE_EMBEDDING_TTL_SECONDS: int = 600
+    CACHE_EMBEDDING_MAX_TEXT_CHARS: int = 4000
+    CACHE_RETRIEVAL_TTL_SECONDS: int = 180
+    CACHE_PLATFORM_TTL_SECONDS: int = 300
+    CACHE_SETTINGS_TTL_SECONDS: int = 60
+    CACHE_OBSERVABILITY_STATUS_TTL_SECONDS: int = 30
+    CACHE_MEMORY_SEARCH_TTL_SECONDS: int = 60
+    CACHE_QUERY_EMBEDDING_TTL_SECONDS: int = 3600
+    CACHE_USER_PROFILE_TTL_SECONDS: int = 90
+    CACHE_PROJECT_LIST_TTL_SECONDS: int = 30
+    CACHE_CALENDAR_TTL_SECONDS: int = 60
+    CACHE_USER_DIRECTORY_TTL_SECONDS: int = 60
     CELERY_BROKER_URL: str = ""
     CELERY_RESULT_BACKEND: str = ""
     CELERY_TASK_ALWAYS_EAGER: bool = False
@@ -106,10 +119,8 @@ class Settings(BaseSettings):
     AI_DEFAULT_PROVIDER: str = "local"
     AI_EMBEDDING_PROVIDER: str = "local"
     AI_LOCAL_MODEL_NAME: str = "local-heuristic"
-    AI_DOCUMENT_MAX_BYTES: int = 1024 * 1024
-    AI_DOCUMENT_CHUNK_SIZE: int = 1200
-    AI_DOCUMENT_CHUNK_OVERLAP: int = 150
     AI_MAX_OUTPUT_TOKENS: int = 1024
+    AI_EVALUATION_CONCURRENCY: int = 3
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_DEFAULT_MODEL: str = "gpt-4.1-mini"
@@ -134,8 +145,9 @@ class Settings(BaseSettings):
     # RAG
     RAG_ENABLED: bool = True
     RAG_VECTOR_BACKEND: str = "pgvector"
-    RAG_EMBEDDING_PROVIDER: str = "local"
+    RAG_EMBEDDING_PROVIDER: str = ""
     RAG_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    RAG_EMBEDDING_DIMENSIONS: int = 1536
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 150
     RAG_TOP_K: int = 5
@@ -143,6 +155,7 @@ class Settings(BaseSettings):
     RAG_MAX_CONTEXT_TOKENS: int = 6000
     RAG_ALLOWED_FILE_TYPES: str = "pdf,txt,md,docx,csv"
     RAG_MAX_FILE_BYTES: int = 10 * 1024 * 1024
+    RAG_ASK_PROMPT_TEMPLATE_KEY: str = "rag-answer"
 
     CORS_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
 

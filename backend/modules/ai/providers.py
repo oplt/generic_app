@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import math
@@ -9,6 +10,53 @@ import httpx
 from fastapi import HTTPException
 
 from backend.core.config import settings
+from backend.lib.vectors import estimate_tokens
+
+_openai_http_client: httpx.AsyncClient | None = None
+_anthropic_http_client: httpx.AsyncClient | None = None
+_RETRYABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
+_MAX_HTTP_RETRIES = 3
+
+
+def _get_openai_http_client() -> httpx.AsyncClient:
+    global _openai_http_client
+    if _openai_http_client is None or _openai_http_client.is_closed:
+        _openai_http_client = httpx.AsyncClient(
+            timeout=60.0,
+            base_url=settings.OPENAI_BASE_URL,
+        )
+    return _openai_http_client
+
+
+def _get_anthropic_http_client() -> httpx.AsyncClient:
+    global _anthropic_http_client
+    if _anthropic_http_client is None or _anthropic_http_client.is_closed:
+        _anthropic_http_client = httpx.AsyncClient(
+            timeout=60.0,
+            base_url=settings.ANTHROPIC_BASE_URL,
+        )
+    return _anthropic_http_client
+
+
+async def close_ai_provider_http_clients() -> None:
+    global _openai_http_client, _anthropic_http_client
+    for client in (_openai_http_client, _anthropic_http_client):
+        if client is not None and not client.is_closed:
+            await client.aclose()
+    _openai_http_client = None
+    _anthropic_http_client = None
+
+
+async def _post_with_retry(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
+    last_response: httpx.Response | None = None
+    for attempt in range(_MAX_HTTP_RETRIES):
+        response = await client.post(url, **kwargs)
+        last_response = response
+        if response.status_code not in _RETRYABLE_STATUS_CODES or attempt == _MAX_HTTP_RETRIES - 1:
+            return response
+        await asyncio.sleep(min(2**attempt, 8))
+    assert last_response is not None
+    return last_response
 
 
 @dataclass(slots=True)
@@ -42,10 +90,6 @@ class BaseAiProvider:
 
     async def embed_texts(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         raise NotImplementedError
-
-
-def _estimate_tokens(text: str) -> int:
-    return max(1, math.ceil(len(text) / 4))
 
 
 def _hash_embedding(text: str, dimensions: int = 32) -> list[float]:
@@ -86,12 +130,14 @@ class LocalHeuristicProvider(BaseAiProvider):
             model=request.model,
             output_text=output_text,
             output_json=output_json,
-            input_tokens=_estimate_tokens(f"{system}\n{prompt}"),
-            output_tokens=_estimate_tokens(output_text),
+            input_tokens=estimate_tokens(f"{system}\n{prompt}"),
+            output_tokens=estimate_tokens(output_text),
         )
 
     async def embed_texts(self, texts: list[str], model: str | None = None) -> list[list[float]]:
-        return [_hash_embedding(text) for text in texts]
+        return [
+            _hash_embedding(text, dimensions=settings.RAG_EMBEDDING_DIMENSIONS) for text in texts
+        ]
 
 
 class OpenAIProvider(BaseAiProvider):
@@ -100,22 +146,23 @@ class OpenAIProvider(BaseAiProvider):
     async def generate(self, request: ProviderGenerateRequest) -> ProviderGenerateResult:
         if not settings.OPENAI_API_KEY:
             raise HTTPException(status_code=422, detail="OPENAI_API_KEY is not configured")
-        async with httpx.AsyncClient(timeout=60.0, base_url=settings.OPENAI_BASE_URL) as client:
-            response = await client.post(
-                "/chat/completions",
-                headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-                json={
-                    "model": request.model,
-                    "temperature": request.temperature,
-                    "response_format": {"type": "json_object"}
-                    if request.response_format == "json"
-                    else {"type": "text"},
-                    "messages": [
-                        {"role": "system", "content": request.system_prompt},
-                        {"role": "user", "content": request.user_prompt},
-                    ],
-                },
-            )
+        client = _get_openai_http_client()
+        response = await _post_with_retry(
+            client,
+            "/chat/completions",
+            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
+            json={
+                "model": request.model,
+                "temperature": request.temperature,
+                "response_format": {"type": "json_object"}
+                if request.response_format == "json"
+                else {"type": "text"},
+                "messages": [
+                    {"role": "system", "content": request.system_prompt},
+                    {"role": "user", "content": request.user_prompt},
+                ],
+            },
+        )
         if response.status_code >= 400:
             raise HTTPException(
                 status_code=502,
@@ -142,15 +189,16 @@ class OpenAIProvider(BaseAiProvider):
     async def embed_texts(self, texts: list[str], model: str | None = None) -> list[list[float]]:
         if not settings.OPENAI_API_KEY:
             raise HTTPException(status_code=422, detail="OPENAI_API_KEY is not configured")
-        async with httpx.AsyncClient(timeout=60.0, base_url=settings.OPENAI_BASE_URL) as client:
-            response = await client.post(
-                "/embeddings",
-                headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-                json={
-                    "model": model or settings.OPENAI_EMBEDDING_MODEL,
-                    "input": texts,
-                },
-            )
+        client = _get_openai_http_client()
+        response = await _post_with_retry(
+            client,
+            "/embeddings",
+            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
+            json={
+                "model": model or settings.OPENAI_EMBEDDING_MODEL,
+                "input": texts,
+            },
+        )
         if response.status_code >= 400:
             raise HTTPException(
                 status_code=502,
@@ -166,21 +214,22 @@ class AnthropicProvider(BaseAiProvider):
     async def generate(self, request: ProviderGenerateRequest) -> ProviderGenerateResult:
         if not settings.ANTHROPIC_API_KEY:
             raise HTTPException(status_code=422, detail="ANTHROPIC_API_KEY is not configured")
-        async with httpx.AsyncClient(timeout=60.0, base_url=settings.ANTHROPIC_BASE_URL) as client:
-            response = await client.post(
-                "/messages",
-                headers={
-                    "x-api-key": settings.ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json={
-                    "model": request.model,
-                    "system": request.system_prompt,
-                    "temperature": request.temperature,
-                    "max_tokens": settings.AI_MAX_OUTPUT_TOKENS,
-                    "messages": [{"role": "user", "content": request.user_prompt}],
-                },
-            )
+        client = _get_anthropic_http_client()
+        response = await _post_with_retry(
+            client,
+            "/messages",
+            headers={
+                "x-api-key": settings.ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+            },
+            json={
+                "model": request.model,
+                "system": request.system_prompt,
+                "temperature": request.temperature,
+                "max_tokens": settings.AI_MAX_OUTPUT_TOKENS,
+                "messages": [{"role": "user", "content": request.user_prompt}],
+            },
+        )
         if response.status_code >= 400:
             raise HTTPException(
                 status_code=502,
@@ -234,11 +283,28 @@ class AiProviderRegistry:
             raise HTTPException(status_code=404, detail=f"Unknown AI provider: {provider_key}")
         return provider
 
-    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+    def embedding_provider_and_model(self) -> tuple[BaseAiProvider, str]:
         provider = self.get(settings.AI_EMBEDDING_PROVIDER)
         model = (
             settings.OPENAI_EMBEDDING_MODEL
             if provider.key == "openai"
             else settings.AI_LOCAL_MODEL_NAME
         )
+        return provider, model
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        provider, model = self.embedding_provider_and_model()
         return await provider.embed_texts(texts, model=model)
+
+    async def embed_retrieval_queries(self, texts: list[str]) -> list[list[float]]:
+        from backend.lib.embedding_cache import embed_texts_with_cache
+
+        provider, model = self.embedding_provider_and_model()
+        return await embed_texts_with_cache(
+            provider=provider.key,
+            model=model,
+            texts=texts,
+            embed_fn=lambda miss: provider.embed_texts(miss, model=model),
+            dimensions=settings.RAG_EMBEDDING_DIMENSIONS,
+            ttl_seconds=settings.CACHE_QUERY_EMBEDDING_TTL_SECONDS,
+        )

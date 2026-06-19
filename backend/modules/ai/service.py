@@ -1,31 +1,46 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import math
+import logging
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
+from backend.core.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT
+from backend.modules.ai.application.rag_answer_prompt import resolve_rag_answer_prompt
 from backend.modules.ai.models import (
     AiEvaluationRun,
     AiPromptTemplate,
     AiPromptVersion,
+    AiRun,
 )
 from backend.modules.ai.providers import AiProviderRegistry, ProviderGenerateRequest
 from backend.modules.ai.repository import AiRepository
 from backend.modules.ai.schemas import AiProviderDescriptor
 from backend.modules.identity_access.models import User
+from backend.modules.identity_access.repository import IdentityRepository
+from backend.modules.rag.application.legacy_ai_document_service import LegacyAiDocumentService
+
+logger = logging.getLogger(__name__)
 
 PLACEHOLDER_PATTERN = re.compile(r"{{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*}}")
 
 
-def _estimate_tokens(text: str) -> int:
-    return max(1, math.ceil(len(text) / 4))
+@dataclass(frozen=True, slots=True)
+class _EvaluationCaseResult:
+    case_id: str
+    ai_run_id: str
+    score: float
+    passed: bool
+    notes: str
 
 
 def _render_template(template: str, variables: dict[str, Any]) -> str:
@@ -39,34 +54,6 @@ def _render_template(template: str, variables: dict[str, Any]) -> str:
         return str(value)
 
     return PLACEHOLDER_PATTERN.sub(replace, template)
-
-
-def _chunk_text(text: str, chunk_size: int = 1200, overlap: int = 150) -> list[str]:
-    normalized = text.strip()
-    if not normalized:
-        return []
-    chunks: list[str] = []
-    start = 0
-    while start < len(normalized):
-        end = min(len(normalized), start + chunk_size)
-        chunk = normalized[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        if end >= len(normalized):
-            break
-        start = max(end - overlap, start + 1)
-    return chunks
-
-
-def _cosine_similarity(left: list[float], right: list[float]) -> float:
-    if not left or not right or len(left) != len(right):
-        return 0.0
-    numerator = sum(a * b for a, b in zip(left, right, strict=True))
-    left_norm = math.sqrt(sum(a * a for a in left))
-    right_norm = math.sqrt(sum(b * b for b in right))
-    if left_norm == 0 or right_norm == 0:
-        return 0.0
-    return numerator / (left_norm * right_norm)
 
 
 class AiService:
@@ -98,8 +85,16 @@ class AiService:
             ),
         ]
 
-    async def list_prompt_templates(self, user: User):
-        return await self.repo.list_prompt_templates_for_user(user.id)
+    async def list_prompt_templates(
+        self,
+        user: User,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ):
+        return await self.repo.list_prompt_templates_for_user(
+            user.id, limit=limit, offset=offset
+        )
 
     async def create_prompt_template(
         self, user: User, key: str, name: str, description: str | None
@@ -148,7 +143,7 @@ class AiService:
         template = await self.repo.get_prompt_template_for_user(user.id, template_id)
         if not template:
             raise HTTPException(status_code=404, detail="Prompt template not found")
-        versions = await self.repo.list_prompt_versions(template.id)
+        versions, _ = await self.repo.list_prompt_versions(template.id, limit=1, offset=0)
         next_version_number = (versions[0].version_number + 1) if versions else 1
         version = await self.repo.create_prompt_version(
             prompt_template_id=template.id,
@@ -193,14 +188,32 @@ class AiService:
         await self.db.refresh(version)
         return version
 
-    async def list_prompt_versions(self, user: User, template_id: str):
+    async def list_prompt_versions(
+        self,
+        user: User,
+        template_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ):
         template = await self.repo.get_prompt_template_for_user(user.id, template_id)
         if not template:
             raise HTTPException(status_code=404, detail="Prompt template not found")
-        return await self.repo.list_prompt_versions(template.id)
+        return await self.repo.list_prompt_versions(
+            template.id, limit=limit, offset=offset
+        )
 
-    async def list_documents(self, user: User):
-        return await self.repo.list_documents_for_user(user.id)
+    async def list_documents(
+        self,
+        user: User,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ):
+        self._require_rag_documents()
+        return await LegacyAiDocumentService(self.db).list_documents(
+            user.id, limit=limit, offset=offset
+        )
 
     async def create_document_from_text(
         self,
@@ -215,78 +228,31 @@ class AiService:
     ):
         if not content.strip():
             raise HTTPException(status_code=422, detail="Document content must not be empty")
-        if len(content.encode("utf-8")) > settings.AI_DOCUMENT_MAX_BYTES:
+        max_bytes = settings.RAG_MAX_FILE_BYTES
+        if len(content.encode("utf-8")) > max_bytes:
             raise HTTPException(
                 status_code=413,
-                detail=(
-                    f"Document exceeds the maximum size of"
-                    f" {settings.AI_DOCUMENT_MAX_BYTES} bytes"
-                ),
+                detail=f"Document exceeds the maximum size of {max_bytes} bytes",
             )
-        chunks = _chunk_text(
-            content, settings.AI_DOCUMENT_CHUNK_SIZE, settings.AI_DOCUMENT_CHUNK_OVERLAP
-        )
-        embeddings = await self.providers.embed_texts(chunks) if chunks else []
-        document = await self.repo.create_document(
+        self._require_rag_documents()
+        return await LegacyAiDocumentService(self.db).create_from_text(
             user_id=user.id,
-            title=title,
-            description=description,
-            filename=filename,
-            content_type=content_type,
-            size_bytes=len(content.encode("utf-8")),
-            ingestion_status="completed",
-            source_text=content,
-            metadata_json=metadata or {},
-            chunk_count=len(chunks),
-        )
-        await self.repo.replace_document_chunks(
-            document,
-            [
-                (index, chunk, _estimate_tokens(chunk), embeddings[index])
-                for index, chunk in enumerate(chunks)
-            ],
-        )
-        await self.db.commit()
-        await self.db.refresh(document)
-        return document
-
-    async def create_document_from_upload(
-        self, user: User, file: UploadFile, description: str | None
-    ):
-        content_type = file.content_type or "text/plain"
-        if not (
-            content_type.startswith("text/")
-            or content_type in {"application/json", "application/x-ndjson", "text/markdown"}
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail="Document ingestion currently supports text, markdown, and json files only",
-            )
-        payload = await file.read()
-        if not payload:
-            raise HTTPException(status_code=400, detail="Uploaded document file is empty")
-        if len(payload) > settings.AI_DOCUMENT_MAX_BYTES:
-            raise HTTPException(
-                status_code=413,
-                detail=(
-                    f"Document exceeds the maximum size of"
-                    f" {settings.AI_DOCUMENT_MAX_BYTES} bytes"
-                ),
-            )
-        try:
-            content = payload.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise HTTPException(
-                status_code=400, detail="Uploaded document must be valid UTF-8 text"
-            ) from exc
-        title = file.filename or "Untitled document"
-        return await self.create_document_from_text(
-            user,
             title=title,
             description=description,
             content=content,
             content_type=content_type,
-            filename=file.filename,
+            filename=filename,
+            metadata=metadata,
+        )
+
+    async def create_document_from_upload(
+        self, user: User, file: UploadFile, description: str | None
+    ):
+        self._require_rag_documents()
+        return await LegacyAiDocumentService(self.db).create_from_upload(
+            user_id=user.id,
+            file=file,
+            description=description,
         )
 
     async def retrieve_chunks(
@@ -297,34 +263,19 @@ class AiService:
         document_ids: list[str],
         top_k: int,
     ) -> list[dict[str, Any]]:
-        allowed_docs = await self.repo.list_documents_for_user(user.id)
-        allowed_doc_map = {document.id: document for document in allowed_docs}
-        candidate_ids = document_ids or list(allowed_doc_map)
-        invalid_ids = [
-            document_id for document_id in candidate_ids if document_id not in allowed_doc_map
-        ]
-        if invalid_ids:
-            raise HTTPException(status_code=404, detail="One or more documents were not found")
-        chunks = await self.repo.list_document_chunks(candidate_ids)
-        if not chunks:
+        if not settings.RAG_ENABLED:
             return []
-        query_embedding = (await self.providers.embed_texts([query]))[0]
-        matches = []
-        for chunk in chunks:
-            score = _cosine_similarity(query_embedding, chunk.embedding_json)
-            document = allowed_doc_map[chunk.document_id]
-            matches.append(
-                {
-                    "document_id": chunk.document_id,
-                    "chunk_id": chunk.id,
-                    "document_title": document.title,
-                    "chunk_index": chunk.chunk_index,
-                    "score": round(score, 4),
-                    "content": chunk.content,
-                }
-            )
-        matches.sort(key=lambda item: item["score"], reverse=True)
-        return matches[:top_k]
+        return await LegacyAiDocumentService(self.db).retrieve_chunks(
+            user_id=user.id,
+            query=query,
+            document_ids=document_ids,
+            top_k=top_k,
+        )
+
+    @staticmethod
+    def _require_rag_documents() -> None:
+        if not settings.RAG_ENABLED:
+            raise HTTPException(status_code=503, detail="RAG is disabled")
 
     async def _resolve_prompt_version(
         self,
@@ -353,7 +304,9 @@ class AiService:
         )
         if not template:
             raise HTTPException(status_code=404, detail="Prompt template not found")
-        versions = await self.repo.list_prompt_versions(template.id)
+        versions, _ = await self.repo.list_prompt_versions(
+            template.id, limit=MAX_PAGE_LIMIT, offset=0
+        )
         version = None
         if template.active_version_id:
             version = next(
@@ -387,7 +340,6 @@ class AiService:
             prompt_template_key=prompt_template_key,
             prompt_version_id=prompt_version_id,
         )
-        provider = self.providers.get(version.provider_key)
         matches: list[dict[str, Any]] = []
         if retrieval_query:
             matches = await self.retrieve_chunks(
@@ -430,7 +382,72 @@ class AiService:
             review_status="pending" if review_required else "not_requested",
         )
         await self.db.flush()
+        return await self._finalize_run_generation(
+            user=user,
+            run=run,
+            version=version,
+            rendered_system_prompt=rendered_system_prompt,
+            rendered_user_prompt=rendered_user_prompt,
+            review_required=review_required,
+        )
 
+    async def run_rag_answer(
+        self,
+        user: User,
+        *,
+        query: str,
+        combined_context: str,
+        retrieved_chunk_ids: list[str],
+        review_required: bool = False,
+    ) -> AiRun:
+        prompt_spec = await resolve_rag_answer_prompt(self.repo, user)
+
+        reference_context = combined_context.strip()
+        rendered_system_prompt = (
+            f"{prompt_spec.system_prompt}\n\n{reference_context}"
+            if reference_context
+            else prompt_spec.system_prompt
+        )
+        rendered_user_prompt = query
+
+        run = await self.repo.create_run(
+            user_id=user.id,
+            prompt_template_id=prompt_spec.template_id,
+            prompt_version_id=prompt_spec.version_id,
+            provider_key=prompt_spec.provider_key,
+            model_name=prompt_spec.model_name,
+            status="running",
+            response_format=prompt_spec.response_format,
+            variables_json={"query": query},
+            retrieval_query=query,
+            retrieved_chunk_ids_json=retrieved_chunk_ids,
+            input_messages_json=[
+                {"role": "system", "content": rendered_system_prompt},
+                {"role": "user", "content": rendered_user_prompt},
+            ],
+            review_status="pending" if review_required else "not_requested",
+        )
+        await self.db.flush()
+        return await self._finalize_run_generation(
+            user=user,
+            run=run,
+            version=prompt_spec.execution_version,
+            rendered_system_prompt=rendered_system_prompt,
+            rendered_user_prompt=rendered_user_prompt,
+            review_required=review_required,
+        )
+
+    async def _finalize_run_generation(
+        self,
+        *,
+        user: User,
+        run: AiRun,
+        version: AiPromptVersion | SimpleNamespace,
+        rendered_system_prompt: str,
+        rendered_user_prompt: str,
+        review_required: bool,
+    ) -> AiRun:
+        provider = self.providers.get(run.provider_key)
         started = perf_counter()
         try:
             result = await provider.generate(
@@ -479,8 +496,14 @@ class AiService:
         await self.db.refresh(run)
         return run
 
-    async def list_runs(self, user: User):
-        return await self.repo.list_runs_for_user(user.id)
+    async def list_runs(
+        self,
+        user: User,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ):
+        return await self.repo.list_runs_for_user(user.id, limit=limit, offset=offset)
 
     async def create_review(self, user: User, run_id: str, assigned_to_user_id: str | None):
         run = await self.repo.get_run_for_user(user.id, run_id)
@@ -497,8 +520,14 @@ class AiService:
         await self.db.refresh(review)
         return review
 
-    async def list_reviews(self, user: User):
-        return await self.repo.list_reviews_for_user(user.id)
+    async def list_reviews(
+        self,
+        user: User,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ):
+        return await self.repo.list_reviews_for_user(user.id, limit=limit, offset=offset)
 
     async def decide_review(self, user: User, review_id: str, payload: dict[str, Any]):
         review = await self.repo.get_review(review_id)
@@ -541,14 +570,27 @@ class AiService:
         await self.db.refresh(feedback)
         return feedback
 
-    async def list_feedback(self, user: User, run_id: str):
+    async def list_feedback(
+        self,
+        user: User,
+        run_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ):
         run = await self.repo.get_run_for_user(user.id, run_id)
         if not run:
             raise HTTPException(status_code=404, detail="AI run not found")
-        return await self.repo.list_feedback_for_run(run.id)
+        return await self.repo.list_feedback_for_run(run.id, limit=limit, offset=offset)
 
-    async def list_datasets(self, user: User):
-        return await self.repo.list_datasets_for_user(user.id)
+    async def list_datasets(
+        self,
+        user: User,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ):
+        return await self.repo.list_datasets_for_user(user.id, limit=limit, offset=offset)
 
     async def create_dataset(self, user: User, name: str, description: str | None):
         dataset = await self.repo.create_dataset(
@@ -568,11 +610,20 @@ class AiService:
         await self.db.refresh(dataset)
         return dataset
 
-    async def list_dataset_cases(self, user: User, dataset_id: str):
+    async def list_dataset_cases(
+        self,
+        user: User,
+        dataset_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ):
         dataset = await self.repo.get_dataset_for_user(user.id, dataset_id)
         if not dataset:
             raise HTTPException(status_code=404, detail="Evaluation dataset not found")
-        return await self.repo.list_dataset_cases(dataset.id)
+        return await self.repo.list_dataset_cases(
+            dataset.id, limit=limit, offset=offset
+        )
 
     async def create_dataset_case(self, user: User, dataset_id: str, payload: dict[str, Any]):
         dataset = await self.repo.get_dataset_for_user(user.id, dataset_id)
@@ -589,7 +640,56 @@ class AiService:
         await self.db.refresh(case)
         return case
 
-    async def run_evaluation(
+    async def _list_all_dataset_cases(self, dataset_id: str):
+        cases, total = await self.repo.list_dataset_cases(
+            dataset_id, limit=MAX_PAGE_LIMIT, offset=0
+        )
+        offset = len(cases)
+        while offset < total:
+            page, _ = await self.repo.list_dataset_cases(
+                dataset_id, limit=MAX_PAGE_LIMIT, offset=offset
+            )
+            cases.extend(page)
+            offset += len(page)
+        return cases
+
+    async def _execute_evaluation_case(
+        self,
+        *,
+        user: User,
+        template: AiPromptTemplate,
+        version: AiPromptVersion,
+        dataset_id: str,
+        case,
+    ) -> _EvaluationCaseResult:
+        from backend.db.session import SessionLocal
+
+        async with SessionLocal() as db:
+            case_service = AiService(db)
+            ai_run = await case_service.run_prompt(
+                user,
+                prompt_template_key=template.key,
+                prompt_version_id=version.id,
+                variables=case.input_variables_json,
+                retrieval_query=None,
+                document_ids=[],
+                top_k=0,
+                review_required=False,
+                evaluation_dataset_id=dataset_id,
+                evaluation_case_id=case.id,
+            )
+            score, passed, notes = self._score_evaluation_case(
+                ai_run.output_text, ai_run.output_json, case
+            )
+            return _EvaluationCaseResult(
+                case_id=case.id,
+                ai_run_id=ai_run.id,
+                score=score,
+                passed=passed,
+                notes=notes,
+            )
+
+    async def queue_evaluation(
         self, user: User, dataset_id: str, prompt_version_id: str
     ) -> AiEvaluationRun:
         dataset = await self.repo.get_dataset_for_user(user.id, dataset_id)
@@ -601,7 +701,8 @@ class AiService:
         template = await self.repo.get_prompt_template_for_user(user.id, version.prompt_template_id)
         if not template:
             raise HTTPException(status_code=404, detail="Prompt template not found")
-        cases = await self.repo.list_dataset_cases(dataset.id)
+
+        cases = await self._list_all_dataset_cases(dataset.id)
         evaluation_run = await self.repo.create_evaluation_run(
             dataset_id=dataset.id,
             prompt_version_id=version.id,
@@ -611,42 +712,124 @@ class AiService:
             passed_cases=0,
             average_score=0,
         )
-        passed_cases = 0
-        scores: list[float] = []
-        for case in cases:
-            ai_run = await self.run_prompt(
-                user,
-                prompt_template_key=template.key,
-                prompt_version_id=version.id,
-                variables=case.input_variables_json,
-                retrieval_query=None,
-                document_ids=[],
-                top_k=0,
-                review_required=False,
-                evaluation_dataset_id=dataset.id,
-                evaluation_case_id=case.id,
-            )
-            score, passed, notes = self._score_evaluation_case(
-                ai_run.output_text, ai_run.output_json, case
-            )
-            scores.append(score)
-            if passed:
-                passed_cases += 1
-            await self.repo.create_evaluation_run_item(
-                evaluation_run_id=evaluation_run.id,
-                evaluation_case_id=case.id,
-                ai_run_id=ai_run.id,
-                score=score,
-                passed=passed,
-                notes=notes,
-            )
-        evaluation_run.status = "completed"
-        evaluation_run.passed_cases = passed_cases
-        evaluation_run.average_score = round(sum(scores) / len(scores), 4) if scores else 0.0
-        evaluation_run.completed_at = datetime.now(UTC)
         await self.db.commit()
         await self.db.refresh(evaluation_run)
+
+        from backend.workers.evaluation import queue_evaluation_run
+
+        queue_evaluation_run(
+            evaluation_run_id=evaluation_run.id,
+            user_id=user.id,
+            dataset_id=dataset.id,
+            prompt_version_id=version.id,
+        )
         return evaluation_run
+
+    async def execute_evaluation_run(
+        self,
+        *,
+        evaluation_run_id: str,
+        user_id: str,
+        dataset_id: str,
+        prompt_version_id: str,
+    ) -> None:
+        try:
+            user = await IdentityRepository(self.db).get_user_by_id(user_id)
+            if not user:
+                await self._mark_evaluation_run_failed(
+                    evaluation_run_id, notes="User not found for evaluation run"
+                )
+                return
+
+            dataset = await self.repo.get_dataset_for_user(user_id, dataset_id)
+            if not dataset:
+                await self._mark_evaluation_run_failed(
+                    evaluation_run_id, notes="Evaluation dataset not found"
+                )
+                return
+            version = await self.repo.get_prompt_version(prompt_version_id)
+            if not version:
+                await self._mark_evaluation_run_failed(
+                    evaluation_run_id, notes="Prompt version not found"
+                )
+                return
+            template = await self.repo.get_prompt_template_for_user(
+                user_id, version.prompt_template_id
+            )
+            if not template:
+                await self._mark_evaluation_run_failed(
+                    evaluation_run_id, notes="Prompt template not found"
+                )
+                return
+
+            evaluation_run = await self.repo.get_evaluation_run_by_id(evaluation_run_id)
+            if not evaluation_run:
+                logger.warning("Evaluation run %s not found; skipping worker execution", evaluation_run_id)
+                return
+            if evaluation_run.status != "running":
+                logger.info(
+                    "Evaluation run %s already in status=%s; skipping",
+                    evaluation_run_id,
+                    evaluation_run.status,
+                )
+                return
+
+            cases = await self._list_all_dataset_cases(dataset.id)
+            evaluation_run.total_cases = len(cases)
+            concurrency = max(1, settings.AI_EVALUATION_CONCURRENCY)
+            semaphore = asyncio.Semaphore(concurrency)
+
+            async def _run_case(case):
+                async with semaphore:
+                    return await self._execute_evaluation_case(
+                        user=user,
+                        template=template,
+                        version=version,
+                        dataset_id=dataset.id,
+                        case=case,
+                    )
+
+            results = await asyncio.gather(*[_run_case(case) for case in cases])
+            passed_cases = 0
+            scores: list[float] = []
+            item_payloads: list[dict] = []
+            for result in results:
+                scores.append(result.score)
+                if result.passed:
+                    passed_cases += 1
+                item_payloads.append(
+                    {
+                        "evaluation_run_id": evaluation_run.id,
+                        "evaluation_case_id": result.case_id,
+                        "ai_run_id": result.ai_run_id,
+                        "score": result.score,
+                        "passed": result.passed,
+                        "notes": result.notes,
+                    }
+                )
+            if item_payloads:
+                await self.repo.create_evaluation_run_items_batch(item_payloads)
+            evaluation_run.status = "completed"
+            evaluation_run.passed_cases = passed_cases
+            evaluation_run.average_score = round(sum(scores) / len(scores), 4) if scores else 0.0
+            evaluation_run.completed_at = datetime.now(UTC)
+            await self.db.commit()
+        except Exception:
+            logger.exception("AI evaluation run %s failed", evaluation_run_id)
+            await self._mark_evaluation_run_failed(evaluation_run_id)
+            raise
+
+    async def _mark_evaluation_run_failed(
+        self, evaluation_run_id: str, *, notes: str | None = None
+    ) -> None:
+        if notes:
+            logger.error("Evaluation run %s failed: %s", evaluation_run_id, notes)
+        evaluation_run = await self.repo.get_evaluation_run_by_id(evaluation_run_id)
+        if evaluation_run is None or evaluation_run.status != "running":
+            return
+        evaluation_run.status = "failed"
+        evaluation_run.completed_at = datetime.now(UTC)
+        await self.db.commit()
 
     def _score_evaluation_case(
         self, output_text: str | None, output_json: dict | None, case
@@ -664,14 +847,37 @@ class AiService:
             return partial, partial >= 1.0, "Substring text comparison"
         return 0.0, False, "No expected output defined"
 
-    async def list_evaluation_runs(self, user: User):
-        return await self.repo.list_evaluation_runs_for_user(user.id)
+    async def list_evaluation_runs(
+        self,
+        user: User,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ):
+        return await self.repo.list_evaluation_runs_for_user(
+            user.id, limit=limit, offset=offset
+        )
 
     async def get_overview(self, user: User):
-        prompt_templates = await self.repo.list_prompt_templates_for_user(user.id)
-        recent_runs = await self.repo.list_runs_for_user(user.id, limit=10)
-        documents = await self.repo.list_documents_for_user(user.id)
-        datasets = await self.repo.list_datasets_for_user(user.id)
+        (
+            prompt_templates_result,
+            recent_runs_result,
+            documents_result,
+            datasets_result,
+        ) = await asyncio.gather(
+            self.repo.list_prompt_templates_for_user(
+                user.id, limit=DEFAULT_PAGE_LIMIT, offset=0
+            ),
+            self.repo.list_runs_for_user(user.id, limit=10, offset=0),
+            self.list_documents(user, limit=DEFAULT_PAGE_LIMIT, offset=0),
+            self.repo.list_datasets_for_user(
+                user.id, limit=DEFAULT_PAGE_LIMIT, offset=0
+            ),
+        )
+        prompt_templates, _ = prompt_templates_result
+        recent_runs, _ = recent_runs_result
+        documents, _ = documents_result
+        datasets, _ = datasets_result
         return {
             "providers": self.list_provider_descriptors(),
             "prompt_templates": prompt_templates,

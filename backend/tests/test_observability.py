@@ -1,8 +1,8 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from backend.observability.schemas import ObservabilityStatusItem
+from backend.observability.schemas import ObservabilityStatus, ObservabilityStatusItem
 from backend.observability.service import ObservabilityService, build_public_url
 
 
@@ -20,9 +20,33 @@ def make_settings(**overrides):
         "GRAFANA_SCHEDULED_TASKS_DASHBOARD_PATH": "/d/scheduled-tasks/scheduled-tasks",
         "GRAFANA_ERRORS_DASHBOARD_PATH": "/d/errors/error-investigation",
         "GRAFANA_TEMPO_EXPLORE_PATH": "/explore",
+        "CACHE_OBSERVABILITY_STATUS_TTL_SECONDS": 30,
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
+
+
+def make_status_item(**overrides):
+    payload = {"status": "healthy", "detail": "ok", "last_checked_at": "2026-01-01T00:00:00+00:00"}
+    payload.update(overrides)
+    return ObservabilityStatusItem(**payload)
+
+
+def make_observability_status():
+    item = make_status_item()
+    return ObservabilityStatus(
+        api=item,
+        frontend=item,
+        database=item,
+        cache=item,
+        workers=item,
+        background_jobs=item,
+        error_rate=item,
+        request_latency=item,
+        prometheus=item,
+        grafana=item,
+        tempo=item,
+    )
 
 
 class ObservabilityServiceTest(unittest.TestCase):
@@ -33,7 +57,7 @@ class ObservabilityServiceTest(unittest.TestCase):
 
     def test_links_return_configured_urls_for_admin(self):
         user = SimpleNamespace(is_admin=True)
-        links = ObservabilityService(make_settings()).get_links(user)
+        links = ObservabilityService(make_settings()).get_links(is_admin=True)
 
         self.assertEqual(
             links.dashboards.api.url,
@@ -46,14 +70,13 @@ class ObservabilityServiceTest(unittest.TestCase):
         user = SimpleNamespace(is_admin=True)
         links = ObservabilityService(
             make_settings(GRAFANA_FRONTEND_DASHBOARD_PATH="")
-        ).get_links(user)
+        ).get_links(is_admin=True)
 
         self.assertIsNone(links.dashboards.frontend.url)
         self.assertFalse(links.dashboards.frontend.configured)
 
     def test_non_admin_does_not_receive_technical_urls(self):
-        user = SimpleNamespace(is_admin=False)
-        links = ObservabilityService(make_settings()).get_links(user)
+        links = ObservabilityService(make_settings()).get_links(is_admin=False)
 
         self.assertIsNone(links.prometheus_url.url)
         self.assertFalse(links.prometheus_url.allowed)
@@ -70,7 +93,14 @@ class ObservabilityStatusTest(unittest.IsolatedAsyncioTestCase):
         )
         unknown = ObservabilityStatusItem(status="unknown", detail="check unavailable")
 
+        async def passthrough_get_or_load_model(key, model, *, ttl_seconds, loader):
+            return await loader()
+
         with (
+            patch(
+                "backend.observability.service.cache_get_or_load_model",
+                passthrough_get_or_load_model,
+            ),
             patch.object(service, "_database_status", AsyncMock(return_value=unknown)),
             patch.object(service, "_cache_status", AsyncMock(return_value=unknown)),
         ):
@@ -79,6 +109,47 @@ class ObservabilityStatusTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn(status.prometheus.status, {"not_configured", "unknown", "down"})
         self.assertIn(status.grafana.status, {"not_configured", "unknown", "down"})
         self.assertIn(status.tempo.status, {"not_configured", "unknown", "down"})
+
+    async def test_status_uses_cached_payload_on_repeat_calls(self):
+        service = ObservabilityService(make_settings())
+        built = make_observability_status()
+        build_mock = AsyncMock(return_value=built)
+
+        with (
+            patch.object(service, "_build_status", build_mock),
+            patch(
+                "backend.observability.service.cache_get_or_load_model",
+                AsyncMock(side_effect=[built, built]),
+            ),
+        ):
+            first = await service.get_status()
+            second = await service.get_status()
+
+        self.assertEqual(first.api.status, "healthy")
+        self.assertEqual(second.api.status, "healthy")
+        build_mock.assert_not_called()
+
+    async def test_http_status_reuses_shared_client(self):
+        service = ObservabilityService(make_settings())
+        created_clients: list[MagicMock] = []
+
+        class FakeAsyncClient:
+            is_closed = False
+
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+                created_clients.append(self)
+
+            async def get(self, url):
+                response = MagicMock()
+                response.status_code = 200
+                return response
+
+        with patch("backend.observability.service.httpx.AsyncClient", FakeAsyncClient):
+            await service._http_status("http://localhost:9090/graph", "Prometheus", "2026-01-01T00:00:00+00:00")
+            await service._http_status("http://localhost:3001/", "Grafana", "2026-01-01T00:00:00+00:00")
+
+        self.assertEqual(len(created_clients), 1)
 
 
 if __name__ == "__main__":

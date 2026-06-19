@@ -1,3 +1,12 @@
+"""Observability runtime configuration.
+
+OTLP endpoint resolution:
+- Prefer ``OTEL_EXPORTER_OTLP_ENDPOINT`` (OpenTelemetry standard).
+- Fall back to legacy ``OTLP_ENDPOINT`` when the OTEL variable is unset.
+- ``OTEL_EXPORTER_OTLP_PROTOCOL`` defaults to ``http/protobuf``; legacy-only
+  ``OTLP_ENDPOINT`` without OTEL endpoint implies gRPC for backward compatibility.
+"""
+
 from __future__ import annotations
 
 import os

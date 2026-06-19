@@ -55,14 +55,15 @@ export function HealthStatusCard({
 
     return (
         <Paper
-            sx={{
+            sx={(theme) => ({
                 p: 2,
-                borderRadius: 4,
-                border: 1,
-                borderColor: "divider",
+                borderRadius: 1,
+                border: "none",
                 boxShadow: "none",
                 minHeight: 180,
-            }}
+                backgroundColor:
+                    theme.palette.mode === "dark" ? theme.palette.background.paper : "var(--tesla-light-ash)",
+            })}
         >
             <Stack spacing={1.5} sx={{ height: "100%" }}>
                 <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1.5}>

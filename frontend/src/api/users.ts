@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, type Paginated } from "./client";
 
 export type UserProfile = {
     id: string;
@@ -44,5 +44,6 @@ export async function revokeSession(sessionId: string): Promise<void> {
 }
 
 export async function listUserDirectory(): Promise<UserDirectoryEntry[]> {
-    return apiFetch("/users/directory");
+    const page = await apiFetch<Paginated<UserDirectoryEntry>>("/users/directory");
+    return page.items;
 }

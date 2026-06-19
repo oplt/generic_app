@@ -39,10 +39,12 @@ import {
     updateProjectTask,
 } from "../api/projects";
 import { listUserDirectory } from "../api/users";
+import { queryKeys } from "../config/queryKeys";
+import { QUERY_STALE_TIMES } from "../config/queryTiming";
 import { useSnackbar } from "../app/snackbarContext";
 import { EmptyState } from "../components/ui/EmptyState";
-import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
+import { QueryErrorAlert } from "../components/ui/QueryBoundary";
 import { SectionCard } from "../components/ui/SectionCard";
 import { StatCard } from "../components/ui/StatCard";
 import { formatDate, formatDateOnly, formatDateTime, humanizeKey } from "../utils/formatters";
@@ -137,19 +139,24 @@ function TaskMetaChips({ task }: { task: ProjectTask }) {
 function TaskBoardCard({
     task,
     selected,
+    isDragging,
     onSelect,
     onDragStart,
     onDropBefore,
+    onMoveToStatus,
 }: {
     task: ProjectTask;
     selected: boolean;
+    isDragging: boolean;
     onSelect: () => void;
     onDragStart: () => void;
     onDropBefore: () => void;
+    onMoveToStatus: (status: ProjectTaskStatus) => void;
 }) {
     return (
         <Paper
             draggable
+            aria-grabbed={isDragging}
             onClick={onSelect}
             onDragStart={(event) => {
                 event.dataTransfer.setData("text/plain", task.id);
@@ -184,6 +191,29 @@ function TaskBoardCard({
                     {task.description || "No task notes yet."}
                 </Typography>
                 <TaskMetaChips task={task} />
+                <TextField
+                    select
+                    size="small"
+                    label="Move to"
+                    value=""
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) => {
+                        event.stopPropagation();
+                        onMoveToStatus(event.target.value as ProjectTaskStatus);
+                    }}
+                    fullWidth
+                    SelectProps={{
+                        displayEmpty: true,
+                        renderValue: () => "Choose column",
+                    }}
+                    inputProps={{ "aria-label": `Move ${task.title} to another column` }}
+                >
+                    {TASK_STATUS_OPTIONS.filter((option) => option.value !== task.status).map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                        </MenuItem>
+                    ))}
+                </TextField>
             </Stack>
         </Paper>
     );
@@ -242,21 +272,23 @@ export default function ProjectDetailPage() {
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
     const [taskDraft, setTaskDraft] = useState<TaskDraft>(EMPTY_TASK_DRAFT);
     const [taskError, setTaskError] = useState("");
+    const [taskTitleError, setTaskTitleError] = useState("");
     const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
 
     const { data: project, isLoading: projectLoading, error: projectError } = useQuery({
-        queryKey: ["project", projectId],
+        queryKey: queryKeys.projects.detail(projectId),
         queryFn: () => getProject(projectId),
         enabled: Boolean(projectId),
     });
     const { data: tasks, isLoading: tasksLoading, error: tasksError } = useQuery({
-        queryKey: ["project", projectId, "tasks"],
+        queryKey: queryKeys.projects.tasks(projectId),
         queryFn: () => listProjectTasks(projectId),
         enabled: Boolean(projectId),
     });
-    const { data: users } = useQuery({
-        queryKey: ["users", "directory"],
+    const { data: users, isError: usersIsError, error: usersError, refetch: refetchUsers } = useQuery({
+        queryKey: queryKeys.users.directory,
         queryFn: listUserDirectory,
+        staleTime: QUERY_STALE_TIMES.userDirectory,
     });
 
     const orderedTasks = sortTasks(tasks ?? []);
@@ -279,13 +311,13 @@ export default function ProjectDetailPage() {
                 assignee_id: taskDraft.assignee_id || null,
             }),
         onSuccess: (task) => {
-            queryClient.setQueryData<ProjectTask[]>(["project", projectId, "tasks"], (current) =>
+            queryClient.setQueryData<ProjectTask[]>(queryKeys.projects.tasks(projectId), (current) =>
                 sortTasks([...(current ?? []), task])
             );
             setTaskDraft(EMPTY_TASK_DRAFT);
             setSelectedTaskId(null);
             setTaskError("");
-            void queryClient.invalidateQueries({ queryKey: ["projects"] });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
             showToast({ message: "Task created.", severity: "success" });
         },
         onError: (error) => {
@@ -304,7 +336,7 @@ export default function ProjectDetailPage() {
                 assignee_id: taskDraft.assignee_id || null,
             }),
         onSuccess: (task) => {
-            queryClient.setQueryData<ProjectTask[]>(["project", projectId, "tasks"], (current) =>
+            queryClient.setQueryData<ProjectTask[]>(queryKeys.projects.tasks(projectId), (current) =>
                 sortTasks((current ?? []).map((item) => (item.id === task.id ? task : item)))
             );
             setSelectedTaskId(task.id);
@@ -320,7 +352,7 @@ export default function ProjectDetailPage() {
     const deleteTaskMutation = useMutation({
         mutationFn: () => deleteProjectTask(projectId, selectedTaskId ?? ""),
         onSuccess: () => {
-            queryClient.setQueryData<ProjectTask[]>(["project", projectId, "tasks"], (current) =>
+            queryClient.setQueryData<ProjectTask[]>(queryKeys.projects.tasks(projectId), (current) =>
                 (current ?? []).filter((task) => task.id !== selectedTaskId)
             );
             setSelectedTaskId(null);
@@ -338,10 +370,10 @@ export default function ProjectDetailPage() {
             columns: Array<{ status: ProjectTaskStatus; task_ids: string[] }>;
         }) => reorderProjectTasks(projectId, payload),
         onSuccess: (updatedTasks) => {
-            queryClient.setQueryData(["project", projectId, "tasks"], sortTasks(updatedTasks));
+            queryClient.setQueryData(queryKeys.projects.tasks(projectId), sortTasks(updatedTasks));
         },
         onError: () => {
-            void queryClient.invalidateQueries({ queryKey: ["project", projectId, "tasks"] });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId) });
             showToast({ message: "Failed to reorder tasks.", severity: "error" });
         },
     });
@@ -350,19 +382,22 @@ export default function ProjectDetailPage() {
         setSelectedTaskId(null);
         setTaskDraft(EMPTY_TASK_DRAFT);
         setTaskError("");
+        setTaskTitleError("");
     }
 
     function selectTask(task: ProjectTask) {
         setSelectedTaskId(task.id);
         setTaskDraft(taskToDraft(task));
         setTaskError("");
+        setTaskTitleError("");
     }
 
     function submitTask() {
         if (taskDraft.title.trim().length < 2) {
-            setTaskError("Task title must be at least 2 characters.");
+            setTaskTitleError("Task title must be at least 2 characters.");
             return;
         }
+        setTaskTitleError("");
 
         if (selectedTaskId) {
             updateTaskMutation.mutate();
@@ -372,16 +407,21 @@ export default function ProjectDetailPage() {
         createTaskMutation.mutate();
     }
 
-    function handleDrop(targetStatus: ProjectTaskStatus, beforeTaskId?: string) {
-        if (!draggingTaskId || !tasks || reorderTaskMutation.isPending) {
+    function handleDrop(
+        targetStatus: ProjectTaskStatus,
+        beforeTaskId?: string,
+        taskIdOverride?: string
+    ) {
+        const activeTaskId = taskIdOverride ?? draggingTaskId;
+        if (!activeTaskId || !tasks || reorderTaskMutation.isPending) {
             return;
         }
-        if (beforeTaskId === draggingTaskId) {
+        if (beforeTaskId === activeTaskId) {
             setDraggingTaskId(null);
             return;
         }
 
-        const draggingTask = tasks.find((task) => task.id === draggingTaskId);
+        const draggingTask = tasks.find((task) => task.id === activeTaskId);
         if (!draggingTask) {
             return;
         }
@@ -391,7 +431,7 @@ export default function ProjectDetailPage() {
         ) as Record<ProjectTaskStatus, ProjectTask[]>;
 
         tasks.forEach((task) => {
-            if (task.id !== draggingTaskId) {
+            if (task.id !== activeTaskId) {
                 byStatus[task.status].push(task);
             }
         });
@@ -417,7 +457,7 @@ export default function ProjectDetailPage() {
             )
         );
 
-        queryClient.setQueryData(["project", projectId, "tasks"], nextTasks);
+        queryClient.setQueryData(queryKeys.projects.tasks(projectId), nextTasks);
         reorderTaskMutation.mutate({
             columns: TASK_STATUS_OPTIONS.map((option) => ({
                 status: option.value,
@@ -430,12 +470,28 @@ export default function ProjectDetailPage() {
         setDraggingTaskId(null);
     }
 
-    if (projectLoading || tasksLoading) {
+    function moveTaskToStatus(taskId: string, targetStatus: ProjectTaskStatus) {
+        handleDrop(targetStatus, undefined, taskId);
+    }
+
+    if (projectLoading) {
         return (
             <PageShell maxWidth="xl">
                 <Stack spacing={2}>
-                    <Skeleton variant="rounded" height={180} sx={{ borderRadius: 6 }} />
-                    <Skeleton variant="rounded" height={360} sx={{ borderRadius: 6 }} />
+                    <Skeleton variant="text" width={280} height={48} />
+                    <Skeleton variant="text" width="60%" height={28} />
+                    <Box
+                        sx={{
+                            display: "grid",
+                            gap: 2,
+                            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" },
+                        }}
+                    >
+                        {Array.from({ length: 4 }).map((_, index) => (
+                            <Skeleton key={index} variant="rounded" height={120} sx={{ borderRadius: 3 }} />
+                        ))}
+                    </Box>
+                    <Skeleton variant="rounded" height={420} sx={{ borderRadius: 3 }} />
                 </Stack>
             </PageShell>
         );
@@ -453,34 +509,15 @@ export default function ProjectDetailPage() {
 
     return (
         <PageShell maxWidth="xl">
-            <PageHeader
-                eyebrow="Project workspace"
-                title={project.name}
-                description={
-                    project.description ||
-                    "Add tasks, assign work, and move cards across the delivery board."
-                }
-                actions={
-                    <Button
-                        variant="outlined"
-                        startIcon={<ArrowBackIcon />}
-                        onClick={() => navigate("/projects")}
-                    >
-                        Back to projects
-                    </Button>
-                }
-                meta={
-                    <>
-                        <Chip label={`Created ${formatDate(project.created_at)}`} variant="outlined" />
-                        <Chip label={`${totalTasks} tasks`} variant="outlined" />
-                        <Chip
-                            label={overdueTasks > 0 ? `${overdueTasks} overdue` : "No overdue work"}
-                            color={overdueTasks > 0 ? "warning" : "default"}
-                            variant="outlined"
-                        />
-                    </>
-                }
-            />
+            <Stack direction="row" sx={{ mb: 2 }}>
+                <Button
+                    variant="outlined"
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => navigate("/projects")}
+                >
+                    Back to projects
+                </Button>
+            </Stack>
 
             <Box
                 sx={{
@@ -559,9 +596,12 @@ export default function ProjectDetailPage() {
                         <TextField
                             label="Title"
                             value={taskDraft.title}
-                            onChange={(event) =>
-                                setTaskDraft((current) => ({ ...current, title: event.target.value }))
-                            }
+                            onChange={(event) => {
+                                setTaskDraft((current) => ({ ...current, title: event.target.value }));
+                                setTaskTitleError("");
+                            }}
+                            error={Boolean(taskTitleError)}
+                            helperText={taskTitleError}
                             fullWidth
                         />
                         <TextField
@@ -628,6 +668,14 @@ export default function ProjectDetailPage() {
                                 setTaskDraft((current) => ({ ...current, assignee_id: event.target.value }))
                             }
                             fullWidth
+                            error={usersIsError}
+                            helperText={
+                                usersIsError
+                                    ? usersError instanceof Error
+                                        ? usersError.message
+                                        : "Failed to load user directory."
+                                    : undefined
+                            }
                         >
                             <MenuItem value="">Unassigned</MenuItem>
                             {(users ?? []).map((user) => (
@@ -636,6 +684,13 @@ export default function ProjectDetailPage() {
                                 </MenuItem>
                             ))}
                         </TextField>
+                        {usersIsError && (
+                            <QueryErrorAlert
+                                error={usersError}
+                                fallback="Failed to load assignee directory."
+                                onRetry={() => void refetchUsers()}
+                            />
+                        )}
 
                         {selectedTask && (
                             <Alert severity="info">
@@ -700,24 +755,30 @@ export default function ProjectDetailPage() {
                         </Tabs>
                     }
                 >
-                    {orderedTasks.length === 0 ? (
+                    {tasksLoading ? (
+                        <Stack spacing={1.5}>
+                            <Skeleton variant="rounded" height={280} sx={{ borderRadius: 3 }} />
+                            <Skeleton variant="rounded" height={280} sx={{ borderRadius: 3 }} />
+                        </Stack>
+                    ) : orderedTasks.length === 0 ? (
                         <EmptyState
                             icon={<TaskIcon />}
                             title="No tasks yet"
                             description="Create the first task to turn this project into an active delivery flow."
                         />
                     ) : taskView === "board" ? (
-                        <Box
-                            sx={{
-                                display: "grid",
-                                gap: 1.5,
-                                gridTemplateColumns: {
-                                    xs: "1fr",
-                                    md: "repeat(2, minmax(0, 1fr))",
-                                    xl: "repeat(5, minmax(0, 1fr))",
-                                },
-                            }}
-                        >
+                        <Box sx={{ overflowX: { md: "auto" }, WebkitOverflowScrolling: "touch", pb: 1 }}>
+                            <Box
+                                sx={{
+                                    display: "grid",
+                                    gap: 1.5,
+                                    minWidth: { md: 1280 },
+                                    gridTemplateColumns: {
+                                        xs: "1fr",
+                                        md: "repeat(5, minmax(240px, 1fr))",
+                                    },
+                                }}
+                            >
                             {TASK_STATUS_OPTIONS.map((statusOption) => {
                                 const columnTasks = orderedTasks.filter(
                                     (task) => task.status === statusOption.value
@@ -764,10 +825,14 @@ export default function ProjectDetailPage() {
                                                             key={task.id}
                                                             task={task}
                                                             selected={task.id === selectedTaskId}
+                                                            isDragging={draggingTaskId === task.id}
                                                             onSelect={() => selectTask(task)}
                                                             onDragStart={() => setDraggingTaskId(task.id)}
                                                             onDropBefore={() =>
                                                                 handleDrop(statusOption.value, task.id)
+                                                            }
+                                                            onMoveToStatus={(status) =>
+                                                                moveTaskToStatus(task.id, status)
                                                             }
                                                         />
                                                     ))
@@ -791,6 +856,7 @@ export default function ProjectDetailPage() {
                                     </Box>
                                 );
                             })}
+                            </Box>
                         </Box>
                     ) : (
                         <Stack spacing={1.5}>

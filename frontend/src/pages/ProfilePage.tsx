@@ -2,14 +2,13 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     Alert,
     Avatar,
     Box,
     Button,
     Chip,
-    CircularProgress,
     Link,
     Paper,
     Skeleton,
@@ -28,13 +27,19 @@ import {
 import { alpha } from "@mui/material/styles";
 import QRCode from "qrcode";
 import { disableMfa, enableMfa, verifyMfa } from "../api/auth";
-import { changePassword, getMe, getSessions, revokeSession, updateMe } from "../api/users";
-import { deleteAvatar, getProfile, updateProfile, uploadAvatar } from "../api/profile";
+import { changePassword, revokeSession, updateMe } from "../api/users";
+import { deleteAvatar, updateProfile, uploadAvatar } from "../api/profile";
 import { useSnackbar } from "../app/snackbarContext";
+import { invalidateUserIdentity, queryKeys } from "../config/queryKeys";
 import { EmptyState } from "../components/ui/EmptyState";
-import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
+import { SettingsTabs } from "../components/layout/SettingsTabs";
+import { QueryBoundary, QueryErrorAlert } from "../components/ui/QueryBoundary";
 import { SectionCard } from "../components/ui/SectionCard";
+import { useMutationErrorToast } from "../hooks/useMutationErrorToast";
+import { useCurrentUser } from "../hooks/useCurrentUser";
+import { useUserProfile } from "../hooks/useUserProfile";
+import { useUserSessions } from "../hooks/useUserSessions";
 import { formatDate, formatDateTime, getInitials } from "../utils/formatters";
 
 const accountSchema = z.object({
@@ -126,19 +131,29 @@ function MfaQrCode({ provisioningUri }: { provisioningUri: string }) {
 export default function ProfilePage() {
     const queryClient = useQueryClient();
     const { showToast } = useSnackbar();
+    const toastMutationError = useMutationErrorToast();
 
-    const { data: user, isLoading: userLoading } = useQuery({
-        queryKey: ["me"],
-        queryFn: getMe,
-    });
-    const { data: profile, isLoading: profileLoading } = useQuery({
-        queryKey: ["profile"],
-        queryFn: getProfile,
-    });
-    const { data: sessions, isLoading: sessionsLoading } = useQuery({
-        queryKey: ["sessions"],
-        queryFn: getSessions,
-    });
+    const {
+        data: user,
+        isLoading: userLoading,
+        isError: userIsError,
+        error: userError,
+        refetch: refetchUser,
+    } = useCurrentUser();
+    const {
+        data: profile,
+        isLoading: profileLoading,
+        isError: profileIsError,
+        error: profileError,
+        refetch: refetchProfile,
+    } = useUserProfile();
+    const {
+        data: sessions,
+        isLoading: sessionsLoading,
+        isError: sessionsIsError,
+        error: sessionsError,
+        refetch: refetchSessions,
+    } = useUserSessions();
 
     const accountForm = useForm<AccountValues>({
         resolver: zodResolver(accountSchema),
@@ -165,31 +180,34 @@ export default function ProfilePage() {
     const accountMutation = useMutation({
         mutationFn: updateMe,
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["me"] });
-            await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+            await invalidateUserIdentity(queryClient);
         },
+        onError: (error) => toastMutationError(error, "Failed to update account info."),
     });
     const profileMutation = useMutation({
         mutationFn: updateProfile,
-        onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["profile"] }),
+        onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.users.profile }),
+        onError: (error) => toastMutationError(error, "Failed to update public profile."),
     });
     const passwordMutation = useMutation({
         mutationFn: changePassword,
         onSuccess: () => passwordForm.reset(),
+        onError: (error) => toastMutationError(error, "Failed to update password."),
     });
     const revokeSessionMutation = useMutation({
         mutationFn: revokeSession,
-        onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+        onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.users.sessions }),
+        onError: (error) => toastMutationError(error, "Failed to revoke session."),
     });
     const enableMfaMutation = useMutation({
         mutationFn: enableMfa,
+        onError: (error) => toastMutationError(error, "Failed to start MFA setup."),
     });
     const verifyMfaMutation = useMutation({
         mutationFn: (values: MfaCodeValues) => verifyMfa(values.code),
         onSuccess: async () => {
             mfaVerifyForm.reset();
-            await queryClient.invalidateQueries({ queryKey: ["me"] });
-            await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+            await invalidateUserIdentity(queryClient);
             showToast({ message: "MFA enabled.", severity: "success" });
         },
     });
@@ -197,15 +215,14 @@ export default function ProfilePage() {
         mutationFn: (values: MfaCodeValues) => disableMfa(values.code),
         onSuccess: async () => {
             mfaDisableForm.reset();
-            await queryClient.invalidateQueries({ queryKey: ["me"] });
-            await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+            await invalidateUserIdentity(queryClient);
             showToast({ message: "MFA disabled.", severity: "success" });
         },
     });
     const uploadAvatarMutation = useMutation({
         mutationFn: uploadAvatar,
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["profile"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.users.profile });
             showToast({ message: "Avatar updated.", severity: "success" });
         },
         onError: (error) => {
@@ -218,7 +235,7 @@ export default function ProfilePage() {
     const deleteAvatarMutation = useMutation({
         mutationFn: deleteAvatar,
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["profile"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.users.profile });
             showToast({ message: "Avatar removed.", severity: "success" });
         },
         onError: (error) => {
@@ -238,33 +255,54 @@ export default function ProfilePage() {
 
     if (userLoading || profileLoading) {
         return (
-            <Box sx={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
-                <CircularProgress />
-            </Box>
+            <PageShell maxWidth="xl">
+                <SettingsTabs />
+                <Box
+                    sx={{
+                        display: "grid",
+                        gap: 2,
+                        gridTemplateColumns: { xs: "1fr", lg: "minmax(320px, 0.92fr) minmax(0, 1.08fr)" },
+                    }}
+                >
+                    <Skeleton variant="rounded" height={420} sx={{ borderRadius: 3 }} />
+                    <Stack spacing={2}>
+                        <Skeleton variant="rounded" height={280} sx={{ borderRadius: 3 }} />
+                        <Skeleton variant="rounded" height={220} sx={{ borderRadius: 3 }} />
+                    </Stack>
+                </Box>
+            </PageShell>
+        );
+    }
+
+    if (userIsError || profileIsError) {
+        return (
+            <PageShell maxWidth="xl">
+                <SettingsTabs />
+                <Stack spacing={2}>
+                    {userIsError && (
+                        <QueryErrorAlert
+                            error={userError}
+                            fallback="Failed to load account details."
+                            title="Account"
+                            onRetry={() => void refetchUser()}
+                        />
+                    )}
+                    {profileIsError && (
+                        <QueryErrorAlert
+                            error={profileError}
+                            fallback="Failed to load profile details."
+                            title="Profile"
+                            onRetry={() => void refetchProfile()}
+                        />
+                    )}
+                </Stack>
+            </PageShell>
         );
     }
 
     return (
         <PageShell maxWidth="xl">
-            <PageHeader
-                eyebrow="Personal settings"
-                title="Profile"
-                description="Manage identity, public details, active sessions, and password security from a single polished account hub."
-                meta={
-                    <>
-                        <Chip
-                            label={user?.is_verified ? "Email verified" : "Email verification needed"}
-                            color={user?.is_verified ? "success" : "warning"}
-                            variant="outlined"
-                        />
-                        <Chip
-                            label={user?.mfa_enabled ? "MFA enabled" : "MFA recommended"}
-                            color={user?.mfa_enabled ? "success" : "default"}
-                            variant="outlined"
-                        />
-                    </>
-                }
-            />
+            <SettingsTabs />
 
             <Box
                 sx={{
@@ -550,15 +588,23 @@ export default function ProfilePage() {
 
                 <Stack spacing={2}>
                     <SectionCard title="Active sessions" description="Review and revoke sessions you no longer trust.">
-                        {sessionsLoading ? (
+                        <QueryBoundary
+                            isLoading={sessionsLoading}
+                            isError={sessionsIsError}
+                            error={sessionsError}
+                            errorFallback="Failed to load active sessions."
+                            onRetry={() => void refetchSessions()}
+                            isEmpty={!sessions || sessions.length === 0}
+                            emptyFallback={
+                                <EmptyState
+                                    icon={<DevicesIcon />}
+                                    title="No active sessions"
+                                    description="Your signed-in sessions will appear here when they are available."
+                                />
+                            }
+                        >
                             <Stack spacing={1.25}>
-                                {Array.from({ length: 3 }).map((_, index) => (
-                                    <Skeleton key={index} variant="rounded" height={84} sx={{ borderRadius: 4 }} />
-                                ))}
-                            </Stack>
-                        ) : sessions && sessions.length > 0 ? (
-                            <Stack spacing={1.25}>
-                                {sessions.map((session, index) => {
+                                {sessions?.map((session, index) => {
                                     const isRevokingThisItem =
                                         revokeSessionMutation.isPending &&
                                         revokeSessionMutation.variables === session.id;
@@ -601,13 +647,7 @@ export default function ProfilePage() {
                                     );
                                 })}
                             </Stack>
-                        ) : (
-                            <EmptyState
-                                icon={<DevicesIcon />}
-                                title="No active sessions"
-                                description="Your signed-in sessions will appear here when they are available."
-                            />
-                        )}
+                        </QueryBoundary>
                     </SectionCard>
 
                     <SectionCard title="Change password" description="Refresh your credentials to keep account access secure.">

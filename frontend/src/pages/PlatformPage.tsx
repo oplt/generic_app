@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import {
     Alert,
     Box,
@@ -33,53 +34,97 @@ import {
     selectMyPlan,
     testWebhook,
     updateWebhook,
+    type WebhookEndpoint,
 } from "../api/platform";
 import { useSnackbar } from "../app/snackbarContext";
+import { queryKeys } from "../config/queryKeys";
 import { EmptyState } from "../components/ui/EmptyState";
-import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
+import { SettingsTabs } from "../components/layout/SettingsTabs";
+import { QueryErrorAlert } from "../components/ui/QueryBoundary";
 import { SectionCard } from "../components/ui/SectionCard";
 import { StatCard } from "../components/ui/StatCard";
+import { useMutationErrorToast } from "../hooks/useMutationErrorToast";
 import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
 import { formatCurrency, formatDateTime } from "../utils/formatters";
+
+const webhookTargetUrlSchema = z.string().url("Enter a valid URL (https://...)");
 
 export default function PlatformPage() {
     const queryClient = useQueryClient();
     const { showToast } = useSnackbar();
-    const { data: metadata, isLoading: metadataLoading } = usePlatformMetadata();
+    const toastMutationError = useMutationErrorToast();
+    const {
+        data: metadata,
+        isLoading: metadataLoading,
+        isError: metadataIsError,
+        error: metadataError,
+        refetch: refetchMetadata,
+    } = usePlatformMetadata();
     const enabledModules = metadata?.enabled_modules ?? [];
     const billingEnabled = enabledModules.includes("billing");
     const apiKeysEnabled = enabledModules.includes("api_keys");
     const webhooksEnabled = enabledModules.includes("webhooks");
     const flagsEnabled = enabledModules.includes("feature_flags");
 
-    const { data: plans, isLoading: plansLoading } = useQuery({
-        queryKey: ["platform", "plans"],
+    const {
+        data: plans,
+        isLoading: plansLoading,
+        isError: plansIsError,
+        error: plansError,
+        refetch: refetchPlans,
+    } = useQuery({
+        queryKey: queryKeys.platform.plans,
         queryFn: listSubscriptionPlans,
         enabled: billingEnabled,
     });
-    const { data: subscription, isLoading: subscriptionLoading } = useQuery({
-        queryKey: ["platform", "subscription"],
+    const {
+        data: subscription,
+        isLoading: subscriptionLoading,
+        isError: subscriptionIsError,
+        error: subscriptionError,
+        refetch: refetchSubscription,
+    } = useQuery({
+        queryKey: queryKeys.platform.subscription,
         queryFn: getMySubscription,
         enabled: billingEnabled,
     });
-    const { data: apiKeys, isLoading: apiKeysLoading } = useQuery({
-        queryKey: ["platform", "api-keys"],
+    const {
+        data: apiKeys,
+        isLoading: apiKeysLoading,
+        isError: apiKeysIsError,
+        error: apiKeysError,
+        refetch: refetchApiKeys,
+    } = useQuery({
+        queryKey: queryKeys.platform.apiKeys,
         queryFn: listApiKeys,
         enabled: apiKeysEnabled,
     });
-    const { data: webhooks, isLoading: webhooksLoading } = useQuery({
-        queryKey: ["platform", "webhooks"],
+    const {
+        data: webhooks,
+        isLoading: webhooksLoading,
+        isError: webhooksIsError,
+        error: webhooksError,
+        refetch: refetchWebhooks,
+    } = useQuery({
+        queryKey: queryKeys.platform.webhooks,
         queryFn: listWebhooks,
         enabled: webhooksEnabled,
     });
-    const { data: featureFlags, isLoading: featureFlagsLoading } = useQuery({
-        queryKey: ["platform", "feature-flags"],
+    const {
+        data: featureFlags,
+        isLoading: featureFlagsLoading,
+        isError: featureFlagsIsError,
+        error: featureFlagsError,
+        refetch: refetchFeatureFlags,
+    } = useQuery({
+        queryKey: queryKeys.platform.featureFlags,
         queryFn: listMyFeatureFlags,
         enabled: flagsEnabled,
     });
 
     const [apiKeyName, setApiKeyName] = useState("");
+    const [apiKeyNameError, setApiKeyNameError] = useState<string | null>(null);
     const [revealedKey, setRevealedKey] = useState<string | null>(null);
     const [revealedWebhookSecret, setRevealedWebhookSecret] = useState<string | null>(null);
     const [webhookDraft, setWebhookDraft] = useState({
@@ -87,58 +132,71 @@ export default function PlatformPage() {
         description: "",
         events: "platform.test",
     });
+    const [webhookUrlError, setWebhookUrlError] = useState<string | null>(null);
     const [lastWebhookResult, setLastWebhookResult] = useState("");
 
     const selectPlanMutation = useMutation({
         mutationFn: selectMyPlan,
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["platform", "subscription"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.platform.subscription });
             showToast({ message: "Subscription updated.", severity: "success" });
         },
-        onError: (error) => {
-            showToast({
-                message: error instanceof Error ? error.message : "Failed to update subscription.",
-                severity: "error",
-            });
-        },
+        onError: (error) => toastMutationError(error, "Failed to update subscription."),
     });
     const createApiKeyMutation = useMutation({
         mutationFn: createApiKey,
         onSuccess: async (data) => {
             setApiKeyName("");
             setRevealedKey(data.plaintext_key);
-            await queryClient.invalidateQueries({ queryKey: ["platform", "api-keys"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.platform.apiKeys });
         },
+        onError: (error) => toastMutationError(error, "Failed to create API key."),
     });
     const revokeApiKeyMutation = useMutation({
         mutationFn: revokeApiKey,
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["platform", "api-keys"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.platform.apiKeys });
             showToast({ message: "API key revoked.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to revoke API key."),
     });
     const createWebhookMutation = useMutation({
         mutationFn: createWebhook,
         onSuccess: async (data) => {
             setWebhookDraft({ target_url: "", description: "", events: "platform.test" });
             setRevealedWebhookSecret(data.signing_secret);
-            await queryClient.invalidateQueries({ queryKey: ["platform", "webhooks"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.platform.webhooks });
             showToast({ message: "Webhook created.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to create webhook."),
     });
     const toggleWebhookMutation = useMutation({
         mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
             updateWebhook(id, { is_active }),
-        onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["platform", "webhooks"] });
+        onMutate: async ({ id, is_active }) => {
+            await queryClient.cancelQueries({ queryKey: queryKeys.platform.webhooks });
+            const previous = queryClient.getQueryData<WebhookEndpoint[]>(queryKeys.platform.webhooks);
+            queryClient.setQueryData<WebhookEndpoint[]>(
+                queryKeys.platform.webhooks,
+                (old) => old?.map((webhook) => (webhook.id === id ? { ...webhook, is_active } : webhook))
+            );
+            return { previous };
         },
+        onError: (error, _vars, context) => {
+            if (context?.previous) {
+                queryClient.setQueryData(queryKeys.platform.webhooks, context.previous);
+            }
+            toastMutationError(error, "Failed to update webhook.");
+        },
+        onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.platform.webhooks }),
     });
     const deleteWebhookMutation = useMutation({
         mutationFn: deleteWebhook,
         onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: ["platform", "webhooks"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.platform.webhooks });
             showToast({ message: "Webhook deleted.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to delete webhook."),
     });
     const testWebhookMutation = useMutation({
         mutationFn: testWebhook,
@@ -151,6 +209,7 @@ export default function PlatformPage() {
                         : `Received status ${result.status_code}.`
             );
         },
+        onError: (error) => toastMutationError(error, "Failed to test webhook."),
     });
 
     if (metadataLoading) {
@@ -161,22 +220,25 @@ export default function PlatformPage() {
         );
     }
 
+    if (metadataIsError || !metadata) {
+        return (
+            <PageShell maxWidth="xl">
+                <SettingsTabs />
+                <QueryErrorAlert
+                    error={metadataError ?? new Error("Failed to load platform metadata.")}
+                    fallback="Failed to load platform metadata."
+                    onRetry={() => void refetchMetadata()}
+                />
+            </PageShell>
+        );
+    }
+
     const visibleUserModules =
         metadata?.module_catalog.filter((item) => item.user_visible && item.enabled) ?? [];
 
     return (
         <PageShell maxWidth="xl">
-            <PageHeader
-                eyebrow="Platform services"
-                title="Platform"
-                description="Use the optional modules enabled by your current pack, including billing, developer access, event delivery, and feature access."
-                meta={
-                    <>
-                        <Chip label={`Pack: ${metadata?.module_pack ?? "n/a"}`} variant="outlined" />
-                        <Chip label={`${visibleUserModules.length} user modules`} variant="outlined" />
-                    </>
-                }
-            />
+            <SettingsTabs />
 
             <Box
                 sx={{
@@ -230,6 +292,16 @@ export default function PlatformPage() {
 
             {billingEnabled && (
                 <SectionCard title="Billing" description="Review plans and switch when your usage changes.">
+                    {(subscriptionIsError || plansIsError) && (
+                        <QueryErrorAlert
+                            error={subscriptionError ?? plansError}
+                            fallback="Failed to load billing data."
+                            onRetry={() => {
+                                void refetchSubscription();
+                                void refetchPlans();
+                            }}
+                        />
+                    )}
                     {subscriptionLoading || plansLoading ? (
                         <Box
                             sx={{
@@ -251,6 +323,13 @@ export default function PlatformPage() {
                             <Alert severity="info">
                                 Current plan: {subscription?.plan.name ?? "No plan selected"}
                             </Alert>
+                            {(plans?.length ?? 0) === 0 ? (
+                                <EmptyState
+                                    icon={<BillingIcon />}
+                                    title="No subscription plans yet"
+                                    description="Plans will appear here once billing is configured for your workspace."
+                                />
+                            ) : (
                             <Box
                                 sx={{
                                     display: "grid",
@@ -310,6 +389,7 @@ export default function PlatformPage() {
                                     );
                                 })}
                             </Box>
+                            )}
                         </Stack>
                     )}
                 </SectionCard>
@@ -318,6 +398,13 @@ export default function PlatformPage() {
             {apiKeysEnabled && (
                 <SectionCard title="API keys" description="Create and revoke developer credentials with cleaner visibility.">
                     <Stack spacing={2}>
+                        {apiKeysIsError && (
+                            <QueryErrorAlert
+                                error={apiKeysError}
+                                fallback="Failed to load API keys."
+                                onRetry={() => void refetchApiKeys()}
+                            />
+                        )}
                         {revealedKey && (
                             <Alert severity="success">
                                 New key: <Typography component="span" sx={{ fontFamily: '"IBM Plex Mono", monospace' }}>{revealedKey}</Typography>. Copy it now. It will not be shown again.
@@ -327,13 +414,25 @@ export default function PlatformPage() {
                             <TextField
                                 label="Key name"
                                 value={apiKeyName}
-                                onChange={(event) => setApiKeyName(event.target.value)}
+                                onChange={(event) => {
+                                    setApiKeyName(event.target.value);
+                                    setApiKeyNameError(null);
+                                }}
+                                error={Boolean(apiKeyNameError)}
+                                helperText={apiKeyNameError ?? "At least 2 characters. Shown in your key list only."}
                                 fullWidth
                             />
                             <Button
                                 variant="contained"
                                 disabled={createApiKeyMutation.isPending || apiKeyName.trim().length < 2}
-                                onClick={() => createApiKeyMutation.mutate(apiKeyName.trim())}
+                                onClick={() => {
+                                    const trimmed = apiKeyName.trim();
+                                    if (trimmed.length < 2) {
+                                        setApiKeyNameError("Key name must be at least 2 characters.");
+                                        return;
+                                    }
+                                    createApiKeyMutation.mutate(trimmed);
+                                }}
                             >
                                 {createApiKeyMutation.isPending ? "Creating..." : "Create key"}
                             </Button>
@@ -405,6 +504,18 @@ export default function PlatformPage() {
             {webhooksEnabled && (
                 <SectionCard title="Webhooks" description="Configure delivery endpoints for outbound platform events.">
                     <Stack spacing={2}>
+                        {webhooksIsError && (
+                            <QueryErrorAlert
+                                error={webhooksError}
+                                fallback="Failed to load webhooks."
+                                onRetry={() => void refetchWebhooks()}
+                            />
+                        )}
+                        {revealedWebhookSecret && (
+                            <Alert severity="success">
+                                New webhook signing secret: <strong>{revealedWebhookSecret}</strong>
+                            </Alert>
+                        )}
                         {lastWebhookResult && <Alert severity="info">{lastWebhookResult}</Alert>}
                         <Box
                             sx={{
@@ -417,9 +528,15 @@ export default function PlatformPage() {
                                 <TextField
                                     label="Target URL"
                                     value={webhookDraft.target_url}
-                                    onChange={(event) =>
-                                        setWebhookDraft((current) => ({ ...current, target_url: event.target.value }))
-                                    }
+                                    onChange={(event) => {
+                                        setWebhookUrlError(null);
+                                        setWebhookDraft((current) => ({
+                                            ...current,
+                                            target_url: event.target.value,
+                                        }));
+                                    }}
+                                    error={Boolean(webhookUrlError)}
+                                    helperText={webhookUrlError ?? "Must be a valid http(s) URL"}
                                     fullWidth
                                 />
                                 <TextField
@@ -442,16 +559,22 @@ export default function PlatformPage() {
                                 <Button
                                     variant="contained"
                                     disabled={createWebhookMutation.isPending || webhookDraft.target_url.trim().length < 8}
-                                    onClick={() =>
+                                    onClick={() => {
+                                        const trimmedUrl = webhookDraft.target_url.trim();
+                                        const parsed = webhookTargetUrlSchema.safeParse(trimmedUrl);
+                                        if (!parsed.success) {
+                                            setWebhookUrlError(parsed.error.issues[0]?.message ?? "Invalid URL");
+                                            return;
+                                        }
                                         createWebhookMutation.mutate({
-                                            target_url: webhookDraft.target_url.trim(),
+                                            target_url: trimmedUrl,
                                             description: webhookDraft.description.trim() || undefined,
                                             events: webhookDraft.events
                                                 .split(",")
                                                 .map((item) => item.trim())
                                                 .filter(Boolean),
-                                        })
-                                    }
+                                        });
+                                    }}
                                 >
                                     {createWebhookMutation.isPending ? "Creating..." : "Create webhook"}
                                 </Button>
@@ -570,6 +693,13 @@ export default function PlatformPage() {
 
             {flagsEnabled && (
                 <SectionCard title="Feature flags" description="These flags are active for your account based on current platform configuration.">
+                    {featureFlagsIsError && (
+                        <QueryErrorAlert
+                            error={featureFlagsError}
+                            fallback="Failed to load feature flags."
+                            onRetry={() => void refetchFeatureFlags()}
+                        />
+                    )}
                     {featureFlagsLoading ? (
                         <Box
                             sx={{
@@ -627,16 +757,10 @@ export default function PlatformPage() {
                             icon={<FlagIcon />}
                             title="No feature flags configured"
                             description="Flags will appear here when the platform exposes rollout-based capabilities."
-                                />
-                            )}
-
-                            {revealedWebhookSecret && (
-                                <Alert severity="success">
-                                    New webhook signing secret: <strong>{revealedWebhookSecret}</strong>
-                                </Alert>
-                            )}
-                        </SectionCard>
+                        />
                     )}
+                </SectionCard>
+            )}
         </PageShell>
     );
 }

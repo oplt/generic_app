@@ -37,3 +37,19 @@ rag_answer_latency_ms = Histogram(
 )
 rag_permission_denied_total = Counter("rag_permission_denied_total", "RAG permission denials")
 rag_vector_unavailable_total = Counter("rag_vector_unavailable_total", "Vector store unavailable")
+rag_retrieval_degraded_total = Counter(
+    "rag_retrieval_degraded_total",
+    "Retrieval completed in degraded mode",
+)
+rag_retrieval_no_match_total = Counter(
+    "rag_retrieval_no_match_total",
+    "Retrieval succeeded but returned no chunks above threshold",
+)
+rag_injection_chunks_filtered_total = Counter(
+    "rag_injection_chunks_filtered_total",
+    "Retrieved chunks excluded due to prompt-injection flags",
+)
+rag_json_fallback_total = Counter(
+    "rag_json_fallback_total",
+    "Retrieval queries that used JSON embedding fallback",
+)

@@ -9,6 +9,45 @@ from backend.modules.rag.domain.models import ParsedDocument
 
 
 class IngestionParserTest(unittest.IsolatedAsyncioTestCase):
+    @patch("backend.modules.rag.infrastructure.langchain_document_loaders.asyncio.to_thread")
+    async def test_parse_offloads_to_thread(self, to_thread):
+        to_thread.return_value = []
+        parser = DocumentParserService()
+        cases = [
+            ("notes.txt", "text/plain", b"User prefers PostgreSQL for project X."),
+            ("report.pdf", "application/pdf", b"%PDF-1.4\n"),
+            (
+                "brief.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                b"PK\x03\x04",
+            ),
+            ("data.csv", "text/csv", b"col1,col2\na,b"),
+        ]
+        for filename, content_type, content in cases:
+            with self.subTest(filename=filename):
+                to_thread.reset_mock()
+                await parser.parse_bytes(
+                    content=content,
+                    filename=filename,
+                    content_type=content_type,
+                )
+                to_thread.assert_awaited_once()
+                called_fn = to_thread.await_args.args[0]
+                self.assertEqual(called_fn.__name__, "_parse_bytes_sync")
+
+    @patch("backend.modules.rag.infrastructure.langchain_document_loaders.asyncio.to_thread")
+    async def test_parse_txt_offloads_to_thread(self, to_thread):
+        to_thread.side_effect = lambda fn, *args, **kwargs: fn(*args, **kwargs)
+        parser = DocumentParserService()
+        docs = await parser.parse_bytes(
+            content=b"User prefers PostgreSQL for project X.",
+            filename="notes.txt",
+            content_type="text/plain",
+        )
+        to_thread.assert_awaited_once()
+        self.assertEqual(len(docs), 1)
+        self.assertIn("PostgreSQL", docs[0].content)
+
     async def test_parse_txt_creates_content(self):
         parser = DocumentParserService()
         docs = await parser.parse_bytes(
@@ -25,12 +64,20 @@ class IngestionParserTest(unittest.IsolatedAsyncioTestCase):
         docs = [ParsedDocument(content="A" * 120, metadata={})]
 
         async def run():
-            return await chunker.chunk(
-                docs,
-                document_id="doc-1",
-                user_id="user-a",
-                filename="test.txt",
-            )
+            with patch(
+                "backend.modules.rag.application.chunking_service.asyncio.to_thread",
+                side_effect=lambda fn, *args, **kwargs: fn(*args, **kwargs),
+            ) as to_thread:
+                chunks = await chunker.chunk(
+                    docs,
+                    document_id="doc-1",
+                    user_id="user-a",
+                    filename="test.txt",
+                )
+                to_thread.assert_called_once()
+                called_fn = to_thread.call_args.args[0]
+                self.assertEqual(called_fn.__name__, "_split_documents_with_token_counts")
+                return chunks
 
         import asyncio
 
@@ -90,3 +137,34 @@ class EmbeddingAdapterTest(unittest.IsolatedAsyncioTestCase):
         )
         vectors = await service.embed_texts(["a", "b"])
         self.assertEqual(len(vectors), 2)
+
+
+class EnqueueDocumentIndexingTest(unittest.IsolatedAsyncioTestCase):
+    @patch("backend.modules.rag.application.document_ingestion_service.queue_document_indexing")
+    async def test_enqueue_creates_job_and_queues_worker(self, queue_fn):
+        db = AsyncMock()
+        service = __import__(
+            "backend.modules.rag.application.document_ingestion_service",
+            fromlist=["DocumentIngestionService"],
+        ).DocumentIngestionService(db)
+        service.config = SimpleNamespace(enabled=True)
+        service.repo = MagicMock()
+        document = SimpleNamespace(id="doc-1", user_id="user-a", project_id=None)
+        job = SimpleNamespace(id="job-1")
+        service._get_document_for_indexing = AsyncMock(return_value=document)
+        service.repo.create_ingestion_job = AsyncMock(return_value=job)
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        result = await service.enqueue_document_indexing(
+            document_id="doc-1",
+            user_id="user-a",
+        )
+
+        self.assertEqual(result.id, "job-1")
+        queue_fn.assert_called_once_with(
+            document_id="doc-1",
+            user_id="user-a",
+            job_id="job-1",
+        )
+        service.repo.create_ingestion_job.assert_awaited_once()

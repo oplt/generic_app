@@ -27,6 +27,13 @@ function buildCsrfHeaders(): HeadersInit {
     return csrfToken ? { "X-CSRF-Token": csrfToken } : {};
 }
 
+export type Paginated<T> = {
+    items: T[];
+    total: number;
+    limit: number;
+    offset: number;
+};
+
 export async function apiFetch<T>(
     path: string,
     options: RequestInit = {},

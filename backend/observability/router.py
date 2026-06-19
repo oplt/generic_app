@@ -13,7 +13,7 @@ router = APIRouter()
 async def get_observability_links(
     current_user: User = Depends(get_current_user),
 ) -> ObservabilityLinks:
-    return ObservabilityService(settings).get_links(current_user)
+    return ObservabilityService(settings).get_links(is_admin=current_user.is_admin)
 
 
 @router.get("/status", response_model=ObservabilityStatus)

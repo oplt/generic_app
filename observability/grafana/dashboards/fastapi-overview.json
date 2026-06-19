@@ -222,6 +222,194 @@
       ],
       "title": "Status Code Distribution",
       "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 10,
+      "panels": [],
+      "title": "RAG & Memory",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 18
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(rag_retrieval_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p95 retrieval",
+          "refId": "A"
+        }
+      ],
+      "title": "RAG Retrieval Latency (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 18
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(rag_answer_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p95 answer",
+          "refId": "A"
+        }
+      ],
+      "title": "RAG Answer Latency (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 18
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(memory_search_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p95 search",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Search Latency (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(rag_vector_unavailable_total[1h]))",
+          "legendFormat": "RAG vector unavailable",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(increase(mem0_unavailable_count_total[1h]))",
+          "legendFormat": "Mem0 unavailable",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(increase(memory_search_failure_total[1h]))",
+          "legendFormat": "Memory search failures",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(increase(rag_parse_failure_total[1h]))",
+          "legendFormat": "RAG parse failures",
+          "refId": "D"
+        }
+      ],
+      "title": "RAG & Memory Failures (1h)",
+      "type": "timeseries"
     }
   ],
   "refresh": "10s",

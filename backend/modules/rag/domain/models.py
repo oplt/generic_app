@@ -42,6 +42,15 @@ class RetrievedChunk:
 
 
 @dataclass(slots=True)
+class RetrievalOutcome:
+    chunks: list[RetrievedChunk]
+    degraded: bool = False
+    degradation_reason: str | None = None
+    no_matches: bool = False
+    injection_chunks_filtered: int = 0
+
+
+@dataclass(slots=True)
 class Citation:
     document_id: str
     chunk_id: str
@@ -61,6 +70,10 @@ class RagAnswer:
     model_name: str
     latency_ms: int
     no_context_found: bool = False
+    ai_run_id: str | None = None
+    retrieval_degraded: bool = False
+    memory_degraded: bool = False
+    degradation_reason: str | None = None
 
 
 @dataclass(slots=True)

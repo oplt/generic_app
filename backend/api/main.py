@@ -10,7 +10,11 @@ from backend.core.logging import setup_logging
 from backend.core.storage import object_storage
 from backend.db.session import SessionLocal, engine
 from backend.modules.platform.service import PlatformService
+from backend.modules.ai.providers import close_ai_provider_http_clients
+from backend.observability.service import close_observability_http_client
 from backend.observability import setup_observability
+from backend.modules.rag.infrastructure.rag_config import validate_rag_config
+from backend.workers.async_dispatch import log_eager_mode_startup_warning
 
 from .middleware.correlation_id import CorrelationIdMiddleware
 from .middleware.csrf import CSRFMiddleware
@@ -25,12 +29,15 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_observability(app)
+    log_eager_mode_startup_warning()
+    validate_rag_config()
     await object_storage.ensure_bucket()
     async with SessionLocal() as db:
         platform_service = PlatformService(db)
         await platform_service.ensure_defaults()
     yield
+    await close_ai_provider_http_clients()
+    await close_observability_http_client()
     await redis_client.aclose()
     await engine.dispose()
 
@@ -58,3 +65,6 @@ app.add_middleware(
 register_exception_handlers(app)
 app.include_router(api_router)
 app.include_router(health_router)
+
+# Metrics and OTLP instrumentation must register before the ASGI app starts.
+setup_observability(app)

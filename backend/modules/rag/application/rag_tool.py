@@ -32,16 +32,22 @@ async def rag_search_tool(
     retrieval = RetrievalService(db, config)
     filters = {"document_ids": document_ids} if document_ids else None
     try:
-        chunks = await retrieval.retrieve(
+        outcome = await retrieval.retrieve(
             query,
             user_id=user_id,
             project_id=project_id,
             top_k=top_k,
             filters=filters,
         )
+        chunks = outcome.chunks
     except Exception:
         logger.exception("rag_search_tool failed for user=%s", user_id)
         return [], ""
 
-    context = RagContextBuilder().build_document_context_block(chunks)
-    return chunks, context
+    builder = RagContextBuilder()
+    bounded = builder.trim_chunks_to_token_budget(
+        chunks,
+        max_tokens=config.max_context_tokens,
+    )
+    context = builder.build_document_context_block(bounded)
+    return bounded, context

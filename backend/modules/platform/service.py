@@ -11,7 +11,17 @@ import httpx
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.cache import (
+    PLATFORM_CONFIG_CACHE_KEY,
+    PLATFORM_EMAIL_TEMPLATES_CACHE_KEY,
+    PLATFORM_FEATURE_FLAGS_CACHE_KEY,
+    cache_get_or_load_json,
+    cache_get_or_load_model,
+    invalidate_platform_caches,
+    invalidate_platform_email_template_cache,
+)
 from backend.core.config import settings
+from backend.core.pagination import DEFAULT_PAGE_LIMIT
 from backend.modules.identity_access.models import User
 from backend.modules.platform.models import (
     ApiKey,
@@ -257,6 +267,7 @@ class PlatformService:
 
         if changed:
             await self.db.commit()
+            await invalidate_platform_caches()
 
     async def get_platform_metadata(self) -> PlatformMetadataResponse:
         config = await self.get_platform_config()
@@ -272,6 +283,14 @@ class PlatformService:
         )
 
     async def get_platform_config(self) -> PlatformConfigResponse:
+        return await cache_get_or_load_model(
+            PLATFORM_CONFIG_CACHE_KEY,
+            PlatformConfigResponse,
+            ttl_seconds=settings.CACHE_PLATFORM_TTL_SECONDS,
+            loader=self._load_platform_config,
+        )
+
+    async def _load_platform_config(self) -> PlatformConfigResponse:
         platform_settings = await self.settings_repo.list_by_prefix("platform.")
         setting_map = {item.key: item.value for item in platform_settings}
 
@@ -385,7 +404,8 @@ class PlatformService:
                     await self.settings_repo.delete(existing)
 
         await self.db.commit()
-        return await self.get_platform_config()
+        await invalidate_platform_caches()
+        return await self._load_platform_config()
 
     async def list_plans(self) -> list[SubscriptionPlan]:
         return await self.repo.list_plans()
@@ -456,9 +476,17 @@ class PlatformService:
         await self.db.refresh(subscription)
         return subscription
 
-    async def list_api_keys_for_user(self, user: User) -> list[ApiKey]:
+    async def list_api_keys_for_user(
+        self,
+        user: User,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[ApiKey], int]:
         await self.ensure_module_enabled("api_keys")
-        return await self.repo.list_api_keys_for_user(user.id)
+        return await self.repo.list_api_keys_for_user(
+            user.id, limit=limit, offset=offset
+        )
 
     async def create_api_key_for_user(self, user: User, name: str) -> tuple[ApiKey, str]:
         await self.ensure_module_enabled("api_keys")
@@ -483,9 +511,17 @@ class PlatformService:
         await self.db.refresh(api_key)
         return api_key
 
-    async def list_webhooks_for_user(self, user: User) -> list[WebhookEndpoint]:
+    async def list_webhooks_for_user(
+        self,
+        user: User,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[WebhookEndpoint], int]:
         await self.ensure_module_enabled("webhooks")
-        return await self.repo.list_webhooks_for_user(user.id)
+        return await self.repo.list_webhooks_for_user(
+            user.id, limit=limit, offset=offset
+        )
 
     async def create_webhook_for_user(
         self,
@@ -589,13 +625,22 @@ class PlatformService:
             }
 
     async def list_feature_flags(self) -> list[FeatureFlag]:
-        return await self.repo.list_feature_flags()
+        cached = await cache_get_or_load_json(
+            PLATFORM_FEATURE_FLAGS_CACHE_KEY,
+            ttl_seconds=settings.CACHE_PLATFORM_TTL_SECONDS,
+            loader=self._load_feature_flags_for_cache,
+        )
+        return [self._feature_flag_from_cache(item) for item in cached]
+
+    async def _load_feature_flags_for_cache(self) -> list[dict]:
+        flags = await self.repo.list_feature_flags()
+        return [self._feature_flag_to_cache(flag) for flag in flags]
 
     async def list_effective_feature_flags_for_user(
         self, user: User
     ) -> list[EffectiveFeatureFlagResponse]:
         await self.ensure_module_enabled("feature_flags")
-        flags = await self.repo.list_feature_flags()
+        flags = await self.list_feature_flags()
         metadata = await self.get_platform_metadata()
         enabled_modules = set(metadata.enabled_modules)
         return [
@@ -622,6 +667,7 @@ class PlatformService:
         flag = await self.repo.create_feature_flag(**payload)
         await self.db.commit()
         await self.db.refresh(flag)
+        await invalidate_platform_caches()
         return flag
 
     async def update_feature_flag(self, feature_flag_id: str, payload: dict) -> FeatureFlag:
@@ -632,10 +678,20 @@ class PlatformService:
             setattr(flag, field, value)
         await self.db.commit()
         await self.db.refresh(flag)
+        await invalidate_platform_caches()
         return flag
 
     async def list_email_templates(self) -> list[EmailTemplate]:
-        return await self.repo.list_email_templates()
+        cached = await cache_get_or_load_json(
+            PLATFORM_EMAIL_TEMPLATES_CACHE_KEY,
+            ttl_seconds=settings.CACHE_SETTINGS_TTL_SECONDS,
+            loader=self._load_email_templates_for_cache,
+        )
+        return [self._email_template_from_cache(item) for item in cached]
+
+    async def _load_email_templates_for_cache(self) -> list[dict]:
+        templates = await self.repo.list_email_templates()
+        return [self._email_template_to_cache(template) for template in templates]
 
     async def create_email_template(self, payload: dict) -> EmailTemplate:
         if await self.repo.get_email_template_by_key(payload["key"]) is not None:
@@ -645,6 +701,7 @@ class PlatformService:
         template = await self.repo.create_email_template(**payload)
         await self.db.commit()
         await self.db.refresh(template)
+        await invalidate_platform_email_template_cache()
         return template
 
     async def update_email_template(self, template_id: str, payload: dict) -> EmailTemplate:
@@ -655,6 +712,7 @@ class PlatformService:
             setattr(template, field, value)
         await self.db.commit()
         await self.db.refresh(template)
+        await invalidate_platform_email_template_cache()
         return template
 
     async def render_email_template(
@@ -683,6 +741,48 @@ class PlatformService:
         metadata = await self.get_platform_metadata()
         if module_key not in metadata.enabled_modules:
             raise HTTPException(status_code=404, detail=f"Module `{module_key}` is not enabled")
+
+    @staticmethod
+    def _feature_flag_to_cache(flag: FeatureFlag) -> dict:
+        return {
+            "id": flag.id,
+            "key": flag.key,
+            "name": flag.name,
+            "description": flag.description,
+            "module_key": flag.module_key,
+            "is_enabled": flag.is_enabled,
+            "rollout_percentage": flag.rollout_percentage,
+            "updated_at": flag.updated_at.isoformat(),
+        }
+
+    @staticmethod
+    def _feature_flag_from_cache(payload: dict) -> FeatureFlag:
+        data = dict(payload)
+        updated_at = data.get("updated_at")
+        if isinstance(updated_at, str):
+            data["updated_at"] = datetime.fromisoformat(updated_at)
+        return FeatureFlag(**data)
+
+    @staticmethod
+    def _email_template_to_cache(template: EmailTemplate) -> dict:
+        return {
+            "id": template.id,
+            "key": template.key,
+            "name": template.name,
+            "subject_template": template.subject_template,
+            "html_template": template.html_template,
+            "text_template": template.text_template,
+            "is_active": template.is_active,
+            "updated_at": template.updated_at.isoformat(),
+        }
+
+    @staticmethod
+    def _email_template_from_cache(payload: dict) -> EmailTemplate:
+        data = dict(payload)
+        updated_at = data.get("updated_at")
+        if isinstance(updated_at, str):
+            data["updated_at"] = datetime.fromisoformat(updated_at)
+        return EmailTemplate(**data)
 
     async def _normalize_default_plan(self, active_plan: SubscriptionPlan) -> None:
         if not active_plan.is_default:

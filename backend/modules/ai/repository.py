@@ -1,9 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_scalars
 from backend.modules.ai.models import (
-    AiDocument,
-    AiDocumentChunk,
     AiEvaluationCase,
     AiEvaluationDataset,
     AiEvaluationRun,
@@ -20,13 +19,19 @@ class AiRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_prompt_templates_for_user(self, user_id: str) -> list[AiPromptTemplate]:
-        result = await self.db.execute(
+    async def list_prompt_templates_for_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[AiPromptTemplate], int]:
+        stmt = (
             select(AiPromptTemplate)
             .where(AiPromptTemplate.user_id == user_id)
             .order_by(AiPromptTemplate.updated_at.desc())
         )
-        return list(result.scalars().all())
+        return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
     async def get_prompt_template_for_user(
         self, user_id: str, template_id: str
@@ -56,13 +61,19 @@ class AiRepository:
         await self.db.flush()
         return template
 
-    async def list_prompt_versions(self, template_id: str) -> list[AiPromptVersion]:
-        result = await self.db.execute(
+    async def list_prompt_versions(
+        self,
+        template_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[AiPromptVersion], int]:
+        stmt = (
             select(AiPromptVersion)
             .where(AiPromptVersion.prompt_template_id == template_id)
             .order_by(AiPromptVersion.version_number.desc())
         )
-        return list(result.scalars().all())
+        return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
     async def get_prompt_version(self, version_id: str) -> AiPromptVersion | None:
         result = await self.db.execute(
@@ -76,65 +87,6 @@ class AiRepository:
         await self.db.flush()
         return version
 
-    async def list_documents_for_user(self, user_id: str) -> list[AiDocument]:
-        result = await self.db.execute(
-            select(AiDocument)
-            .where(AiDocument.user_id == user_id)
-            .order_by(AiDocument.updated_at.desc())
-        )
-        return list(result.scalars().all())
-
-    async def get_document_for_user(self, user_id: str, document_id: str) -> AiDocument | None:
-        result = await self.db.execute(
-            select(AiDocument).where(
-                AiDocument.user_id == user_id,
-                AiDocument.id == document_id,
-            )
-        )
-        return result.scalar_one_or_none()
-
-    async def create_document(self, **kwargs) -> AiDocument:
-        document = AiDocument(**kwargs)
-        self.db.add(document)
-        await self.db.flush()
-        return document
-
-    async def replace_document_chunks(
-        self,
-        document: AiDocument,
-        chunks: list[tuple[int, str, int, list[float]]],
-    ) -> None:
-        result = await self.db.execute(
-            select(AiDocumentChunk).where(AiDocumentChunk.document_id == document.id)
-        )
-        for chunk in result.scalars().all():
-            await self.db.delete(chunk)
-        await self.db.flush()
-        for chunk_index, content, token_count, embedding in chunks:
-            self.db.add(
-                AiDocumentChunk(
-                    document_id=document.id,
-                    chunk_index=chunk_index,
-                    content=content,
-                    token_count=token_count,
-                    embedding_json=embedding,
-                )
-            )
-        await self.db.flush()
-
-    async def list_document_chunks(
-        self,
-        document_ids: list[str],
-    ) -> list[AiDocumentChunk]:
-        if not document_ids:
-            return []
-        result = await self.db.execute(
-            select(AiDocumentChunk)
-            .where(AiDocumentChunk.document_id.in_(document_ids))
-            .order_by(AiDocumentChunk.document_id.asc(), AiDocumentChunk.chunk_index.asc())
-        )
-        return list(result.scalars().all())
-
     async def create_run(self, **kwargs) -> AiRun:
         run = AiRun(**kwargs)
         self.db.add(run)
@@ -147,17 +99,28 @@ class AiRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_runs_for_user(self, user_id: str, limit: int = 50) -> list[AiRun]:
-        result = await self.db.execute(
+    async def list_runs_for_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[AiRun], int]:
+        stmt = (
             select(AiRun)
             .where(AiRun.user_id == user_id)
             .order_by(AiRun.created_at.desc())
-            .limit(limit)
         )
-        return list(result.scalars().all())
+        return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
-    async def list_reviews_for_user(self, user_id: str) -> list[AiReviewItem]:
-        result = await self.db.execute(
+    async def list_reviews_for_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[AiReviewItem], int]:
+        stmt = (
             select(AiReviewItem)
             .where(
                 (AiReviewItem.requested_by_user_id == user_id)
@@ -166,7 +129,7 @@ class AiRepository:
             )
             .order_by(AiReviewItem.updated_at.desc())
         )
-        return list(result.scalars().all())
+        return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
     async def get_review(self, review_id: str) -> AiReviewItem | None:
         result = await self.db.execute(select(AiReviewItem).where(AiReviewItem.id == review_id))
@@ -178,13 +141,19 @@ class AiRepository:
         await self.db.flush()
         return review
 
-    async def list_feedback_for_run(self, run_id: str) -> list[AiFeedback]:
-        result = await self.db.execute(
+    async def list_feedback_for_run(
+        self,
+        run_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[AiFeedback], int]:
+        stmt = (
             select(AiFeedback)
             .where(AiFeedback.run_id == run_id)
             .order_by(AiFeedback.created_at.desc())
         )
-        return list(result.scalars().all())
+        return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
     async def create_feedback(self, **kwargs) -> AiFeedback:
         feedback = AiFeedback(**kwargs)
@@ -192,13 +161,19 @@ class AiRepository:
         await self.db.flush()
         return feedback
 
-    async def list_datasets_for_user(self, user_id: str) -> list[AiEvaluationDataset]:
-        result = await self.db.execute(
+    async def list_datasets_for_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[AiEvaluationDataset], int]:
+        stmt = (
             select(AiEvaluationDataset)
             .where(AiEvaluationDataset.user_id == user_id)
             .order_by(AiEvaluationDataset.updated_at.desc())
         )
-        return list(result.scalars().all())
+        return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
     async def get_dataset_for_user(
         self, user_id: str, dataset_id: str
@@ -217,13 +192,19 @@ class AiRepository:
         await self.db.flush()
         return dataset
 
-    async def list_dataset_cases(self, dataset_id: str) -> list[AiEvaluationCase]:
-        result = await self.db.execute(
+    async def list_dataset_cases(
+        self,
+        dataset_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[AiEvaluationCase], int]:
+        stmt = (
             select(AiEvaluationCase)
             .where(AiEvaluationCase.dataset_id == dataset_id)
             .order_by(AiEvaluationCase.created_at.asc())
         )
-        return list(result.scalars().all())
+        return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
     async def get_dataset_case(self, case_id: str) -> AiEvaluationCase | None:
         result = await self.db.execute(
@@ -243,16 +224,36 @@ class AiRepository:
         await self.db.flush()
         return evaluation_run
 
+    async def get_evaluation_run_by_id(self, evaluation_run_id: str) -> AiEvaluationRun | None:
+        result = await self.db.execute(
+            select(AiEvaluationRun).where(AiEvaluationRun.id == evaluation_run_id)
+        )
+        return result.scalar_one_or_none()
+
     async def create_evaluation_run_item(self, **kwargs) -> AiEvaluationRunItem:
         item = AiEvaluationRunItem(**kwargs)
         self.db.add(item)
         await self.db.flush()
         return item
 
-    async def list_evaluation_runs_for_user(self, user_id: str) -> list[AiEvaluationRun]:
-        result = await self.db.execute(
+    async def create_evaluation_run_items_batch(
+        self, items: list[dict]
+    ) -> list[AiEvaluationRunItem]:
+        rows = [AiEvaluationRunItem(**payload) for payload in items]
+        self.db.add_all(rows)
+        await self.db.flush()
+        return rows
+
+    async def list_evaluation_runs_for_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[AiEvaluationRun], int]:
+        stmt = (
             select(AiEvaluationRun)
             .where(AiEvaluationRun.user_id == user_id)
             .order_by(AiEvaluationRun.created_at.desc())
         )
-        return list(result.scalars().all())
+        return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)

@@ -1,59 +1,75 @@
 from __future__ import annotations
 
-import asyncio
 import logging
-from typing import Any
 
 from backend.core.config import settings
+from backend.workers.async_dispatch import (
+    dispatch_background_sync_job,
+    run_async_in_sync_context,
+)
 
 logger = logging.getLogger(__name__)
 
-_pending_content: dict[str, bytes] = {}
 
-
-def store_pending_content(document_id: str, content: bytes) -> None:
-    _pending_content[document_id] = content
-
-
-def get_pending_content(document_id: str) -> bytes | None:
-    return _pending_content.get(document_id)
-
-
-def pop_pending_content(document_id: str) -> bytes | None:
-    return _pending_content.pop(document_id, None)
-
-
-def index_document_sync(*, document_id: str, user_id: str, content: bytes | None = None) -> None:
+def index_document_sync(
+    *,
+    document_id: str,
+    user_id: str,
+    job_id: str | None = None,
+) -> None:
     from backend.db.session import SessionLocal
     from backend.modules.rag.application.document_ingestion_service import DocumentIngestionService
 
     async def _run() -> None:
         async with SessionLocal() as db:
             service = DocumentIngestionService(db)
-            file_content = content or pop_pending_content(document_id)
             await service.index_document(
                 document_id=document_id,
                 user_id=user_id,
-                file_content=file_content,
+                file_content=None,
+                job_id=job_id,
             )
 
-    asyncio.run(_run())
+    try:
+        run_async_in_sync_context(_run())
+        logger.info(
+            "RAG indexing completed for document=%s user=%s job=%s",
+            document_id,
+            user_id,
+            job_id,
+        )
+    except Exception:
+        logger.exception(
+            "RAG indexing failed for document=%s user=%s job=%s",
+            document_id,
+            user_id,
+            job_id,
+        )
+        raise
 
 
 def queue_document_indexing(
     *,
     document_id: str,
     user_id: str,
-    content: bytes | None = None,
+    job_id: str | None = None,
 ) -> None:
-    if content is not None:
-        store_pending_content(document_id, content)
-
-    payload: dict[str, Any] = {"document_id": document_id, "user_id": user_id}
-    if settings.CELERY_TASK_ALWAYS_EAGER:
-        index_document_sync(document_id=document_id, user_id=user_id, content=content)
-        return
+    payload = {"document_id": document_id, "user_id": user_id}
+    if job_id:
+        payload["job_id"] = job_id
 
     from backend.workers.tasks import index_rag_document_task
 
-    index_rag_document_task.apply_async(kwargs=payload, queue=settings.CELERY_TASK_DEFAULT_QUEUE)
+    dispatch_background_sync_job(
+        target=index_document_sync,
+        kwargs={
+            "document_id": document_id,
+            "user_id": user_id,
+            "job_id": job_id,
+        },
+        celery_task=index_rag_document_task,
+        celery_kwargs=payload,
+        queue=settings.CELERY_TASK_DEFAULT_QUEUE,
+        job_name="rag-indexing",
+    )
+    logger.info("Queued RAG indexing for document=%s user=%s", document_id, user_id)

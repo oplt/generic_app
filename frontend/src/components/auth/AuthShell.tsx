@@ -1,5 +1,5 @@
 import { Box, Container, Paper } from "@mui/material";
-import { alpha } from "@mui/material/styles";
+import { colors } from "../../app/designTokens";
 
 type AuthShellProps = {
     sideContent: React.ReactNode;
@@ -30,40 +30,25 @@ export function AuthShell({ sideContent, children }: AuthShellProps) {
                     <Paper
                         sx={(theme) => ({
                             p: { xs: 3, md: 4.5 },
-                            borderRadius: 4,
+                            borderRadius: 1,
                             overflow: "hidden",
-                            position: "relative",
-                            color: theme.palette.mode === "dark" ? "#ffffff" : "#0c0a09",
-                            backgroundColor: theme.palette.background.paper,
-                            backgroundImage:
-                                theme.palette.mode === "dark"
-                                    ? "radial-gradient(circle at 18% 18%, rgba(167, 229, 211, 0.22), transparent 34%), radial-gradient(circle at 86% 72%, rgba(200, 184, 224, 0.18), transparent 38%)"
-                                    : "radial-gradient(circle at 18% 18%, rgba(167, 229, 211, 0.5), transparent 34%), radial-gradient(circle at 86% 72%, rgba(244, 197, 168, 0.36), transparent 38%)",
-                            boxShadow:
-                                theme.palette.mode === "dark"
-                                    ? "0 18px 50px rgba(0, 0, 0, 0.3)"
-                                    : "0 4px 16px rgba(28, 25, 23, 0.04)",
-                            "&::after": {
-                                content: '""',
-                                position: "absolute",
-                                inset: 0,
-                                backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === "dark" ? 0.02 : 0.18),
-                                pointerEvents: "none",
-                            },
+                            color: theme.palette.mode === "dark" ? colors.white : colors.carbonDark,
+                            backgroundColor:
+                                theme.palette.mode === "dark" ? theme.palette.background.paper : colors.lightAsh,
+                            boxShadow: "none",
                         })}
                     >
-                        <Box sx={{ position: "relative", zIndex: 1, height: "100%" }}>
-                            {sideContent}
-                        </Box>
+                        {sideContent}
                     </Paper>
                     <Paper
                         sx={{
                             p: { xs: 3, md: 4 },
-                            borderRadius: 4,
+                            borderRadius: 1,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
                             minHeight: { lg: 720 },
+                            boxShadow: "none",
                         }}
                     >
                         <Box sx={{ width: "100%", maxWidth: 440 }}>{children}</Box>

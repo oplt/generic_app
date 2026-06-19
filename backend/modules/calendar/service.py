@@ -1,8 +1,16 @@
+import asyncio
 from datetime import date
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.config import settings
+from backend.lib.resource_cache import (
+    calendar_items_cache_key,
+    get_cached_model_items,
+    invalidate_calendar_cache,
+    set_cached_model_items,
+)
 from backend.modules.calendar.models import CalendarEntry
 from backend.modules.calendar.repository import CalendarRepository
 from backend.modules.calendar.schemas import CalendarItemCreate, CalendarItemResponse
@@ -14,6 +22,8 @@ from backend.modules.projects.service import ProjectsService
 
 
 class CalendarService:
+    MAX_RANGE_DAYS = 90
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = CalendarRepository(db)
@@ -28,9 +38,21 @@ class CalendarService:
     ) -> list[CalendarItemResponse]:
         if start_date > end_date:
             raise HTTPException(status_code=400, detail="Start date must be before end date")
+        if (end_date - start_date).days > self.MAX_RANGE_DAYS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Date range cannot exceed {self.MAX_RANGE_DAYS} days",
+            )
 
-        entries = await self.repo.list_entries_by_user_and_range(user.id, start_date, end_date)
-        tasks = await self.projects_repo.list_tasks_due_for_user(user.id, start_date, end_date)
+        cache_key = calendar_items_cache_key(user.id, start_date, end_date)
+        cached = await get_cached_model_items(cache_key, CalendarItemResponse)
+        if cached is not None:
+            return cached
+
+        entries, tasks = await asyncio.gather(
+            self.repo.list_entries_by_user_and_range(user.id, start_date, end_date),
+            self.projects_repo.list_tasks_due_for_user(user.id, start_date, end_date),
+        )
 
         items = [self._entry_to_response(entry) for entry in entries]
         items.extend(self._task_to_response(task, project) for task, project in tasks)
@@ -41,12 +63,20 @@ class CalendarService:
                 item.created_at.isoformat(),
             )
         )
+        await set_cached_model_items(
+            cache_key,
+            items,
+            ttl_seconds=settings.CACHE_CALENDAR_TTL_SECONDS,
+        )
         return items
 
     async def create_item(self, user: User, payload: CalendarItemCreate) -> CalendarItemResponse:
         if payload.type == "task":
-            return await self._create_task_item(user, payload)
-        return await self._create_entry_item(user, payload)
+            response = await self._create_task_item(user, payload)
+        else:
+            response = await self._create_entry_item(user, payload)
+        await invalidate_calendar_cache(user.id)
+        return response
 
     async def _create_entry_item(
         self,
@@ -136,4 +166,3 @@ class CalendarService:
             status=task.status,
             created_at=task.created_at,
         )
-

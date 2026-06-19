@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from uuid import uuid4
 
-from backend.core.storage import StorageNotConfiguredError, object_storage
+from backend.core.storage import PRIVATE_UPLOAD_CACHE_CONTROL, StorageNotConfiguredError, object_storage
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ class FileStorageAdapter:
                 object_key=object_key,
                 body=content,
                 content_type=content_type,
+                cache_control=PRIVATE_UPLOAD_CACHE_CONTROL,
             )
             return object_key
         except StorageNotConfiguredError:

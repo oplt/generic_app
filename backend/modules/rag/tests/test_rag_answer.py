@@ -1,7 +1,9 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from backend.modules.identity_access.models import User
 from backend.modules.rag.application.citation_service import CitationService
 from backend.modules.rag.application.rag_answer_service import NO_CONTEXT_ANSWER, RagAnswerService
 from backend.modules.rag.application.rag_context_builder import (
@@ -9,10 +11,13 @@ from backend.modules.rag.application.rag_context_builder import (
     RagContextBuilder,
 )
 from backend.modules.rag.application.rag_policy_service import RagPolicyService
-from backend.modules.rag.domain.models import RetrievedChunk
+from backend.modules.rag.domain.models import RetrievedChunk, RetrievalOutcome
 
 
 class RagAnswerTest(unittest.IsolatedAsyncioTestCase):
+    def _user(self) -> User:
+        return User(id="user-a", email="user@example.com", password_hash="x")
+
     def _chunk(self, chunk_id: str, content: str) -> RetrievedChunk:
         return RetrievedChunk(
             chunk_id=chunk_id,
@@ -23,19 +28,21 @@ class RagAnswerTest(unittest.IsolatedAsyncioTestCase):
             chunk_index=0,
         )
 
-    @patch("backend.modules.rag.application.rag_answer_service.AiProviderRegistry")
-    async def test_rag_answer_includes_citations(self, registry_cls):
+    async def test_rag_answer_includes_citations(self):
         db = AsyncMock()
         service = RagAnswerService(db)
-        service.config = SimpleNamespace(enabled=True)
+        service.config = SimpleNamespace(enabled=True, max_context_tokens=6000)
         service.retrieval = MagicMock()
-        service.retrieval.retrieve = AsyncMock(return_value=[self._chunk("c1", "PostgreSQL DB")])
+        service.retrieval.retrieve = AsyncMock(
+            return_value=RetrievalOutcome(chunks=[self._chunk("c1", "PostgreSQL DB")])
+        )
         service.memory_config = SimpleNamespace(enabled=False)
-        service.providers = registry_cls.return_value
-        registry_cls.return_value.get.return_value.generate = AsyncMock(
+        service.generation = MagicMock()
+        service.generation.run_rag_answer = AsyncMock(
             return_value=SimpleNamespace(
+                id="run-1",
                 output_text="The project uses PostgreSQL.",
-                model="local-heuristic",
+                model_name="local-heuristic",
             )
         )
         service.repo = MagicMock()
@@ -44,28 +51,68 @@ class RagAnswerTest(unittest.IsolatedAsyncioTestCase):
 
         result = await service.answer(
             "What database?",
-            user_id="user-a",
+            user=self._user(),
             project_id=None,
         )
         self.assertEqual(len(result.citations), 1)
         self.assertEqual(result.citations[0].chunk_id, "c1")
         self.assertFalse(result.no_context_found)
+        self.assertEqual(result.ai_run_id, "run-1")
+        service.generation.run_rag_answer.assert_awaited_once()
 
-    async def test_no_chunks_no_invented_citations(self):
+    @patch("backend.modules.rag.application.rag_answer_service.asyncio.gather", wraps=asyncio.gather)
+    async def test_answer_loads_retrieval_and_memory_in_parallel(self, gather_fn):
         db = AsyncMock()
         service = RagAnswerService(db)
-        service.config = SimpleNamespace(enabled=True)
+        service.config = SimpleNamespace(enabled=True, max_context_tokens=6000)
         service.retrieval = MagicMock()
-        service.retrieval.retrieve = AsyncMock(return_value=[])
-        service.memory_config = SimpleNamespace(enabled=False)
+        service.retrieval.retrieve = AsyncMock(
+            return_value=RetrievalOutcome(chunks=[self._chunk("c1", "PostgreSQL DB")])
+        )
+        service.memory = MagicMock()
+        service.memory.build_prompt_context_with_status = AsyncMock(return_value=("memory block", False))
+        service.memory_config = SimpleNamespace(enabled=True)
+        service.generation = MagicMock()
+        service.generation.run_rag_answer = AsyncMock(
+            return_value=SimpleNamespace(
+                id="run-1",
+                output_text="The project uses PostgreSQL.",
+                model_name="local-heuristic",
+            )
+        )
         service.repo = MagicMock()
         service.repo.create_query_record = AsyncMock()
         db.commit = AsyncMock()
 
-        result = await service.answer("anything", user_id="user-a", project_id=None)
+        await service.answer(
+            "What database?",
+            user=self._user(),
+            project_id=None,
+        )
+
+        gather_fn.assert_called()
+        service.retrieval.retrieve.assert_awaited_once()
+        service.memory.build_prompt_context_with_status.assert_awaited_once()
+        service.generation.run_rag_answer.assert_awaited_once()
+
+    async def test_no_chunks_no_invented_citations(self):
+        db = AsyncMock()
+        service = RagAnswerService(db)
+        service.config = SimpleNamespace(enabled=True, max_context_tokens=6000)
+        service.retrieval = MagicMock()
+        service.retrieval.retrieve = AsyncMock(return_value=RetrievalOutcome(chunks=[]))
+        service.memory_config = SimpleNamespace(enabled=False)
+        service.repo = MagicMock()
+        service.repo.create_query_record = AsyncMock()
+        db.commit = AsyncMock()
+        service.generation = MagicMock()
+
+        result = await service.answer("anything", user=self._user(), project_id=None)
         self.assertEqual(result.citations, [])
         self.assertTrue(result.no_context_found)
         self.assertEqual(result.answer, NO_CONTEXT_ANSWER)
+        self.assertIsNone(result.ai_run_id)
+        service.generation.run_rag_answer.assert_not_called()
 
     def test_prompt_injection_rule_in_context(self):
         builder = RagContextBuilder()

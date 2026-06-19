@@ -3,6 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
+from backend.core.pagination import (
+    PaginatedResponse,
+    PaginationParams,
+    paginated_response,
+    pagination_params,
+)
 from backend.modules.audit.repository import AuditRepository
 from backend.modules.identity_access.models import User
 from backend.modules.users.schemas import (
@@ -28,21 +34,17 @@ async def get_me(current_user: User = Depends(get_current_user)):
     )
 
 
-@router.get("/directory", response_model=list[UserDirectoryResponse])
+@router.get("/directory", response_model=PaginatedResponse[UserDirectoryResponse])
 async def list_directory(
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     service = UsersService(db)
-    users = await service.list_directory()
-    return [
-        UserDirectoryResponse(
-            id=user.id,
-            email=user.email,
-            full_name=user.full_name,
-        )
-        for user in users
-    ]
+    users, total = await service.list_directory(
+        limit=pagination.limit, offset=pagination.offset
+    )
+    return paginated_response(users, total=total, limit=pagination.limit, offset=pagination.offset)
 
 
 @router.patch("/me", response_model=UserProfileResponse)

@@ -10,13 +10,13 @@ from backend.core.cache import redis_client
 from backend.core.config import settings
 from backend.core.security import (
     generate_refresh_token,
-    hash_password,
+    hash_password_async,
     hash_refresh_token,
-    verify_password,
+    verify_password_async,
 )
+from backend.lib.platform_read_port import PlatformReadPort, PlatformServiceReadPort
 from backend.modules.identity_access.models import User
 from backend.modules.identity_access.repository import IdentityRepository
-from backend.modules.platform.service import PlatformService
 from backend.workers.email import queue_email
 
 
@@ -28,11 +28,10 @@ class IdentityService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = IdentityRepository(db)
+        self.platform: PlatformReadPort = PlatformServiceReadPort(db)
 
     async def _get_platform_app_name(self) -> str:
-        platform_service = PlatformService(self.db)
-        config = await platform_service.get_platform_config()
-        return config.app_name
+        return await self.platform.get_app_name()
 
     # ------------------------------------------------------------------ sign up / sign in
 
@@ -62,7 +61,7 @@ class IdentityService:
 
         user = await self.repo.create_user(
             email=email,
-            password_hash=hash_password(password),
+            password_hash=await hash_password_async(password),
             full_name=full_name,
             is_admin=is_admin,
             is_verified=not settings.REQUIRE_EMAIL_VERIFICATION,
@@ -74,9 +73,8 @@ class IdentityService:
             token = await self._store_verification_token(user.id)
             _query = urlencode({"token": token, "email": user.email})
             verification_link = f"{settings.FRONTEND_URL}/verify-email?{_query}"
-            platform_service = PlatformService(self.db)
             app_name = await self._get_platform_app_name()
-            subject, html_body, text_body = await platform_service.render_email_template(
+            subject, html_body, text_body = await self.platform.render_email_template(
                 key="auth.verify_email",
                 context={
                     "app_name": app_name,
@@ -106,7 +104,7 @@ class IdentityService:
 
     async def sign_in(self, email: str, password: str, mfa_code: str | None = None) -> dict:
         user = await self.repo.get_user_by_email(email)
-        if not user or not verify_password(password, user.password_hash):
+        if not user or not await verify_password_async(password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if not user.is_active:
@@ -218,9 +216,8 @@ class IdentityService:
         token = await self._store_verification_token(user.id)
         _query = urlencode({"token": token, "email": user.email})
         verification_link = f"{settings.FRONTEND_URL}/verify-email?{_query}"
-        platform_service = PlatformService(self.db)
         app_name = await self._get_platform_app_name()
-        subject, html_body, text_body = await platform_service.render_email_template(
+        subject, html_body, text_body = await self.platform.render_email_template(
             key="auth.verify_email",
             context={
                 "app_name": app_name,
@@ -258,9 +255,8 @@ class IdentityService:
         await redis_client.setex(key, settings.PASSWORD_RESET_TOKEN_TTL, user.id)
 
         reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
-        platform_service = PlatformService(self.db)
         app_name = await self._get_platform_app_name()
-        subject, html_body, text_body = await platform_service.render_email_template(
+        subject, html_body, text_body = await self.platform.render_email_template(
             key="auth.reset_password",
             context={
                 "app_name": app_name,
@@ -297,7 +293,7 @@ class IdentityService:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        user.password_hash = hash_password(new_password)
+        user.password_hash = await hash_password_async(new_password)
         await self.repo.revoke_all_refresh_sessions_for_user(user.id)
         await self.db.commit()
         await redis_client.delete(key)

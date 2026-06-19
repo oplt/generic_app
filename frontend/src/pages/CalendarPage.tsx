@@ -1,18 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
-import { Button, Chip } from "@mui/material";
+import { Button, Stack } from "@mui/material";
 import { ArrowForward as ArrowForwardIcon } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { listProjects } from "../api/projects";
+import { queryKeys } from "../config/queryKeys";
 import { DashboardCalendar } from "../components/dashboard/DashboardCalendar";
-import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
+import { QueryBoundary } from "../components/ui/QueryBoundary";
 import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
 
 export default function CalendarPage() {
     const navigate = useNavigate();
     const { data: platformMetadata } = usePlatformMetadata();
-    const { data: projects, isLoading: projectsLoading } = useQuery({
-        queryKey: ["projects"],
+    const {
+        data: projects,
+        isLoading: projectsLoading,
+        isError: projectsIsError,
+        error: projectsError,
+        refetch: refetchProjects,
+    } = useQuery({
+        queryKey: queryKeys.projects.all,
         queryFn: listProjects,
     });
 
@@ -20,34 +27,40 @@ export default function CalendarPage() {
 
     return (
         <PageShell maxWidth="xl">
-            <PageHeader
-                eyebrow="Planning horizon"
-                title="Calendar"
-                description={`Plan events, appointments, and due work across your ${coreDomainPlural.toLowerCase()} from a dedicated scheduling view.`}
-                actions={
-                    <Button
-                        variant="outlined"
-                        endIcon={<ArrowForwardIcon />}
-                        onClick={() => navigate("/projects")}
-                    >
-                        Open {coreDomainPlural}
-                    </Button>
-                }
-                meta={
-                    <Chip
-                        label={`${projects?.length ?? 0} ${coreDomainPlural.toLowerCase()}`}
-                        variant="outlined"
+            <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+                <Button
+                    variant="outlined"
+                    endIcon={<ArrowForwardIcon />}
+                    onClick={() => navigate("/projects")}
+                >
+                    Open {coreDomainPlural}
+                </Button>
+            </Stack>
+
+            <QueryBoundary
+                isLoading={projectsLoading}
+                isError={projectsIsError}
+                error={projectsError}
+                errorFallback={`Failed to load ${coreDomainPlural.toLowerCase()}.`}
+                onRetry={() => void refetchProjects()}
+                loadingFallback={
+                    <DashboardCalendar
+                        projects={[]}
+                        projectsLoading
+                        onOpenProjects={() => navigate("/projects")}
+                        allowedViews={["day", "week", "month", "twelve_month"]}
+                        initialView="month"
                     />
                 }
-            />
-
-            <DashboardCalendar
-                projects={projects ?? []}
-                projectsLoading={projectsLoading}
-                onOpenProjects={() => navigate("/projects")}
-                allowedViews={["day", "week", "month", "twelve_month"]}
-                initialView="month"
-            />
+            >
+                <DashboardCalendar
+                    projects={projects ?? []}
+                    projectsLoading={false}
+                    onOpenProjects={() => navigate("/projects")}
+                    allowedViews={["day", "week", "month", "twelve_month"]}
+                    initialView="month"
+                />
+            </QueryBoundary>
         </PageShell>
     );
 }

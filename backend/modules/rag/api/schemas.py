@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from backend.modules.ai.schemas import RequestModel
+from backend.core.schemas import RequestModel
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -23,6 +23,11 @@ class RagDocumentResponse(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
+
+
+class RagDocumentUploadResponse(BaseModel):
+    document: RagDocumentResponse
+    ingestion_job: RagIngestionJobResponse
 
 
 class RagChunkResponse(BaseModel):
@@ -65,6 +70,14 @@ class RagRetrievedChunkResponse(BaseModel):
     page_number: int | None = None
 
 
+class RagRetrieveResponse(BaseModel):
+    chunks: list[RagRetrievedChunkResponse]
+    degraded: bool = False
+    degradation_reason: str | None = None
+    no_matches: bool = False
+    injection_chunks_filtered: int = 0
+
+
 class RagAskRequest(RequestModel):
     query: str = Field(min_length=1, max_length=4000)
     project_id: str | None = None
@@ -91,6 +104,10 @@ class RagAskResponse(BaseModel):
     model_name: str
     latency_ms: int
     no_context_found: bool
+    ai_run_id: str | None = None
+    retrieval_degraded: bool = False
+    memory_degraded: bool = False
+    degradation_reason: str | None = None
 
 
 class RagQueryResponse(BaseModel):

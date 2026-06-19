@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from time import perf_counter
@@ -9,6 +10,13 @@ from uuid import uuid4
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.pagination import MAX_PAGE_LIMIT
+from backend.lib.memory_search_cache import (
+    get_cached_memory_search,
+    invalidate_memory_search_cache,
+    set_cached_memory_search,
+)
+from backend.lib.project_access import ProjectAccessPort, SqlAlchemyProjectAccessPort
 from backend.modules.memory.application.memory_consolidator import MemoryConsolidator
 from backend.modules.memory.application.memory_context_builder import MemoryContextBuilder
 from backend.modules.memory.application.memory_extractor import MemoryExtractor
@@ -35,9 +43,11 @@ from backend.modules.memory.infrastructure.memory_audit_repository import (
     MemoryRegistryRepository,
 )
 from backend.modules.memory.infrastructure.memory_config import MemoryConfig
-from backend.modules.projects.repository import ProjectsRepository
 
 logger = logging.getLogger(__name__)
+
+
+_MEMORY_WRITE_CONCURRENCY = 3
 
 
 class MemoryService:
@@ -47,7 +57,7 @@ class MemoryService:
         self.mem0 = Mem0Client(self.config)
         self.audit_repo = MemoryAuditRepository(db)
         self.registry_repo = MemoryRegistryRepository(db)
-        self.projects_repo = ProjectsRepository(db)
+        self.project_access: ProjectAccessPort = SqlAlchemyProjectAccessPort(db)
         self.policy = MemoryPolicyService(self.config.min_confidence)
         self.router = MemoryRouter()
         self.extractor = MemoryExtractor(self.router)
@@ -172,6 +182,7 @@ class MemoryService:
                 memory_level=level.value,
                 memory_type=mtype.value,
             )
+            await invalidate_memory_search_cache(user_id=user_id)
 
         if self.config.audit_enabled:
             await self.audit_repo.log_operation(
@@ -215,30 +226,49 @@ class MemoryService:
         if project_id:
             await self._ensure_project_access(user_id, project_id)
 
+        level_values = (
+            [level.value for level in levels]
+            if levels
+            else [level.value for level in MemoryLevel]
+        )
+        cached = await get_cached_memory_search(
+            user_id=user_id,
+            agent_id=agent_id,
+            query=query,
+            run_id=run_id,
+            project_id=project_id,
+            memory_levels=level_values,
+            limit=resolved_limit,
+        )
+        if cached is not None:
+            return cached
+
         collected: list[MemoryItem] = []
         search_levels = levels or list(MemoryLevel)
         started = perf_counter()
+
+        async def _search_level(level: MemoryLevel) -> list[MemoryItem]:
+            if level == MemoryLevel.PROJECT and not project_id:
+                return []
+            if level == MemoryLevel.SESSION and not run_id:
+                return []
+            items = await self.mem0.search(
+                query=query,
+                memory_level=level,
+                user_id=user_id,
+                agent_id=agent_id,
+                run_id=run_id,
+                project_id=project_id,
+                top_k=resolved_limit,
+            )
+            return await self._filter_authorized_read_items(user_id, items)
+
         try:
-            for level in search_levels:
-                if level == MemoryLevel.PROJECT and not project_id:
-                    continue
-                if level == MemoryLevel.SESSION and not run_id:
-                    continue
-                items = await self.mem0.search(
-                    query=query,
-                    memory_level=level,
-                    user_id=user_id,
-                    agent_id=agent_id,
-                    run_id=run_id,
-                    project_id=project_id,
-                    top_k=resolved_limit,
-                )
-                filtered = [
-                    item
-                    for item in items
-                    if await self._authorize_read_item(user_id, item)
-                ]
-                collected.extend(filtered)
+            level_results = await asyncio.gather(
+                *[_search_level(level) for level in search_levels]
+            )
+            for level_items in level_results:
+                collected.extend(level_items)
             metrics.memory_search_success.inc()
         except Exception:
             metrics.memory_search_failure.inc()
@@ -264,7 +294,18 @@ class MemoryService:
             await self.db.commit()
 
         consolidated = self.consolidator.consolidate(collected)
-        return consolidated[:resolved_limit]
+        result = consolidated[:resolved_limit]
+        await set_cached_memory_search(
+            user_id=user_id,
+            agent_id=agent_id,
+            query=query,
+            run_id=run_id,
+            project_id=project_id,
+            memory_levels=level_values,
+            limit=resolved_limit,
+            items=result,
+        )
+        return result
 
     async def forget(
         self,
@@ -310,7 +351,9 @@ class MemoryService:
                 metadata={"reason": reason},
                 source_ref=None,
             )
-        await self.db.commit()
+            await self.db.commit()
+        cache_user_id = registry.user_id or user_id
+        await invalidate_memory_search_cache(user_id=cache_user_id)
 
     async def list_user_memories(
         self,
@@ -320,29 +363,37 @@ class MemoryService:
         project_id: str | None = None,
         agent_id: str = "default",
         limit: int | None = None,
-    ) -> list[MemoryItem]:
+        offset: int = 0,
+    ) -> tuple[list[MemoryItem], int]:
         if not self.config.enabled:
-            return []
+            return [], 0
 
         if project_id:
             await self._ensure_project_access(user_id, project_id)
 
         resolved_limit = limit or self.config.default_limit
+        fetch_cap = min(offset + resolved_limit, MAX_PAGE_LIMIT)
         levels = [MemoryLevel(memory_level)] if memory_level else [MemoryLevel.USER]
-        items: list[MemoryItem] = []
-        for level in levels:
+
+        async def _fetch_level(level: MemoryLevel) -> list[MemoryItem]:
             rows = await self.mem0.get_all(
                 memory_level=level,
                 user_id=user_id,
                 agent_id=agent_id,
                 run_id=None,
                 project_id=project_id,
-                top_k=resolved_limit,
+                top_k=fetch_cap,
             )
-            items.extend(
-                item for item in rows if await self._authorize_read_item(user_id, item)
-            )
-        return self.consolidator.consolidate(items)[:resolved_limit]
+            return await self._filter_authorized_read_items(user_id, rows)
+
+        level_results = await asyncio.gather(*[_fetch_level(level) for level in levels])
+        items: list[MemoryItem] = []
+        for rows in level_results:
+            items.extend(rows)
+        consolidated = self.consolidator.consolidate(items)
+        total = len(consolidated)
+        page = consolidated[offset : offset + resolved_limit]
+        return page, total
 
     async def get_memory(self, *, user_id: str, memory_id: str) -> MemoryItem:
         registry = await self.registry_repo.get_by_external_id(memory_id)
@@ -361,9 +412,26 @@ class MemoryService:
         return item
 
     async def build_prompt_context(self, request: MemorySearchRequest) -> str:
+        context, _degraded = await self.build_prompt_context_with_status(request)
+        return context
+
+    async def build_prompt_context_with_status(
+        self, request: MemorySearchRequest
+    ) -> tuple[str, bool]:
+        context, _items, degraded = await self.recall_for_prompt(request)
+        return context, degraded
+
+    async def recall_for_prompt(
+        self, request: MemorySearchRequest
+    ) -> tuple[str, list[MemoryItem], bool]:
         if not self.config.enabled:
-            return ""
-        return await self.context_builder.build_context_block(request)
+            return "", [], False
+        try:
+            items = await self.context_builder.recall_ranked(request)
+            return self.context_builder.format_context_block(items), items, False
+        except Exception:
+            logger.exception("Memory recall failed for user=%s", request.user_id)
+            return "", [], True
 
     async def process_turn_memories(
         self,
@@ -379,29 +447,34 @@ class MemoryService:
         if not self.config.enabled or not self.config.write_enabled:
             return []
 
-        results: list[MemoryWriteResult] = []
         candidates = self.extractor.extract_from_turn(
             user_message=user_message,
             assistant_message=assistant_message,
             source_message_id=source_message_id,
         )
-        for candidate in candidates:
-            result = await self.remember(
-                user_id=user_id,
-                agent_id=agent_id,
-                content=candidate.content,
-                memory_level=candidate.routed.memory_level.value,
-                memory_type=candidate.routed.memory_type.value,
-                run_id=run_id if candidate.routed.memory_level == MemoryLevel.SESSION else None,
-                project_id=project_id
-                if candidate.routed.memory_level == MemoryLevel.PROJECT
-                else None,
-                confidence=candidate.routed.confidence,
-                source=candidate.routed.source.value,
-                source_ref=source_message_id,
-            )
-            results.append(result)
-        return results
+        if not candidates:
+            return []
+
+        semaphore = asyncio.Semaphore(_MEMORY_WRITE_CONCURRENCY)
+
+        async def _remember_candidate(candidate) -> MemoryWriteResult:
+            async with semaphore:
+                return await self.remember(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    content=candidate.content,
+                    memory_level=candidate.routed.memory_level.value,
+                    memory_type=candidate.routed.memory_type.value,
+                    run_id=run_id if candidate.routed.memory_level == MemoryLevel.SESSION else None,
+                    project_id=project_id
+                    if candidate.routed.memory_level == MemoryLevel.PROJECT
+                    else None,
+                    confidence=candidate.routed.confidence,
+                    source=candidate.routed.source.value,
+                    source_ref=source_message_id,
+                )
+
+        return list(await asyncio.gather(*[_remember_candidate(candidate) for candidate in candidates]))
 
     async def _authorize_write(
         self,
@@ -419,6 +492,40 @@ class MemoryService:
             await self._ensure_project_access(user_id, project_id)
 
     async def _authorize_read_item(self, user_id: str, item: MemoryItem) -> bool:
+        filtered = await self._filter_authorized_read_items(user_id, [item])
+        return bool(filtered)
+
+    async def _filter_authorized_read_items(
+        self,
+        user_id: str,
+        items: list[MemoryItem],
+    ) -> list[MemoryItem]:
+        if not items:
+            return []
+
+        project_ids = {
+            item.metadata.project_id
+            for item in items
+            if item.metadata.memory_level == MemoryLevel.PROJECT
+            and item.metadata.project_id
+            and item.metadata.user_id == user_id
+        }
+        accessible_project_ids = await self.project_access.filter_accessible_project_ids(
+            user_id,
+            project_ids,
+        )
+        return [
+            item
+            for item in items
+            if self._item_authorized_for_read(user_id, item, accessible_project_ids)
+        ]
+
+    def _item_authorized_for_read(
+        self,
+        user_id: str,
+        item: MemoryItem,
+        accessible_project_ids: set[str],
+    ) -> bool:
         level = item.metadata.memory_level
         if level in {MemoryLevel.USER, MemoryLevel.SESSION, MemoryLevel.EPISODIC}:
             return item.metadata.user_id == user_id
@@ -426,10 +533,7 @@ class MemoryService:
             if item.metadata.user_id != user_id:
                 return False
             if item.metadata.project_id:
-                project = await self.projects_repo.get_by_id_for_user(
-                    item.metadata.project_id, user_id
-                )
-                return project is not None
+                return item.metadata.project_id in accessible_project_ids
             return True
         if level == MemoryLevel.AGENT:
             scope = item.metadata.scope
@@ -439,7 +543,7 @@ class MemoryService:
         return False
 
     async def _ensure_project_access(self, user_id: str, project_id: str) -> None:
-        project = await self.projects_repo.get_by_id_for_user(project_id, user_id)
+        project = await self.project_access.get_project_for_user(project_id, user_id)
         if not project:
             raise HTTPException(status_code=403, detail="Project access denied")
 

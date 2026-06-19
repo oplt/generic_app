@@ -21,15 +21,18 @@ import {
     Event as EventIcon,
     Schedule as AppointmentIcon,
 } from "@mui/icons-material";
-import { alpha } from "@mui/material/styles";
+import { alpha, type Theme, useTheme } from "@mui/material/styles";
 import { DateCalendar, PickersDay, type PickersDayProps } from "@mui/x-date-pickers";
 import type {} from "@mui/x-date-pickers/AdapterDayjs";
 import { createCalendarItem, listCalendarItems, type CalendarItem, type CalendarItemType } from "../../api/calendar";
 import type { Project, ProjectTaskPriority } from "../../api/projects";
 import { useSnackbar } from "../../app/snackbarContext";
+import { queryKeys } from "../../config/queryKeys";
+import { QUERY_STALE_TIMES } from "../../config/queryTiming";
 import { formatDateOnly, humanizeKey } from "../../utils/formatters";
 import { EmptyState } from "../ui/EmptyState";
 import { SectionCard } from "../ui/SectionCard";
+import { QueryErrorAlert } from "../ui/QueryBoundary";
 
 type CalendarViewMode = "day" | "week" | "month" | "twelve_month";
 
@@ -98,27 +101,39 @@ function getMinutesFromTimeString(value: string) {
     return Number(hours) * 60 + Number(minutes);
 }
 
-function getWeekItemColor(item: CalendarItem) {
+function getWeekItemColor(item: CalendarItem, theme: Theme) {
+    const isDark = theme.palette.mode === "dark";
     if (item.type === "task") {
+        const main = theme.palette.success.main;
         return {
-            bg: "#ecfdf3",
-            border: "#a6f4c5",
-            text: "#027a48",
+            bg: alpha(main, isDark ? 0.22 : 0.12),
+            border: alpha(main, isDark ? 0.45 : 0.35),
+            text: isDark ? theme.palette.success.light : theme.palette.success.dark,
         };
     }
     if (item.type === "appointment") {
+        const main = theme.palette.secondary.main;
         return {
-            bg: "#f4f3ff",
-            border: "#d9d6fe",
-            text: "#7a22ff",
+            bg: alpha(main, isDark ? 0.22 : 0.12),
+            border: alpha(main, isDark ? 0.45 : 0.35),
+            text: isDark ? theme.palette.secondary.light : theme.palette.secondary.dark,
         };
     }
+    const main = theme.palette.primary.main;
     return {
-        bg: "#eef4ff",
-        border: "#b2ddff",
-        text: "#175cd3",
+        bg: alpha(main, isDark ? 0.22 : 0.12),
+        border: alpha(main, isDark ? 0.45 : 0.35),
+        text: isDark ? theme.palette.primary.light : theme.palette.primary.dark,
     };
 }
+
+type CalendarFieldErrors = {
+    title?: string;
+    project_id?: string;
+    start_time?: string;
+    end_time?: string;
+    general?: string;
+};
 
 function getItemIcon(type: CalendarItemType) {
     if (type === "task") {
@@ -291,13 +306,14 @@ export function DashboardCalendar({
     initialView = "month",
 }: DashboardCalendarProps) {
     const queryClient = useQueryClient();
+    const theme = useTheme();
     const { showToast } = useSnackbar();
     const [viewMode, setViewMode] = useState<CalendarViewMode>(initialView);
     const [anchorDate, setAnchorDate] = useState(dayjs().startOf("day"));
     const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [draft, setDraft] = useState<CalendarDraft>(buildEmptyDraft(projects));
-    const [formError, setFormError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState<CalendarFieldErrors>({});
 
     const { start, end } = getQueryRange(viewMode, anchorDate);
     const selectedDate = selectedDateKey ? dayjs(selectedDateKey) : anchorDate;
@@ -307,9 +323,10 @@ export function DashboardCalendar({
             : [anchorDate.startOf("month")];
     const daySize = viewMode === "twelve_month" ? 34 : 40;
 
-    const { data: calendarItems, isLoading, error } = useQuery({
-        queryKey: ["calendar", "items", start, end],
+    const { data: calendarItems, isLoading, isError, error, refetch } = useQuery({
+        queryKey: queryKeys.calendar.items(start, end),
         queryFn: () => listCalendarItems(start, end),
+        staleTime: QUERY_STALE_TIMES.calendar,
     });
 
     const itemsByDate = (calendarItems ?? []).reduce<Record<string, CalendarItem[]>>((accumulator, item) => {
@@ -330,12 +347,12 @@ export function DashboardCalendar({
                 priority: draft.type === "task" ? draft.priority : null,
             }),
         onSuccess: async (item) => {
-            await queryClient.invalidateQueries({ queryKey: ["calendar", "items"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.calendar.all });
             if (item.type === "task") {
-                await queryClient.invalidateQueries({ queryKey: ["projects"] });
+                await queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
             }
             setDraft(buildEmptyDraft(projects, draft.type));
-            setFormError("");
+            setFieldErrors({});
             showToast({
                 message:
                     item.type === "task"
@@ -345,9 +362,12 @@ export function DashboardCalendar({
             });
         },
         onError: (mutationError) => {
-            setFormError(
-                mutationError instanceof Error ? mutationError.message : "Failed to save calendar item."
-            );
+            setFieldErrors({
+                general:
+                    mutationError instanceof Error
+                        ? mutationError.message
+                        : "Failed to save calendar item.",
+            });
         },
     });
 
@@ -356,7 +376,7 @@ export function DashboardCalendar({
         setSelectedDateKey(nextDate.format("YYYY-MM-DD"));
         setAnchorDate(nextDate);
         setDrawerOpen(true);
-        setFormError("");
+        setFieldErrors({});
         setDraft((current) => ({
             ...current,
             project_id: current.project_id || projects[0]?.id || "",
@@ -364,21 +384,18 @@ export function DashboardCalendar({
     }
 
     function submitDraft() {
+        const nextErrors: CalendarFieldErrors = {};
         if (!selectedDateKey) {
-            setFormError("Choose a day before adding a calendar item.");
-            return;
+            nextErrors.general = "Choose a day before adding a calendar item.";
         }
         if (draft.title.trim().length < 2) {
-            setFormError("Title must be at least 2 characters.");
-            return;
+            nextErrors.title = "Title must be at least 2 characters.";
         }
         if (draft.type === "task" && !draft.project_id) {
-            setFormError("Select a project for this task.");
-            return;
+            nextErrors.project_id = "Select a project for this task.";
         }
         if (draft.type !== "task" && draft.end_time && !draft.start_time) {
-            setFormError("Start time is required when end time is set.");
-            return;
+            nextErrors.start_time = "Start time is required when end time is set.";
         }
         if (
             draft.type !== "task" &&
@@ -386,9 +403,13 @@ export function DashboardCalendar({
             draft.end_time &&
             draft.end_time <= draft.start_time
         ) {
-            setFormError("End time must be after start time.");
+            nextErrors.end_time = "End time must be after start time.";
+        }
+        if (Object.keys(nextErrors).length > 0) {
+            setFieldErrors(nextErrors);
             return;
         }
+        setFieldErrors({});
         createItemMutation.mutate();
     }
 
@@ -576,7 +597,7 @@ export function DashboardCalendar({
                             </Typography>
                             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
                                 {allDayItems.map((item) => {
-                                    const colors = getWeekItemColor(item);
+                                    const colors = getWeekItemColor(item, theme);
                                     return (
                                         <Box
                                             key={item.id}
@@ -674,7 +695,7 @@ export function DashboardCalendar({
                             )}
 
                             {timedItems.map((item) => {
-                                const colors = getWeekItemColor(item);
+                                const colors = getWeekItemColor(item, theme);
                                 const top = ((item.startMinutes - gridStartMinutes) / 60) * rowHeight;
                                 const height = Math.max(
                                     ((item.endMinutes - item.startMinutes) / 60) * rowHeight,
@@ -813,19 +834,20 @@ export function DashboardCalendar({
         });
 
         return (
-            <Box
-                sx={(theme) => ({
-                    borderRadius: 4,
-                    border: `1px solid ${theme.palette.divider}`,
-                    overflow: "hidden",
-                    backgroundColor: theme.palette.background.paper,
-                })}
-            >
+            <Box sx={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                <Box
+                    sx={(theme) => ({
+                        borderRadius: 4,
+                        border: `1px solid ${theme.palette.divider}`,
+                        overflow: "hidden",
+                        backgroundColor: theme.palette.background.paper,
+                        minWidth: 980,
+                    })}
+                >
                 <Box
                     sx={{
                         display: "grid",
                         gridTemplateColumns: `88px repeat(7, minmax(${dayColumnWidth}px, 1fr))`,
-                        minWidth: 980,
                     }}
                 >
                     <Box
@@ -907,7 +929,7 @@ export function DashboardCalendar({
                             >
                                 <Stack spacing={0.75}>
                                     {allDayItems.slice(0, 2).map((item) => {
-                                        const colors = getWeekItemColor(item);
+                                        const colors = getWeekItemColor(item, theme);
                                         return (
                                             <Box
                                                 key={item.id}
@@ -981,7 +1003,7 @@ export function DashboardCalendar({
                                 />
                             ))}
                             {timedWeekItems[dayIndex].map((item) => {
-                                const colors = getWeekItemColor(item);
+                                const colors = getWeekItemColor(item, theme);
                                 return (
                                     <Box
                                         key={item.id}
@@ -1013,6 +1035,7 @@ export function DashboardCalendar({
                             })}
                         </Box>
                     ))}
+                </Box>
                 </Box>
             </Box>
         );
@@ -1099,10 +1122,14 @@ export function DashboardCalendar({
                     </Stack>
                 }
             >
-                {error && (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                        {error instanceof Error ? error.message : "Failed to load calendar items."}
-                    </Alert>
+                {isError && (
+                    <Box sx={{ mb: 2 }}>
+                        <QueryErrorAlert
+                            error={error}
+                            fallback="Failed to load calendar items."
+                            onRetry={() => void refetch()}
+                        />
+                    </Box>
                 )}
 
                 {isLoading ? (
@@ -1189,7 +1216,7 @@ export function DashboardCalendar({
                                     end_time: nextType === "task" ? "" : current.end_time,
                                     project_id: current.project_id || projects[0]?.id || "",
                                 }));
-                                setFormError("");
+                                setFieldErrors({});
                             }}
                             fullWidth
                         >
@@ -1204,8 +1231,10 @@ export function DashboardCalendar({
                             value={draft.title}
                             onChange={(event) => {
                                 setDraft((current) => ({ ...current, title: event.target.value }));
-                                setFormError("");
+                                setFieldErrors((current) => ({ ...current, title: undefined }));
                             }}
+                            error={Boolean(fieldErrors.title)}
+                            helperText={fieldErrors.title}
                             fullWidth
                         />
                         <TextField
@@ -1225,15 +1254,18 @@ export function DashboardCalendar({
                                     label="Project"
                                     select
                                     value={draft.project_id}
-                                    onChange={(event) =>
-                                        setDraft((current) => ({ ...current, project_id: event.target.value }))
-                                    }
+                                    onChange={(event) => {
+                                        setDraft((current) => ({ ...current, project_id: event.target.value }));
+                                        setFieldErrors((current) => ({ ...current, project_id: undefined }));
+                                    }}
                                     fullWidth
                                     disabled={projectsLoading}
+                                    error={Boolean(fieldErrors.project_id)}
                                     helperText={
-                                        projects.length > 0
+                                        fieldErrors.project_id ??
+                                        (projects.length > 0
                                             ? "Task will be created in Todo with this date as its due date."
-                                            : "Create a project first before scheduling tasks from the calendar."
+                                            : "Create a project first before scheduling tasks from the calendar.")
                                     }
                                 >
                                     {projects.map((project) => (
@@ -1272,9 +1304,16 @@ export function DashboardCalendar({
                                     label="Start time"
                                     type="time"
                                     value={draft.start_time}
-                                    onChange={(event) =>
-                                        setDraft((current) => ({ ...current, start_time: event.target.value }))
-                                    }
+                                    onChange={(event) => {
+                                        setDraft((current) => ({ ...current, start_time: event.target.value }));
+                                        setFieldErrors((current) => ({
+                                            ...current,
+                                            start_time: undefined,
+                                            end_time: undefined,
+                                        }));
+                                    }}
+                                    error={Boolean(fieldErrors.start_time)}
+                                    helperText={fieldErrors.start_time}
                                     fullWidth
                                     InputLabelProps={{ shrink: true }}
                                 />
@@ -1282,16 +1321,19 @@ export function DashboardCalendar({
                                     label="End time"
                                     type="time"
                                     value={draft.end_time}
-                                    onChange={(event) =>
-                                        setDraft((current) => ({ ...current, end_time: event.target.value }))
-                                    }
+                                    onChange={(event) => {
+                                        setDraft((current) => ({ ...current, end_time: event.target.value }));
+                                        setFieldErrors((current) => ({ ...current, end_time: undefined }));
+                                    }}
+                                    error={Boolean(fieldErrors.end_time)}
+                                    helperText={fieldErrors.end_time}
                                     fullWidth
                                     InputLabelProps={{ shrink: true }}
                                 />
                             </Stack>
                         )}
 
-                        {formError && <Alert severity="error">{formError}</Alert>}
+                        {fieldErrors.general && <Alert severity="error">{fieldErrors.general}</Alert>}
 
                         <Stack direction="row" spacing={1}>
                             <Button variant="outlined" onClick={() => setDrawerOpen(false)} fullWidth>

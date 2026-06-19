@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, type Paginated } from "./client";
 
 export type AiProvider = {
     key: string;
@@ -166,7 +166,8 @@ export async function getAiOverview(): Promise<AiOverview> {
 }
 
 export async function listPromptVersions(templateId: string): Promise<AiPromptVersion[]> {
-    return apiFetch(`/ai/prompts/${templateId}/versions`);
+    const page = await apiFetch<Paginated<AiPromptVersion>>(`/ai/prompts/${templateId}/versions`);
+    return page.items;
 }
 
 export async function createPromptTemplate(payload: {
@@ -283,7 +284,8 @@ export async function createAiRun(payload: {
 }
 
 export async function listAiReviews(): Promise<AiReviewItem[]> {
-    return apiFetch("/ai/reviews");
+    const page = await apiFetch<Paginated<AiReviewItem>>("/ai/reviews");
+    return page.items;
 }
 
 export async function createAiReview(
@@ -311,7 +313,8 @@ export async function decideAiReview(
 }
 
 export async function listAiFeedback(runId: string): Promise<AiFeedback[]> {
-    return apiFetch(`/ai/runs/${runId}/feedback`);
+    const page = await apiFetch<Paginated<AiFeedback>>(`/ai/runs/${runId}/feedback`);
+    return page.items;
 }
 
 export async function createAiFeedback(
@@ -325,7 +328,8 @@ export async function createAiFeedback(
 }
 
 export async function listAiDatasets(): Promise<AiEvaluationDataset[]> {
-    return apiFetch("/ai/evaluation-datasets");
+    const page = await apiFetch<Paginated<AiEvaluationDataset>>("/ai/evaluation-datasets");
+    return page.items;
 }
 
 export async function createAiDataset(payload: {
@@ -339,7 +343,10 @@ export async function createAiDataset(payload: {
 }
 
 export async function listAiDatasetCases(datasetId: string): Promise<AiEvaluationCase[]> {
-    return apiFetch(`/ai/evaluation-datasets/${datasetId}/cases`);
+    const page = await apiFetch<Paginated<AiEvaluationCase>>(
+        `/ai/evaluation-datasets/${datasetId}/cases`
+    );
+    return page.items;
 }
 
 export async function createAiDatasetCase(
@@ -358,7 +365,8 @@ export async function createAiDatasetCase(
 }
 
 export async function listAiEvaluationRuns(): Promise<AiEvaluationRun[]> {
-    return apiFetch("/ai/evaluation-runs");
+    const page = await apiFetch<Paginated<AiEvaluationRun>>("/ai/evaluation-runs");
+    return page.items;
 }
 
 export async function runAiEvaluation(

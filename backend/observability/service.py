@@ -1,13 +1,17 @@
+import asyncio
 from datetime import UTC, datetime
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from sqlalchemy import text
 
+from backend.core.cache import (
+    OBSERVABILITY_STATUS_CACHE_KEY,
+    cache_get_or_load_model,
+)
 from backend.core.cache import redis_client
 from backend.core.config import Settings
 from backend.db.session import engine
-from backend.modules.identity_access.models import User
 from backend.observability.schemas import (
     ObservabilityDashboards,
     ObservabilityLinks,
@@ -17,6 +21,22 @@ from backend.observability.schemas import (
 )
 
 TECHNICAL_ACCESS_REQUIRED = True
+
+_observability_http_client: httpx.AsyncClient | None = None
+
+
+def _get_observability_http_client() -> httpx.AsyncClient:
+    global _observability_http_client
+    if _observability_http_client is None or _observability_http_client.is_closed:
+        _observability_http_client = httpx.AsyncClient(timeout=1.5, follow_redirects=True)
+    return _observability_http_client
+
+
+async def close_observability_http_client() -> None:
+    global _observability_http_client
+    if _observability_http_client is not None and not _observability_http_client.is_closed:
+        await _observability_http_client.aclose()
+    _observability_http_client = None
 
 
 def build_public_url(base_url: str, path: str = "") -> str | None:
@@ -48,8 +68,8 @@ class ObservabilityService:
     def __init__(self, settings: Settings):
         self._settings = settings
 
-    def get_links(self, user: User) -> ObservabilityLinks:
-        has_technical_access = bool(user.is_admin)
+    def get_links(self, *, is_admin: bool) -> ObservabilityLinks:
+        has_technical_access = is_admin
         grafana_base = build_public_url(self._settings.GRAFANA_PUBLIC_URL)
         prometheus_graph = build_public_url(self._settings.PROMETHEUS_PUBLIC_URL, "/graph")
         tempo_explore = build_public_url(
@@ -82,17 +102,27 @@ class ObservabilityService:
         )
 
     async def get_status(self) -> ObservabilityStatus:
+        return await cache_get_or_load_model(
+            OBSERVABILITY_STATUS_CACHE_KEY,
+            ObservabilityStatus,
+            ttl_seconds=self._settings.CACHE_OBSERVABILITY_STATUS_TTL_SECONDS,
+            loader=self._build_status,
+        )
+
+    async def _build_status(self) -> ObservabilityStatus:
         checked_at = datetime.now(UTC).isoformat()
 
-        database = await self._database_status(checked_at)
-        cache = await self._cache_status(checked_at)
         prometheus_url = build_public_url(self._settings.PROMETHEUS_PUBLIC_URL)
         grafana_url = build_public_url(self._settings.GRAFANA_PUBLIC_URL)
         tempo_url = build_public_url(self._settings.TEMPO_PUBLIC_URL)
 
-        prometheus = await self._http_status(prometheus_url, "Prometheus", checked_at)
-        grafana = await self._http_status(grafana_url, "Grafana", checked_at)
-        tempo = await self._http_status(tempo_url, "Tempo", checked_at)
+        database, cache, prometheus, grafana, tempo = await asyncio.gather(
+            self._database_status(checked_at),
+            self._cache_status(checked_at),
+            self._http_status(prometheus_url, "Prometheus", checked_at),
+            self._http_status(grafana_url, "Grafana", checked_at),
+            self._http_status(tempo_url, "Tempo", checked_at),
+        )
 
         return ObservabilityStatus(
             api=ObservabilityStatusItem(
@@ -183,8 +213,8 @@ class ObservabilityService:
             )
 
         try:
-            async with httpx.AsyncClient(timeout=1.5, follow_redirects=True) as client:
-                response = await client.get(url)
+            client = _get_observability_http_client()
+            response = await client.get(url)
             if response.status_code < 500:
                 return ObservabilityStatusItem(
                     status="healthy",

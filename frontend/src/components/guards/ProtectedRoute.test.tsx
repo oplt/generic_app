@@ -4,12 +4,32 @@ import { describe, expect, it } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 
-function renderGuard(props: React.ComponentProps<typeof ProtectedRoute>) {
+type GuardRoute = {
+    path: string;
+    redirectPath: string;
+    redirectLabel: string;
+};
+
+const ADMIN_ROUTES: GuardRoute[] = [
+    { path: "/admin/users", redirectPath: "/dashboard", redirectLabel: "Dashboard page" },
+    { path: "/admin/platform", redirectPath: "/dashboard", redirectLabel: "Dashboard page" },
+    { path: "/admin/settings", redirectPath: "/dashboard", redirectLabel: "Dashboard page" },
+];
+
+const WORKSPACE_ROUTES: GuardRoute[] = [
+    { path: "/ai", redirectPath: "/", redirectLabel: "Landing page" },
+    { path: "/projects", redirectPath: "/", redirectLabel: "Landing page" },
+];
+
+function renderGuard(
+    path: string,
+    props: React.ComponentProps<typeof ProtectedRoute>,
+) {
     render(
-        <MemoryRouter initialEntries={["/admin/users"]}>
+        <MemoryRouter initialEntries={[path]}>
             <Routes>
                 <Route
-                    path="/admin/users"
+                    path={path}
                     element={
                         <ProtectedRoute {...props}>
                             <div>Protected content</div>
@@ -26,7 +46,7 @@ function renderGuard(props: React.ComponentProps<typeof ProtectedRoute>) {
 
 describe("ProtectedRoute", () => {
     it("redirects unauthenticated users", async () => {
-        renderGuard({
+        renderGuard("/admin/users", {
             isReady: true,
             isAuthenticated: false,
             redirectTo: "/",
@@ -36,7 +56,7 @@ describe("ProtectedRoute", () => {
     });
 
     it("redirects non-admin users away from admin routes", async () => {
-        renderGuard({
+        renderGuard("/admin/users", {
             isReady: true,
             isAuthenticated: true,
             isAdmin: false,
@@ -47,7 +67,7 @@ describe("ProtectedRoute", () => {
     });
 
     it("renders children for authorized users", async () => {
-        renderGuard({
+        renderGuard("/admin/users", {
             isReady: true,
             isAuthenticated: true,
             isAdmin: true,
@@ -58,7 +78,7 @@ describe("ProtectedRoute", () => {
     });
 
     it("redirects admins without MFA to profile when MFA is required", async () => {
-        renderGuard({
+        renderGuard("/admin/users", {
             isReady: true,
             isAuthenticated: true,
             isAdmin: true,
@@ -69,4 +89,30 @@ describe("ProtectedRoute", () => {
 
         expect(await screen.findByText("Profile page")).toBeInTheDocument();
     });
+
+    it.each(ADMIN_ROUTES)(
+        "blocks non-admin access to $path",
+        async ({ path, redirectLabel }) => {
+            renderGuard(path, {
+                isReady: true,
+                isAuthenticated: true,
+                isAdmin: false,
+                requireAdmin: true,
+            });
+
+            expect(await screen.findByText(redirectLabel)).toBeInTheDocument();
+        }
+    );
+
+    it.each(WORKSPACE_ROUTES)(
+        "redirects signed-out users from $path",
+        async ({ path, redirectLabel }) => {
+            renderGuard(path, {
+                isReady: true,
+                isAuthenticated: false,
+            });
+
+            expect(await screen.findByText(redirectLabel)).toBeInTheDocument();
+        }
+    );
 });

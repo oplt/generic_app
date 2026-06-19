@@ -1,6 +1,7 @@
 from backend.workers.celery_app import celery_app
 from backend.workers.email import send_email_sync
-from backend.workers.rag_indexing import index_document_sync
+from backend.workers.evaluation import run_evaluation_sync
+from backend.modules.rag.workers import index_document_sync
 
 
 @celery_app.task(
@@ -32,5 +33,23 @@ def send_email_task(
     retry_jitter=True,
     max_retries=3,
 )
-def index_rag_document_task(*, document_id: str, user_id: str) -> None:
-    index_document_sync(document_id=document_id, user_id=user_id)
+def index_rag_document_task(
+    *, document_id: str, user_id: str, job_id: str | None = None
+) -> None:
+    index_document_sync(document_id=document_id, user_id=user_id, job_id=job_id)
+
+
+@celery_app.task(name="backend.workers.tasks.run_ai_evaluation_task")
+def run_ai_evaluation_task(
+    *,
+    evaluation_run_id: str,
+    user_id: str,
+    dataset_id: str,
+    prompt_version_id: str,
+) -> None:
+    run_evaluation_sync(
+        evaluation_run_id=evaluation_run_id,
+        user_id=user_id,
+        dataset_id=dataset_id,
+        prompt_version_id=prompt_version_id,
+    )

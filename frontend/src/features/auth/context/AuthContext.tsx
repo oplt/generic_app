@@ -3,6 +3,8 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { logout as logoutRequest, me, type AuthUser } from "../../../api/auth";
+import { queryKeys } from "../../../config/queryKeys";
+import { QUERY_STALE_TIMES } from "../../../config/queryTiming";
 import { AuthContext } from "./authContext";
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -12,9 +14,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         isPending,
         isError,
     } = useQuery<AuthUser | null>({
-        queryKey: ["auth", "me"],
+        queryKey: queryKeys.auth.me,
         queryFn: me,
         retry: false,
+        staleTime: QUERY_STALE_TIMES.userProfile,
     });
 
     const isAuthenticated = currentUser !== null;
@@ -22,11 +25,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     async function logout() {
         await logoutRequest().catch(() => undefined);
-        queryClient.setQueryData(["auth", "me"], null);
+        queryClient.setQueryData(queryKeys.auth.me, null);
     }
 
     function setAuthenticated(user: AuthUser) {
-        queryClient.setQueryData(["auth", "me"], user);
+        queryClient.setQueryData(queryKeys.auth.me, user);
     }
 
     return (

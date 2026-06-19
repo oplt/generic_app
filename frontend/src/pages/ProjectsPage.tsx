@@ -21,10 +21,11 @@ import {
 import { alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import { createProject, listProjects } from "../api/projects";
+import { queryKeys } from "../config/queryKeys";
 import { useSnackbar } from "../app/snackbarContext";
 import { EmptyState } from "../components/ui/EmptyState";
-import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
+import { QueryBoundary } from "../components/ui/QueryBoundary";
 import { SectionCard } from "../components/ui/SectionCard";
 import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
 import { formatDate } from "../utils/formatters";
@@ -41,8 +42,8 @@ export default function ProjectsPage() {
     const queryClient = useQueryClient();
     const { showToast } = useSnackbar();
     const { data: platformMetadata } = usePlatformMetadata();
-    const { data: projects, isLoading, error } = useQuery({
-        queryKey: ["projects"],
+    const { data: projects, isLoading, isError, error, refetch } = useQuery({
+        queryKey: queryKeys.projects.all,
         queryFn: listProjects,
     });
     const {
@@ -55,7 +56,7 @@ export default function ProjectsPage() {
     const mutation = useMutation({
         mutationFn: createProject,
         onSuccess: async (project) => {
-            await queryClient.invalidateQueries({ queryKey: ["projects"] });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
             reset();
             showToast({ message: "Project created successfully.", severity: "success" });
             navigate(`/projects/${project.id}`);
@@ -67,17 +68,6 @@ export default function ProjectsPage() {
 
     return (
         <PageShell maxWidth="xl">
-            <PageHeader
-                eyebrow="Workspace library"
-                title={coreDomainPlural}
-                description={`Create, organize, and review the ${coreDomainPlural.toLowerCase()} that power your workspace. The layout prioritizes creation on the left and scanning on the right.`}
-                meta={
-                    <Typography variant="body2" color="text.secondary">
-                        {isLoading ? "Loading library..." : `${projects?.length ?? 0} total ${coreDomainPlural.toLowerCase()}`}
-                    </Typography>
-                }
-            />
-
             <Box
                 sx={{
                     display: "grid",
@@ -133,13 +123,34 @@ export default function ProjectsPage() {
                     title={`Your ${coreDomainPlural}`}
                     description={`Browse the current ${coreDomainPlural.toLowerCase()} and scan for missing descriptions or naming gaps.`}
                 >
-                    {error && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {error instanceof Error ? error.message : `Failed to load ${coreDomainPlural.toLowerCase()}.`}
-                        </Alert>
-                    )}
-
-                    {isLoading ? (
+                    <QueryBoundary
+                        isLoading={isLoading}
+                        isError={isError}
+                        error={error}
+                        errorFallback={`Failed to load ${coreDomainPlural.toLowerCase()}.`}
+                        onRetry={() => void refetch()}
+                        loadingFallback={
+                            <Box
+                                sx={{
+                                    display: "grid",
+                                    gap: 1.5,
+                                    gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+                                }}
+                            >
+                                {Array.from({ length: 4 }).map((_, index) => (
+                                    <Skeleton key={index} variant="rounded" height={162} sx={{ borderRadius: 4 }} />
+                                ))}
+                            </Box>
+                        }
+                        isEmpty={!projects || projects.length === 0}
+                        emptyFallback={
+                            <EmptyState
+                                icon={<FolderOpenIcon />}
+                                title={`No ${coreDomainPlural.toLowerCase()} yet`}
+                                description={`Create the first ${coreDomainSingular.toLowerCase()} to give the workspace structure and momentum.`}
+                            />
+                        }
+                    >
                         <Box
                             sx={{
                                 display: "grid",
@@ -147,19 +158,7 @@ export default function ProjectsPage() {
                                 gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
                             }}
                         >
-                            {Array.from({ length: 4 }).map((_, index) => (
-                                <Skeleton key={index} variant="rounded" height={162} sx={{ borderRadius: 4 }} />
-                            ))}
-                        </Box>
-                    ) : projects && projects.length > 0 ? (
-                        <Box
-                            sx={{
-                                display: "grid",
-                                gap: 1.5,
-                                gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-                            }}
-                        >
-                            {projects.map((project) => (
+                            {projects?.map((project) => (
                                 <Paper
                                     key={project.id}
                                     sx={(theme) => ({
@@ -208,13 +207,7 @@ export default function ProjectsPage() {
                                 </Paper>
                             ))}
                         </Box>
-                    ) : (
-                        <EmptyState
-                            icon={<FolderOpenIcon />}
-                            title={`No ${coreDomainPlural.toLowerCase()} yet`}
-                            description={`Create the first ${coreDomainSingular.toLowerCase()} to give the workspace structure and momentum.`}
-                        />
-                    )}
+                    </QueryBoundary>
                 </SectionCard>
             </Box>
         </PageShell>

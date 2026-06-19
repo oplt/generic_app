@@ -1,4 +1,5 @@
 import { Box, Paper, Stack, Typography, type SxProps, type Theme } from "@mui/material";
+import { colors } from "../../app/designTokens";
 
 type SectionCardProps = {
     title?: React.ReactNode;
@@ -20,13 +21,14 @@ export function SectionCard({
     return (
         <Paper
             sx={[
-                {
+                (theme) => ({
                     p: { xs: 2.5, md: 3 },
-                    borderRadius: 4,
-                    border: 1,
-                    borderColor: "divider",
+                    borderRadius: 1,
+                    border: "none",
                     boxShadow: "none",
-                },
+                    backgroundColor:
+                        theme.palette.mode === "dark" ? theme.palette.background.paper : colors.lightAsh,
+                }),
                 ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
             ]}
         >

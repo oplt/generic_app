@@ -33,10 +33,11 @@ import {
 } from "../api/settings";
 import { EmptyState } from "../components/ui/EmptyState";
 import { AdminSettingsTabs } from "../components/layout/AdminSettingsTabs";
-import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
+import { QueryErrorAlert } from "../components/ui/QueryBoundary";
 import { SectionCard } from "../components/ui/SectionCard";
 import { StatCard } from "../components/ui/StatCard";
+import { useMutationErrorToast } from "../hooks/useMutationErrorToast";
 import { formatDateTime } from "../utils/formatters";
 
 type DatabaseSettingDrafts = Record<
@@ -316,6 +317,7 @@ function AdminSettingsContent({
     onTabChange: (nextTab: SettingsTabValue) => void;
 }) {
     const queryClient = useQueryClient();
+    const toastMutationError = useMutationErrorToast();
     const configGroups = buildConfigGroups(configData.items);
     const [configDrafts, setConfigDrafts] = useState<Record<string, string>>(() =>
         Object.fromEntries(configData.items.map((item) => [item.key, item.value]))
@@ -353,6 +355,7 @@ function AdminSettingsContent({
             queryClient.setQueryData(["settings", "config"], data);
             setConfigDrafts(Object.fromEntries(data.items.map((item) => [item.key, item.value])));
         },
+        onError: (error) => toastMutationError(error, "Failed to save config."),
     });
     const createDatabaseMutation = useMutation({
         mutationFn: createDatabaseSetting,
@@ -360,6 +363,7 @@ function AdminSettingsContent({
             setNewSetting({ key: "", value: "", description: "" });
             await queryClient.invalidateQueries({ queryKey: ["settings", "database"] });
         },
+        onError: (error) => toastMutationError(error, "Failed to create database setting."),
     });
     const updateDatabaseMutation = useMutation({
         mutationFn: ({ id, value, description }: { id: string; value: string; description: string }) =>
@@ -367,28 +371,18 @@ function AdminSettingsContent({
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ["settings", "database"] });
         },
+        onError: (error) => toastMutationError(error, "Failed to update database setting."),
     });
     const deleteDatabaseMutation = useMutation({
         mutationFn: deleteDatabaseSetting,
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ["settings", "database"] });
         },
+        onError: (error) => toastMutationError(error, "Failed to delete database setting."),
     });
 
     return (
         <PageShell maxWidth="xl">
-            <PageHeader
-                eyebrow="System control"
-                title="Settings"
-                description="Edit environment-backed variables in grouped tabs and keep runtime database settings separate from file-based config."
-                meta={
-                    <>
-                        <Chip label={`${configGroups.length} config groups`} variant="outlined" />
-                        <Chip label={`${customConfigCount} custom values`} variant="outlined" />
-                        <Chip label={`${databaseSettings.length} database settings`} variant="outlined" />
-                    </>
-                }
-            />
             <AdminSettingsTabs />
 
             <Box
@@ -681,6 +675,8 @@ export default function AdminSettingsPage() {
         data: configData,
         isLoading: configLoading,
         error: configError,
+        isError: configIsError,
+        refetch: refetchConfig,
     } = useQuery({
         queryKey: ["settings", "config"],
         queryFn: getConfigSettings,
@@ -689,6 +685,8 @@ export default function AdminSettingsPage() {
         data: databaseSettings,
         isLoading: databaseLoading,
         error: databaseError,
+        isError: databaseIsError,
+        refetch: refetchDatabase,
     } = useQuery({
         queryKey: ["settings", "database"],
         queryFn: listDatabaseSettings,
@@ -705,8 +703,28 @@ export default function AdminSettingsPage() {
         );
     }
 
-    if (!configData || !databaseSettings) {
-        return null;
+    if (!configData) {
+        return (
+            <PageShell maxWidth="xl">
+                <AdminSettingsTabs />
+                <Stack spacing={2} sx={{ mt: 2 }}>
+                    <QueryErrorAlert
+                        error={configError ?? new Error("Failed to load config values.")}
+                        fallback="Failed to load config values."
+                        title="Config"
+                        onRetry={() => void refetchConfig()}
+                    />
+                    {databaseIsError && (
+                        <QueryErrorAlert
+                            error={databaseError}
+                            fallback="Failed to load database settings."
+                            title="Database settings"
+                            onRetry={() => void refetchDatabase()}
+                        />
+                    )}
+                </Stack>
+            </PageShell>
+        );
     }
 
     const configGroups = buildConfigGroups(configData.items);
@@ -714,7 +732,7 @@ export default function AdminSettingsPage() {
         activeTab === "database" || configGroups.some((group) => group.id === activeTab)
             ? activeTab
             : configGroups[0]?.id ?? "database";
-    const settingsKey = `${configData.items.map((item) => `${item.key}:${item.value}`).join("|")}::${databaseSettings
+    const settingsKey = `${configData.items.map((item) => `${item.key}:${item.value}`).join("|")}::${(databaseSettings ?? [])
         .map((item) => `${item.id}:${item.updated_at}`)
         .join("|")}`;
 
@@ -722,15 +740,15 @@ export default function AdminSettingsPage() {
         <AdminSettingsContent
             key={settingsKey}
             configData={configData}
-            databaseSettings={databaseSettings}
+            databaseSettings={databaseSettings ?? []}
             configErrorMessage={
                 configError instanceof Error ? configError.message : "Failed to load config values."
             }
             databaseErrorMessage={
                 databaseError instanceof Error ? databaseError.message : "Failed to load database settings."
             }
-            hasConfigError={Boolean(configError)}
-            hasDatabaseError={Boolean(databaseError)}
+            hasConfigError={configIsError}
+            hasDatabaseError={databaseIsError || !databaseSettings}
             activeTab={resolvedActiveTab}
             onTabChange={setActiveTab}
         />

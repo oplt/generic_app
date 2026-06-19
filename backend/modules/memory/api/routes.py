@@ -1,5 +1,11 @@
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
+from backend.core.pagination import (
+    PaginatedResponse,
+    PaginationParams,
+    paginated_response,
+    pagination_params,
+)
 from backend.modules.identity_access.models import User
 from backend.modules.memory.api.schemas import (
     MemoryAuditLogResponse,
@@ -51,25 +57,31 @@ def _require_memory_enabled() -> None:
         raise HTTPException(status_code=503, detail="Memory service is disabled")
 
 
-@router.get("", response_model=list[MemoryItemResponse])
+@router.get("", response_model=PaginatedResponse[MemoryItemResponse])
 async def list_memories(
     memory_level: str | None = None,
     project_id: str | None = None,
     agent_id: str = "default",
-    limit: int = 20,
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_memory_enabled()
     service = MemoryService(db)
-    items = await service.list_user_memories(
+    items, total = await service.list_user_memories(
         user_id=current_user.id,
         memory_level=memory_level,
         project_id=project_id,
         agent_id=agent_id,
-        limit=limit,
+        limit=pagination.limit,
+        offset=pagination.offset,
     )
-    return [_memory_to_response(item) for item in items]
+    return paginated_response(
+        [_memory_to_response(item) for item in items],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("/search", response_model=list[MemoryItemResponse])
@@ -92,16 +104,25 @@ async def search_memories(
     return [_memory_to_response(item) for item in items]
 
 
-@router.get("/audit", response_model=list[MemoryAuditLogResponse])
+@router.get("/audit", response_model=PaginatedResponse[MemoryAuditLogResponse])
 async def list_audit_logs(
-    limit: int = 100,
+    pagination: PaginationParams = Depends(pagination_params),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _require_memory_enabled()
     service = MemoryService(db)
-    logs = await service.audit_repo.list_for_user(current_user.id, limit=limit)
-    return [MemoryAuditLogResponse.model_validate(log) for log in logs]
+    logs, total = await service.audit_repo.list_for_user(
+        current_user.id,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return paginated_response(
+        [MemoryAuditLogResponse.model_validate(log) for log in logs],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
 
 
 @router.post("", response_model=MemoryWriteResponse, status_code=201)

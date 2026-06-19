@@ -32,6 +32,7 @@ dependencies = [
     "langchain-text-splitters",
     "pypdf",
     "python-docx",
+    "pgvector",
 ]
 
 [tool.ruff]
@@ -44,3 +45,8 @@ ignore = ["B008"]  # FastAPI Depends() in defaults
 [tool.ruff.lint.per-file-ignores]
 "alembic/versions/*.py" = ["E501"]
 "alembic/env.py" = ["E402"]
+
+[dependency-groups]
+dev = [
+    "honcho>=2.0.0",
+]

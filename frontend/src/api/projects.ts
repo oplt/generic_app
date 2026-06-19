@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, type Paginated } from "./client";
 
 export type Project = {
     id: string;
@@ -31,7 +31,8 @@ export type ProjectTask = {
 };
 
 export async function listProjects(): Promise<Project[]> {
-    return apiFetch("/projects");
+    const page = await apiFetch<Paginated<Project>>("/projects");
+    return page.items;
 }
 
 export async function getProject(projectId: string): Promise<Project> {
@@ -49,7 +50,8 @@ export async function createProject(payload: {
 }
 
 export async function listProjectTasks(projectId: string): Promise<ProjectTask[]> {
-    return apiFetch(`/projects/${projectId}/tasks`);
+    const page = await apiFetch<Paginated<ProjectTask>>(`/projects/${projectId}/tasks`);
+    return page.items;
 }
 
 export async function createProjectTask(

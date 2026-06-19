@@ -1,13 +1,25 @@
 from datetime import date
 
+import asyncio
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.config import settings
+from backend.core.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT
+from backend.lib.resource_cache import (
+    get_cached_model_list,
+    invalidate_calendar_cache,
+    invalidate_project_list_cache,
+    project_list_cache_key,
+    set_cached_model_list,
+)
 from backend.modules.identity_access.models import User
 from backend.modules.notifications.repository import NotificationsRepository
 from backend.modules.projects.models import Project, ProjectTask
 from backend.modules.projects.repository import ProjectsRepository
 from backend.modules.projects.schemas import (
+    ProjectResponse,
     ProjectTaskCreate,
     ProjectTaskReorderRequest,
     ProjectTaskUpdate,
@@ -26,19 +38,56 @@ class ProjectsService:
         project = await self.repo.create(owner_id, name, description)
         await self.db.commit()
         await self.db.refresh(project)
+        await invalidate_project_list_cache(owner_id)
         return project
 
-    async def list_projects(self, user_id: str) -> list[Project]:
-        return await self.repo.list_accessible_by_user(user_id)
+    async def list_projects(
+        self,
+        user_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[ProjectResponse], int]:
+        cache_key = project_list_cache_key(user_id, limit, offset)
+        cached = await get_cached_model_list(cache_key, ProjectResponse)
+        if cached is not None:
+            return cached
+
+        projects, total = await self.repo.list_accessible_by_user(
+            user_id, limit=limit, offset=offset
+        )
+        items = [
+            ProjectResponse(
+                id=project.id,
+                name=project.name,
+                description=project.description,
+                created_at=project.created_at,
+            )
+            for project in projects
+        ]
+        await set_cached_model_list(
+            cache_key,
+            items,
+            total=total,
+            ttl_seconds=settings.CACHE_PROJECT_LIST_TTL_SECONDS,
+        )
+        return items, total
 
     async def get_project(self, user_id: str, project_id: str) -> Project:
         return await self._get_project_or_404(user_id, project_id)
 
     async def list_tasks(
-        self, user_id: str, project_id: str
-    ) -> list[tuple[ProjectTask, User | None]]:
+        self,
+        user_id: str,
+        project_id: str,
+        *,
+        limit: int = DEFAULT_PAGE_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[tuple[ProjectTask, User | None]], int]:
         project = await self._get_project_or_404(user_id, project_id)
-        return await self.repo.list_tasks_with_assignees(project.id)
+        return await self.repo.list_tasks_with_assignees(
+            project.id, limit=limit, offset=offset
+        )
 
     async def create_task(
         self,
@@ -68,6 +117,10 @@ class ProjectsService:
         task_row = await self.repo.get_task_with_assignee(project.id, task.id)
         if not task_row:
             raise HTTPException(status_code=500, detail="Failed to load created task")
+        if payload.due_date is not None:
+            await invalidate_calendar_cache(user_id)
+            if assignee and assignee.id != user_id:
+                await invalidate_calendar_cache(assignee.id)
         return task_row
 
     async def update_task(
@@ -117,6 +170,10 @@ class ProjectsService:
         task_row = await self.repo.get_task_with_assignee(project.id, task.id)
         if not task_row:
             raise HTTPException(status_code=500, detail="Failed to load updated task")
+        if "due_date" in fields_set or task.due_date is not None or previous_due_date is not None:
+            await invalidate_calendar_cache(user_id)
+            if assignee and assignee.id != user_id:
+                await invalidate_calendar_cache(assignee.id)
         return task_row
 
     async def delete_task(self, user_id: str, project_id: str, task_id: str) -> None:
@@ -128,6 +185,10 @@ class ProjectsService:
         await self.repo.delete_task(task)
         await self._normalize_positions(project.id)
         await self.db.commit()
+        if task.due_date is not None:
+            await invalidate_calendar_cache(user_id)
+            if task.assignee_id and task.assignee_id != user_id:
+                await invalidate_calendar_cache(task.assignee_id)
 
     async def reorder_tasks(
         self,
@@ -137,7 +198,9 @@ class ProjectsService:
         payload: ProjectTaskReorderRequest,
     ) -> list[tuple[ProjectTask, User | None]]:
         project = await self._get_project_or_404(user_id, project_id)
-        task_rows = await self.repo.list_tasks_with_assignees(project.id)
+        task_rows, _ = await self.repo.list_tasks_with_assignees(
+            project.id, limit=MAX_PAGE_LIMIT
+        )
         tasks_by_id = {task.id: task for task, _ in task_rows}
         previous_status_by_id = {task.id: task.status for task, _ in task_rows}
 
@@ -159,11 +222,16 @@ class ProjectsService:
 
         await self._normalize_positions(project.id)
 
-        for task, _ in task_rows:
-            await self._notify_status_change(project, task, actor, previous_status_by_id[task.id])
+        await asyncio.gather(
+            *[
+                self._notify_status_change(project, task, actor, previous_status_by_id[task.id])
+                for task, _ in task_rows
+            ]
+        )
 
         await self.db.commit()
-        return await self.repo.list_tasks_with_assignees(project.id)
+        rows, _ = await self.repo.list_tasks_with_assignees(project.id, limit=MAX_PAGE_LIMIT)
+        return rows
 
     async def _get_project_or_404(self, user_id: str, project_id: str) -> Project:
         project = await self.repo.get_by_id_for_user(project_id, user_id)
@@ -180,7 +248,7 @@ class ProjectsService:
         return assignee
 
     async def _normalize_positions(self, project_id: str) -> None:
-        rows = await self.repo.list_tasks_with_assignees(project_id)
+        rows, _ = await self.repo.list_tasks_with_assignees(project_id, limit=MAX_PAGE_LIMIT)
         grouped: dict[str, list[ProjectTask]] = {}
         for task, _ in rows:
             grouped.setdefault(task.status, []).append(task)

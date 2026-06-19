@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -136,12 +138,14 @@ async def get_metrics(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
-    total = await db.scalar(select(func.count()).select_from(User))
-    verified = await db.scalar(
-        select(func.count()).select_from(User).where(User.is_verified.is_(True))
+    total, verified, active, notifs = await asyncio.gather(
+        db.scalar(select(func.count()).select_from(User)),
+        db.scalar(
+            select(func.count()).select_from(User).where(User.is_verified.is_(True))
+        ),
+        db.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True))),
+        db.scalar(select(func.count()).select_from(Notification)),
     )
-    active = await db.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True)))
-    notifs = await db.scalar(select(func.count()).select_from(Notification))
 
     return MetricsResponse(
         total_users=total or 0,

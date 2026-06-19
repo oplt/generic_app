@@ -38,10 +38,11 @@ import {
 } from "../api/platform";
 import { useSnackbar } from "../app/snackbarContext";
 import { AdminSettingsTabs } from "../components/layout/AdminSettingsTabs";
-import { PageHeader } from "../components/ui/PageHeader";
 import { PageShell } from "../components/ui/PageShell";
+import { QueryErrorAlert } from "../components/ui/QueryBoundary";
 import { SectionCard } from "../components/ui/SectionCard";
 import { StatCard } from "../components/ui/StatCard";
+import { useMutationErrorToast } from "../hooks/useMutationErrorToast";
 
 type PlanDraft = {
     name: string;
@@ -140,6 +141,7 @@ function AdminPlatformContent({
 }) {
     const queryClient = useQueryClient();
     const { showToast } = useSnackbar();
+    const toastMutationError = useMutationErrorToast();
     const [configDraft, setConfigDraft] = useState(() => buildConfigDraft(configData));
     const [planDrafts, setPlanDrafts] = useState<Record<string, PlanDraft>>(() => buildPlanDrafts(plans));
     const [flagDrafts, setFlagDrafts] = useState<Record<string, FlagDraft>>(() => buildFlagDrafts(flags));
@@ -180,6 +182,7 @@ function AdminPlatformContent({
             await queryClient.invalidateQueries({ queryKey: ["platform"] });
             showToast({ message: "Platform configuration updated.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to save platform configuration."),
     });
     const createPlanMutation = useMutation({
         mutationFn: createAdminPlan,
@@ -196,6 +199,7 @@ function AdminPlatformContent({
             await queryClient.invalidateQueries({ queryKey: ["platform", "admin", "plans"] });
             showToast({ message: "Plan created.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to create plan."),
     });
     const updatePlanMutation = useMutation({
         mutationFn: ({ id, draft }: { id: string; draft: PlanDraft }) =>
@@ -212,6 +216,7 @@ function AdminPlatformContent({
             await queryClient.invalidateQueries({ queryKey: ["platform", "admin", "plans"] });
             showToast({ message: "Plan updated.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to update plan."),
     });
     const createFlagMutation = useMutation({
         mutationFn: createAdminFeatureFlag,
@@ -227,6 +232,7 @@ function AdminPlatformContent({
             await queryClient.invalidateQueries({ queryKey: ["platform", "admin", "feature-flags"] });
             showToast({ message: "Feature flag created.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to create feature flag."),
     });
     const updateFlagMutation = useMutation({
         mutationFn: ({ id, draft }: { id: string; draft: FlagDraft }) =>
@@ -241,6 +247,7 @@ function AdminPlatformContent({
             await queryClient.invalidateQueries({ queryKey: ["platform", "admin", "feature-flags"] });
             showToast({ message: "Feature flag updated.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to update feature flag."),
     });
     const createTemplateMutation = useMutation({
         mutationFn: createAdminEmailTemplate,
@@ -256,6 +263,7 @@ function AdminPlatformContent({
             await queryClient.invalidateQueries({ queryKey: ["platform", "admin", "email-templates"] });
             showToast({ message: "Email template created.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to create email template."),
     });
     const updateTemplateMutation = useMutation({
         mutationFn: ({ id, draft }: { id: string; draft: TemplateDraft }) =>
@@ -270,22 +278,11 @@ function AdminPlatformContent({
             await queryClient.invalidateQueries({ queryKey: ["platform", "admin", "email-templates"] });
             showToast({ message: "Email template updated.", severity: "success" });
         },
+        onError: (error) => toastMutationError(error, "Failed to update email template."),
     });
 
     return (
         <PageShell maxWidth="xl">
-            <PageHeader
-                eyebrow="Administration"
-                title="Platform admin"
-                description="Configure clone defaults, module packs, plans, feature flags, and reusable email templates with clearer grouping and operational feedback."
-                meta={
-                    <>
-                        <Chip label={`${moduleCatalog.length} modules`} variant="outlined" />
-                        <Chip label={`${plans.length} plans`} variant="outlined" />
-                        <Chip label={`${flags.length} feature flags`} variant="outlined" />
-                    </>
-                }
-            />
             <AdminSettingsTabs />
 
             <Box
@@ -1085,19 +1082,39 @@ function AdminPlatformContent({
 }
 
 export default function AdminPlatformPage() {
-    const { data: configData, isLoading: configLoading } = useQuery({
+    const {
+        data: configData,
+        isLoading: configLoading,
+        error: configError,
+        refetch: refetchConfig,
+    } = useQuery({
         queryKey: ["platform", "admin", "config"],
         queryFn: getPlatformConfig,
     });
-    const { data: plans, isLoading: plansLoading } = useQuery({
+    const {
+        data: plans,
+        isLoading: plansLoading,
+        error: plansError,
+        refetch: refetchPlans,
+    } = useQuery({
         queryKey: ["platform", "admin", "plans"],
         queryFn: listAdminPlans,
     });
-    const { data: flags, isLoading: flagsLoading } = useQuery({
+    const {
+        data: flags,
+        isLoading: flagsLoading,
+        error: flagsError,
+        refetch: refetchFlags,
+    } = useQuery({
         queryKey: ["platform", "admin", "feature-flags"],
         queryFn: listAdminFeatureFlags,
     });
-    const { data: templates, isLoading: templatesLoading } = useQuery({
+    const {
+        data: templates,
+        isLoading: templatesLoading,
+        error: templatesError,
+        refetch: refetchTemplates,
+    } = useQuery({
         queryKey: ["platform", "admin", "email-templates"],
         queryFn: listAdminEmailTemplates,
     });
@@ -1115,7 +1132,45 @@ export default function AdminPlatformPage() {
     }
 
     if (!configData || !plans || !flags || !templates) {
-        return null;
+        return (
+            <PageShell maxWidth="xl">
+                <AdminSettingsTabs />
+                <Stack spacing={2} sx={{ mt: 2 }}>
+                    {!configData && (
+                        <QueryErrorAlert
+                            error={configError ?? new Error("Failed to load platform configuration.")}
+                            fallback="Failed to load platform configuration."
+                            title="Configuration"
+                            onRetry={() => void refetchConfig()}
+                        />
+                    )}
+                    {!plans && (
+                        <QueryErrorAlert
+                            error={plansError ?? new Error("Failed to load subscription plans.")}
+                            fallback="Failed to load subscription plans."
+                            title="Plans"
+                            onRetry={() => void refetchPlans()}
+                        />
+                    )}
+                    {!flags && (
+                        <QueryErrorAlert
+                            error={flagsError ?? new Error("Failed to load feature flags.")}
+                            fallback="Failed to load feature flags."
+                            title="Feature flags"
+                            onRetry={() => void refetchFlags()}
+                        />
+                    )}
+                    {!templates && (
+                        <QueryErrorAlert
+                            error={templatesError ?? new Error("Failed to load email templates.")}
+                            fallback="Failed to load email templates."
+                            title="Email templates"
+                            onRetry={() => void refetchTemplates()}
+                        />
+                    )}
+                </Stack>
+            </PageShell>
+        );
     }
 
     const pageKey = [

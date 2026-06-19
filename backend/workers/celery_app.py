@@ -16,6 +16,9 @@ celery_app.conf.update(
         "backend.workers.tasks.index_rag_document_task": {
             "queue": settings.CELERY_TASK_DEFAULT_QUEUE
         },
+        "backend.workers.tasks.run_ai_evaluation_task": {
+            "queue": settings.CELERY_TASK_DEFAULT_QUEUE
+        },
     },
     task_serializer="json",
     accept_content=["json"],
