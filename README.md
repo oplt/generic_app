@@ -34,6 +34,8 @@ uv sync
 .venv/bin/alembic upgrade head
 ```
 
+See [docs/logging.md](../docs/logging.md) for log file location, rotation, and correlation IDs.
+
 3. Start the backend:
 
 ```bash

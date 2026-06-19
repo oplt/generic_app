@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from time import perf_counter
 
+from backend.core.config import settings
 from backend.lib.vectors import can_index_embedding
 from backend.lib.retrieval_cache import get_cached_retrieval, set_cached_retrieval
 from backend.modules.rag.application.embedding_service import EmbeddingService
@@ -50,6 +51,12 @@ class RetrievalService:
                 if removed:
                     metrics.rag_injection_chunks_filtered_total.inc(removed)
                 metrics.rag_retrieved_chunks.observe(len(filtered))
+                logger.debug(
+                    "RAG retrieval cache_hit user=%s chunks=%s injection_filtered=%s",
+                    user_id,
+                    len(filtered),
+                    removed,
+                )
                 return RetrievalOutcome(
                     chunks=filtered,
                     injection_chunks_filtered=removed,
@@ -106,6 +113,36 @@ class RetrievalService:
             metrics.rag_retrieved_chunks.observe(len(filtered))
             if outcome.no_matches:
                 metrics.rag_retrieval_no_match_total.inc()
+            duration_ms = (perf_counter() - started) * 1000
+            if outcome.degraded:
+                logger.warning(
+                    "RAG retrieval degraded user=%s duration_ms=%.2f reason=%s chunks=%s",
+                    user_id,
+                    duration_ms,
+                    outcome.degradation_reason,
+                    len(filtered),
+                )
+            elif outcome.no_matches:
+                logger.info(
+                    "RAG retrieval no_matches user=%s duration_ms=%.2f chunks=%s",
+                    user_id,
+                    duration_ms,
+                    len(filtered),
+                )
+            else:
+                logger.info(
+                    "RAG retrieval completed user=%s duration_ms=%.2f chunks=%s injection_filtered=%s",
+                    user_id,
+                    duration_ms,
+                    len(filtered),
+                    removed,
+                )
+            if duration_ms >= settings.SLOW_EXTERNAL_CALL_MS:
+                logger.warning(
+                    "slow_rag_retrieval user=%s duration_ms=%.2f",
+                    user_id,
+                    duration_ms,
+                )
             return outcome
         except Exception:
             logger.exception("RAG retrieval failed for user=%s", user_id)

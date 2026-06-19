@@ -31,16 +31,22 @@ def index_document_sync(
             )
 
     try:
+        logger.info(
+            "RAG indexing started document=%s user=%s job=%s",
+            document_id,
+            user_id,
+            job_id,
+        )
         run_async_in_sync_context(_run())
         logger.info(
-            "RAG indexing completed for document=%s user=%s job=%s",
+            "RAG indexing completed document=%s user=%s job=%s",
             document_id,
             user_id,
             job_id,
         )
     except Exception:
         logger.exception(
-            "RAG indexing failed for document=%s user=%s job=%s",
+            "RAG indexing failed document=%s user=%s job=%s",
             document_id,
             user_id,
             job_id,

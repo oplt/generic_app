@@ -16,6 +16,7 @@ Guidelines for AI tools contributing to this fullstack monorepo (FastAPI + React
 - Do not reintroduce parallel AI document ingestion — use RAG ingestion only
 - Vector search: pgvector only (`RAG_VECTOR_BACKEND=pgvector`); unsupported backends fail at startup
 - Tests: `pytest` / `unittest` under `backend/tests/` and `backend/modules/*/tests/`
+- Logging: centralized setup in `backend/core/logging.py`; see [docs/logging.md](../docs/logging.md)
 
 ## Before submitting changes
 

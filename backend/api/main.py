@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from backend.core.cache import redis_client
 from backend.core.config import settings
 from backend.core.error_handler import register_exception_handlers
 from backend.core.logging import setup_logging
+from backend.core.log_redaction import redact_url
 from backend.core.storage import object_storage
 from backend.db.session import SessionLocal, engine
 from backend.modules.platform.service import PlatformService
@@ -26,20 +28,37 @@ from .v1.health import health_router
 
 setup_logging()
 
+logger = logging.getLogger("backend.startup")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info(
+        "Application startup app=%s env=%s log_level=%s",
+        settings.APP_NAME,
+        settings.APP_ENV,
+        settings.LOG_LEVEL.upper(),
+    )
     log_eager_mode_startup_warning()
     validate_rag_config()
     await object_storage.ensure_bucket()
+    try:
+        await redis_client.ping()
+        logger.info("Redis connection established url=%s", redact_url(settings.REDIS_URL))
+    except Exception:
+        logger.warning("Redis ping failed during startup", exc_info=True)
     async with SessionLocal() as db:
         platform_service = PlatformService(db)
         await platform_service.ensure_defaults()
+        logger.info("Platform defaults ensured")
+    logger.info("Application startup complete")
     yield
+    logger.info("Application shutdown started")
     await close_ai_provider_http_clients()
     await close_observability_http_client()
     await redis_client.aclose()
     await engine.dispose()
+    logger.info("Application shutdown complete")
 
 
 app = FastAPI(

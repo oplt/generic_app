@@ -10,6 +10,12 @@ logger = logging.getLogger("backend.error")
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def request_validation_error_handler(request: Request, exc: RequestValidationError):
+        logger.warning(
+            "request_validation_failed path=%s correlation_id=%s errors=%s",
+            request.url.path,
+            getattr(request.state, "correlation_id", None),
+            len(exc.errors()),
+        )
         return JSONResponse(
             status_code=422,
             content={
@@ -21,6 +27,12 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError):
+        logger.warning(
+            "value_error path=%s correlation_id=%s detail=%s",
+            request.url.path,
+            getattr(request.state, "correlation_id", None),
+            str(exc)[:200],
+        )
         return JSONResponse(
             status_code=400,
             content={
@@ -31,6 +43,22 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException):
+        if exc.status_code >= 500:
+            logger.error(
+                "http_exception path=%s status=%s correlation_id=%s detail=%s",
+                request.url.path,
+                exc.status_code,
+                getattr(request.state, "correlation_id", None),
+                str(exc.detail)[:200],
+            )
+        elif exc.status_code >= 400:
+            logger.warning(
+                "http_exception path=%s status=%s correlation_id=%s detail=%s",
+                request.url.path,
+                exc.status_code,
+                getattr(request.state, "correlation_id", None),
+                str(exc.detail)[:200],
+            )
         return JSONResponse(
             status_code=exc.status_code,
             content={

@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
     LOG_LEVEL: str = "INFO"
+    LOG_TO_CONSOLE: bool = True
+    LOG_TO_FILE: bool = True
+    LOG_FILE_PATH: str = "logs/logs.txt"
+    LOG_RETENTION_DAYS: int = 1
+    LOG_FORMAT: str = "text"
+    SLOW_REQUEST_MS: int = 1000
+    SLOW_JOB_MS: int = 5000
+    SLOW_EXTERNAL_CALL_MS: int = 3000
     CORE_DOMAIN_SINGULAR: str = "Project"
     CORE_DOMAIN_PLURAL: str = "Projects"
     PLATFORM_DEFAULT_MODULE_PACK: str = "full_platform"
@@ -194,6 +202,37 @@ class Settings(BaseSettings):
         if normalized not in {"lax", "strict", "none"}:
             raise ValueError("COOKIE_SAMESITE must be one of: lax, strict, none")
         return normalized
+
+    @field_validator("LOG_LEVEL")
+    @classmethod
+    def validate_log_level(cls, value: str) -> str:
+        normalized = value.upper()
+        allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if normalized not in allowed:
+            return "INFO"
+        return normalized
+
+    @field_validator("LOG_RETENTION_DAYS")
+    @classmethod
+    def validate_log_retention_days(cls, value: int) -> int:
+        if value < 1 or value > 365:
+            return 1
+        return value
+
+    @field_validator("SLOW_REQUEST_MS")
+    @classmethod
+    def validate_slow_request_ms(cls, value: int) -> int:
+        return value if value >= 1 else 1000
+
+    @field_validator("SLOW_JOB_MS")
+    @classmethod
+    def validate_slow_job_ms(cls, value: int) -> int:
+        return value if value >= 1 else 5000
+
+    @field_validator("SLOW_EXTERNAL_CALL_MS")
+    @classmethod
+    def validate_slow_external_call_ms(cls, value: int) -> int:
+        return value if value >= 1 else 3000
 
     @field_validator("JWT_SECRET")
     @classmethod

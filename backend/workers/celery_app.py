@@ -1,6 +1,9 @@
 from celery import Celery
 
 from backend.core.config import settings
+from backend.core.logging import setup_logging
+
+setup_logging()
 
 celery_app = Celery(
     "app_backend",
@@ -30,3 +33,5 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
+
+import backend.workers.logging_hooks  # noqa: F401,E402 — register Celery signal handlers

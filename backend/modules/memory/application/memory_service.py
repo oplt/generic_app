@@ -278,6 +278,13 @@ class MemoryService:
             elapsed_ms = (perf_counter() - started) * 1000
             metrics.memory_search_latency_ms.observe(elapsed_ms)
 
+        logger.debug(
+            "Memory search completed user=%s results=%s duration_ms=%.2f",
+            user_id,
+            len(collected),
+            elapsed_ms,
+        )
+
         if self.config.audit_enabled:
             await self.audit_repo.log_operation(
                 user_id=user_id,
