@@ -4,10 +4,11 @@ import logging
 from time import perf_counter
 
 from backend.core.config import settings
-from backend.lib.vectors import can_index_embedding
 from backend.lib.retrieval_cache import get_cached_retrieval, set_cached_retrieval
+from backend.lib.vectors import can_index_embedding
 from backend.modules.rag.application.embedding_service import EmbeddingService
 from backend.modules.rag.application.retrieval_filters import exclude_injection_flagged_chunks
+from backend.modules.rag.application.retrieval_ranker import HybridRetrievalRanker
 from backend.modules.rag.domain.models import RetrievalOutcome
 from backend.modules.rag.infrastructure import metrics
 from backend.modules.rag.infrastructure.rag_config import RagConfig
@@ -23,6 +24,7 @@ class RetrievalService:
         self.config = config or RagConfig.from_settings()
         self.vector_store = build_vector_store(db, self.config)
         self.embeddings = EmbeddingService(self.config)
+        self.ranker = HybridRetrievalRanker()
 
     async def retrieve(
         self,
@@ -37,6 +39,8 @@ class RetrievalService:
             return RetrievalOutcome(chunks=[])
 
         resolved_top_k = top_k or self.config.top_k
+        rerank_enabled = getattr(self.config, "rerank_enabled", False)
+        cache_variant = "hybrid-v1" if rerank_enabled else "vector-v1"
         started = perf_counter()
         try:
             cached = await get_cached_retrieval(
@@ -45,6 +49,7 @@ class RetrievalService:
                 query=query,
                 top_k=resolved_top_k,
                 filters=filters,
+                variant=cache_variant,
             )
             if cached is not None:
                 filtered, removed = exclude_injection_flagged_chunks(cached)
@@ -82,34 +87,44 @@ class RetrievalService:
                     degradation_reason="embedding_dimension_mismatch",
                 )
 
+            multiplier = getattr(self.config, "rerank_candidate_multiplier", 1)
+            candidate_limit = (
+                min(50, resolved_top_k * multiplier) if rerank_enabled else resolved_top_k
+            )
             raw_results = await self.vector_store.similarity_search(
                 query,
                 user_id=user_id,
                 project_id=project_id,
-                top_k=resolved_top_k,
+                top_k=candidate_limit,
                 filters=filters,
                 query_embedding=query_embedding,
             )
             filtered, removed = exclude_injection_flagged_chunks(raw_results)
             if removed:
                 metrics.rag_injection_chunks_filtered_total.inc(removed)
+            if rerank_enabled:
+                rerank_started = perf_counter()
+                filtered = self.ranker.rerank(query, filtered, limit=resolved_top_k)
+                metrics.rag_rerank_latency_ms.observe((perf_counter() - rerank_started) * 1000)
 
             outcome = RetrievalOutcome(
                 chunks=filtered,
                 injection_chunks_filtered=removed,
-                no_matches=len(filtered) == 0 and not raw_results,
+                no_matches=len(filtered) == 0,
             )
             if outcome.no_matches and raw_results and removed == len(raw_results):
                 outcome.degradation_reason = "injection_filtered_all_matches"
 
-            await set_cached_retrieval(
-                user_id=user_id,
-                project_id=project_id,
-                query=query,
-                top_k=resolved_top_k,
-                filters=filters,
-                chunks=filtered,
-            )
+            if removed == 0:
+                await set_cached_retrieval(
+                    user_id=user_id,
+                    project_id=project_id,
+                    query=query,
+                    top_k=resolved_top_k,
+                    filters=filters,
+                    chunks=filtered,
+                    variant=cache_variant,
+                )
             metrics.rag_retrieved_chunks.observe(len(filtered))
             if outcome.no_matches:
                 metrics.rag_retrieval_no_match_total.inc()
@@ -131,7 +146,8 @@ class RetrievalService:
                 )
             else:
                 logger.info(
-                    "RAG retrieval completed user=%s duration_ms=%.2f chunks=%s injection_filtered=%s",
+                    "RAG retrieval completed user=%s duration_ms=%.2f "
+                    "chunks=%s injection_filtered=%s",
                     user_id,
                     duration_ms,
                     len(filtered),

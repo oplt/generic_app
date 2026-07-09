@@ -82,3 +82,11 @@ export async function apiFetch<T>(
 
     return response.json();
 }
+
+export async function apiFetchItems<T>(
+    path: string,
+    options: RequestInit = {}
+): Promise<T[]> {
+    const page = await apiFetch<Paginated<T>>(path, options);
+    return page.items;
+}

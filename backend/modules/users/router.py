@@ -9,7 +9,7 @@ from backend.core.pagination import (
     paginated_response,
     pagination_params,
 )
-from backend.modules.audit.repository import AuditRepository
+from backend.modules.audit.request_logging import log_request_audit_event
 from backend.modules.identity_access.models import User
 from backend.modules.users.schemas import (
     PasswordChangeRequest,
@@ -41,9 +41,7 @@ async def list_directory(
     _: User = Depends(get_current_user),
 ):
     service = UsersService(db)
-    users, total = await service.list_directory(
-        limit=pagination.limit, offset=pagination.offset
-    )
+    users, total = await service.list_directory(limit=pagination.limit, offset=pagination.offset)
     return paginated_response(users, total=total, limit=pagination.limit, offset=pagination.offset)
 
 
@@ -73,14 +71,13 @@ async def change_password(
 ):
     service = UsersService(db)
     await service.change_password(current_user, payload.current_password, payload.new_password)
-    audit_repo = AuditRepository(db)
-    await audit_repo.log(
+    await log_request_audit_event(
+        db,
+        request,
         action="user.password_changed",
-        user_id=current_user.id,
+        actor_user_id=current_user.id,
         resource_type="user",
         resource_id=current_user.id,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
     )
     await db.commit()
 
@@ -93,8 +90,7 @@ async def list_sessions(
     service = UsersService(db)
     sessions = await service.list_sessions(current_user)
     return [
-        SessionResponse(id=s.id, created_at=s.created_at, expires_at=s.expires_at)
-        for s in sessions
+        SessionResponse(id=s.id, created_at=s.created_at, expires_at=s.expires_at) for s in sessions
     ]
 
 
@@ -107,13 +103,12 @@ async def revoke_session(
 ):
     service = UsersService(db)
     await service.revoke_session(current_user, session_id)
-    audit_repo = AuditRepository(db)
-    await audit_repo.log(
+    await log_request_audit_event(
+        db,
+        request,
         action="user.session_revoked",
-        user_id=current_user.id,
+        actor_user_id=current_user.id,
         resource_type="refresh_session",
         resource_id=session_id,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
     )
     await db.commit()

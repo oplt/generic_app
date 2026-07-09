@@ -12,12 +12,12 @@ from backend.modules.memory.application.memory_service import MemoryService
 from backend.modules.memory.domain.enums import MemoryLevel, MemoryPrivacy, MemoryType
 from backend.modules.memory.domain.models import MemoryItem, MemoryMetadata, MemorySearchRequest
 from backend.modules.memory.domain.policies import contains_secret, evaluate_storage_policy
-from backend.modules.memory.infrastructure.memory_config import MemoryConfig
 from backend.modules.memory.infrastructure.mem0_client import (
     MEMORY_CONTEXT_HEADER,
     NullMem0Adapter,
     build_entity_filters,
 )
+from backend.modules.memory.infrastructure.memory_config import MemoryConfig
 
 
 def _item(
@@ -95,9 +95,7 @@ class MemoryConsolidatorTest(unittest.TestCase):
 class MemoryContextBuilderTest(unittest.IsolatedAsyncioTestCase):
     async def test_memory_retrieval_included_in_prompt_context(self):
         mock_service = AsyncMock()
-        mock_service.recall = AsyncMock(
-            return_value=[_item("u1", "User likes concise answers.")]
-        )
+        mock_service.recall = AsyncMock(return_value=[_item("u1", "User likes concise answers.")])
         builder = MemoryContextBuilder(mock_service)
         block = await builder.build_context_block(
             MemorySearchRequest(
@@ -327,9 +325,7 @@ class MemoryServiceIsolationTest(unittest.IsolatedAsyncioTestCase):
                 ]
             }
         )
-        service.project_access.filter_accessible_project_ids = AsyncMock(
-            return_value={"proj-1"}
-        )
+        service.project_access.filter_accessible_project_ids = AsyncMock(return_value={"proj-1"})
 
         items = await service.recall(
             user_id="user-a",
@@ -396,7 +392,7 @@ class NullMem0AdapterTest(unittest.IsolatedAsyncioTestCase):
 
 
 class AgentServiceDegradedTest(unittest.IsolatedAsyncioTestCase):
-    @patch("backend.modules.ai.application.prompt_context_builder.MemoryConfig.from_settings")
+    @patch("backend.modules.rag.application.prompt_context_service.MemoryConfig.from_settings")
     @patch("backend.modules.ai.application.agent_service.MemoryConfig.from_settings")
     @patch("backend.modules.ai.application.agent_service.AiService")
     @patch("backend.modules.ai.application.agent_service.MemoryService")

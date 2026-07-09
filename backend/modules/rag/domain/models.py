@@ -74,6 +74,7 @@ class RagAnswer:
     retrieval_degraded: bool = False
     memory_degraded: bool = False
     degradation_reason: str | None = None
+    injection_chunks_filtered: int = 0
 
 
 @dataclass(slots=True)

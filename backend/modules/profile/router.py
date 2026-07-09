@@ -11,19 +11,10 @@ from backend.core.config import settings
 from backend.core.storage import ObjectStorageError, StorageNotConfiguredError, object_storage
 from backend.modules.identity_access.models import User
 from backend.modules.profile.schemas import ProfileResponse, ProfileUpdate
+from backend.modules.profile.serializers import profile_to_response
 from backend.modules.profile.service import ProfileService
 
 router = APIRouter()
-
-
-def _to_response(profile) -> ProfileResponse:
-    return ProfileResponse(
-        user_id=profile.user_id,
-        bio=profile.bio,
-        avatar_url=profile.avatar_url,
-        location=profile.location,
-        website=profile.website,
-    )
 
 
 def _build_avatar_object_key(user_id: str, filename: str | None, content_type: str) -> str:
@@ -52,7 +43,7 @@ async def update_profile(
     profile = await service.update_profile(
         current_user.id, payload.bio, payload.location, payload.website
     )
-    return _to_response(profile)
+    return profile_to_response(profile)
 
 
 @router.post("/avatar", response_model=ProfileResponse)
@@ -98,7 +89,7 @@ async def upload_avatar(
 
     if previous_key and previous_key != object_key:
         await object_storage.delete_object(previous_key)
-    return _to_response(profile)
+    return profile_to_response(profile)
 
 
 @router.delete("/avatar", status_code=204)

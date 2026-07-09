@@ -108,6 +108,7 @@ class RagAskResponse(BaseModel):
     retrieval_degraded: bool = False
     memory_degraded: bool = False
     degradation_reason: str | None = None
+    injection_chunks_filtered: int = 0
 
 
 class RagQueryResponse(BaseModel):

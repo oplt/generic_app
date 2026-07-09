@@ -8,6 +8,7 @@ import { resetPassword } from "../api/auth";
 import { AuthMarketingPanel } from "../components/auth/AuthMarketingPanel";
 import { AuthShell } from "../components/auth/AuthShell";
 import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
+import { getQueryErrorMessage } from "../utils/queryErrors";
 
 const schema = z
     .object({
@@ -45,7 +46,7 @@ export default function ResetPasswordPage() {
             await resetPassword({ token, new_password: values.password });
             setDone(true);
         } catch (error) {
-            setServerError(error instanceof Error ? error.message : "Reset failed.");
+            setServerError(getQueryErrorMessage(error, "Reset failed."));
         }
     }
 

@@ -48,7 +48,9 @@ class IngestionParserTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(docs), 1)
         self.assertIn("PostgreSQL", docs[0].content)
 
-    async def test_parse_txt_creates_content(self):
+    @patch("backend.modules.rag.infrastructure.langchain_document_loaders.asyncio.to_thread")
+    async def test_parse_txt_creates_content(self, to_thread):
+        to_thread.side_effect = lambda fn, *args, **kwargs: fn(*args, **kwargs)
         parser = DocumentParserService()
         docs = await parser.parse_bytes(
             content=b"User prefers PostgreSQL for project X.",

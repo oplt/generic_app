@@ -65,7 +65,8 @@ class PgVectorAdapter:
             from backend.modules.rag.infrastructure import metrics
 
             logger.debug(
-                "Using JSON embedding fallback for query (pgvector unavailable or dimension mismatch)"
+                "Using JSON embedding fallback for query "
+                "(pgvector unavailable or dimension mismatch)"
             )
             metrics.rag_json_fallback_total.inc()
             return await self.repo.similarity_search_json_fallback(
@@ -112,9 +113,8 @@ class PgVectorAdapter:
         )
 
     async def delete_document(self, document_id: str, user_id: str) -> None:
-        document = await self.repo.get_document(document_id)
-        if document and document.user_id == user_id:
-            await self.repo.soft_delete_document(document)
+        del user_id
+        await self.repo.delete_chunks_for_document(document_id)
 
 
 def build_vector_store(db: AsyncSession, config: RagConfig | None = None) -> PgVectorAdapter:

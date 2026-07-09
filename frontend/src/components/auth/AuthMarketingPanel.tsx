@@ -1,4 +1,5 @@
 import { Box, Stack, Typography } from "@mui/material";
+import { fonts } from "../../app/designTokens";
 
 type Highlight = {
     value: string;
@@ -39,7 +40,7 @@ export function AuthMarketingPanel({
                     <Typography
                         variant="h3"
                         sx={{
-                            fontFamily: "'Universal Sans Display', -apple-system, Arial, sans-serif",
+                            fontFamily: fonts.display,
                             mb: 1.25,
                         }}
                     >

@@ -19,9 +19,11 @@ export default defineConfig({
               { name: "firefox", use: { ...devices["Desktop Firefox"] } },
               { name: "webkit", use: { ...devices["Desktop Safari"] } },
           ],
-    webServer: {
-        command: "npm run dev",
-        url: baseURL,
-        reuseExistingServer: !process.env.CI,
-    },
+    webServer: process.env.E2E_BASE_URL
+        ? undefined
+        : {
+              command: "npm run dev",
+              url: baseURL,
+              reuseExistingServer: !process.env.CI,
+          },
 });

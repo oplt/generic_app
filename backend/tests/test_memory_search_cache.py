@@ -22,7 +22,13 @@ class StorageCacheControlTest(unittest.TestCase):
 
         import asyncio
 
-        with patch("backend.core.storage.settings") as mock_settings:
+        async def run_inline(func):
+            return func()
+
+        with (
+            patch("backend.core.storage.settings") as mock_settings,
+            patch("backend.core.storage.asyncio.to_thread", side_effect=run_inline) as to_thread,
+        ):
             mock_settings.STORAGE_BUCKET = "app-assets"
             mock_settings.STORAGE_PUBLIC_BASE_URL = "http://localhost:9000/app-assets"
             asyncio.run(
@@ -34,6 +40,7 @@ class StorageCacheControlTest(unittest.TestCase):
                 )
             )
 
+        to_thread.assert_awaited_once()
         storage._client.put_object.assert_called_once()
         self.assertEqual(
             storage._client.put_object.call_args.kwargs["CacheControl"],

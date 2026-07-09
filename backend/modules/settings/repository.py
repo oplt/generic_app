@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.modules.settings.models import AppSetting
@@ -33,6 +34,16 @@ class SettingsRepository:
         self.db.add(setting)
         await self.db.flush()
         return setting
+
+    def add_many(self, rows: list[dict[str, str]]) -> None:
+        self.db.add_all([AppSetting(**row) for row in rows])
+
+    async def upsert_defaults(self, rows: list[dict[str, str]]) -> int:
+        if not rows:
+            return 0
+        statement = insert(AppSetting).values(rows).on_conflict_do_nothing(index_elements=["key"])
+        result = await self.db.execute(statement)
+        return int(result.rowcount or 0)
 
     async def delete(self, setting: AppSetting) -> None:
         await self.db.delete(setting)

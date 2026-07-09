@@ -10,11 +10,40 @@ from backend.modules.rag.domain.models import ParsedDocument
 logger = logging.getLogger(__name__)
 
 
-def _parse_txt_or_md(content: bytes) -> list[ParsedDocument]:
+def _parse_text(content: bytes) -> list[ParsedDocument]:
     text = content.decode("utf-8", errors="replace").strip()
     if not text:
         return []
     return [ParsedDocument(content=text, metadata={"format": "text"})]
+
+
+def _parse_markdown(content: bytes) -> list[ParsedDocument]:
+    text = content.decode("utf-8", errors="replace").strip()
+    if not text:
+        return []
+    sections: list[ParsedDocument] = []
+    heading: str | None = None
+    body: list[str] = []
+
+    def flush() -> None:
+        section = "\n".join(body).strip()
+        if section:
+            sections.append(
+                ParsedDocument(
+                    content=section,
+                    metadata={"format": "markdown", "section_heading": heading},
+                )
+            )
+
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            flush()
+            body = [line]
+            heading = line.lstrip("#").strip() or None
+        else:
+            body.append(line)
+    flush()
+    return sections
 
 
 def _parse_csv(content: bytes) -> list[ParsedDocument]:
@@ -64,11 +93,33 @@ def _parse_docx(content: bytes) -> list[ParsedDocument]:
     import io
 
     document = docx.Document(io.BytesIO(content))
-    paragraphs = [p.text.strip() for p in document.paragraphs if p.text.strip()]
-    text = "\n".join(paragraphs)
-    if not text:
-        return []
-    return [ParsedDocument(content=text, metadata={"format": "docx"})]
+    sections: list[ParsedDocument] = []
+    heading: str | None = None
+    paragraphs: list[str] = []
+
+    def flush() -> None:
+        text = "\n".join(paragraphs).strip()
+        if text:
+            sections.append(
+                ParsedDocument(
+                    content=text,
+                    metadata={"format": "docx", "section_heading": heading},
+                )
+            )
+
+    for paragraph in document.paragraphs:
+        text = paragraph.text.strip()
+        if not text:
+            continue
+        style_name = getattr(paragraph.style, "name", "") or ""
+        if style_name.lower().startswith("heading"):
+            flush()
+            paragraphs = [text]
+            heading = text
+        else:
+            paragraphs.append(text)
+    flush()
+    return sections
 
 
 def _parse_with_langchain_loader(file_path: str, loader_name: str) -> list[ParsedDocument]:
@@ -107,8 +158,10 @@ def _parse_bytes_sync(
 ) -> list[ParsedDocument]:
     """Parse raw bytes into documents. CPU-bound — use ``load_documents_from_bytes``."""
     suffix = Path(filename).suffix.lower().lstrip(".")
-    if suffix in {"txt", "md", "markdown"} or content_type.startswith("text/"):
-        return _parse_txt_or_md(content)
+    if suffix in {"md", "markdown"}:
+        return _parse_markdown(content)
+    if suffix == "txt" or content_type.startswith("text/"):
+        return _parse_text(content)
     if suffix == "csv":
         parsed = _parse_csv(content)
         if parsed:

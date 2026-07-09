@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
@@ -16,6 +17,7 @@ from backend.core.cache import (
     set_local_cached_json,
 )
 from backend.core.config import ENV_FILE, Settings, settings
+from backend.modules.settings.env_file_store import EnvFileStore
 from backend.modules.settings.models import AppSetting
 from backend.modules.settings.repository import SettingsRepository
 from backend.modules.settings.schemas import (
@@ -29,6 +31,14 @@ CONFIG_NOTICE = (
     " `settings` update immediately, "
     "but infrastructure-bound changes may still require a backend restart."
 )
+
+logger = logging.getLogger(__name__)
+
+DEPRECATED_CONFIG_KEY_REPLACEMENTS = {
+    "AI_DOCUMENT_MAX_BYTES": "RAG_MAX_FILE_BYTES",
+    "AI_DOCUMENT_CHUNK_SIZE": "RAG_CHUNK_SIZE",
+    "AI_DOCUMENT_CHUNK_OVERLAP": "RAG_CHUNK_OVERLAP",
+}
 
 CONFIG_FIELD_METADATA: dict[str, dict[str, Any]] = {
     "APP_NAME": {
@@ -277,6 +287,7 @@ class SettingsService:
         await self.db.commit()
         await self.db.refresh(setting)
         await invalidate_settings_related_caches(key)
+        logger.info("Database setting created key=%s", key)
         return setting
 
     async def update_database_setting(self, setting_id: str, updates: dict[str, Any]) -> AppSetting:
@@ -290,6 +301,7 @@ class SettingsService:
         await self.db.commit()
         await self.db.refresh(setting)
         await invalidate_settings_related_caches(setting.key)
+        logger.info("Database setting updated key=%s", setting.key)
         return setting
 
     async def delete_database_setting(self, setting_id: str) -> None:
@@ -301,6 +313,7 @@ class SettingsService:
         await self.repo.delete(setting)
         await self.db.commit()
         await invalidate_settings_related_caches(setting_key)
+        logger.info("Database setting deleted key=%s", setting_key)
 
     @staticmethod
     def _setting_to_cache(setting: AppSetting) -> dict:
@@ -336,7 +349,11 @@ class SettingsService:
 
     @classmethod
     def _build_config_entries(cls) -> ConfigSettingsResponse:
-        env_entries = cls._read_env_entries()
+        env_entries = {
+            key: value
+            for key, value in cls._read_env_entries().items()
+            if key not in DEPRECATED_CONFIG_KEY_REPLACEMENTS
+        }
         items: list[ConfigEntryResponse] = []
         known_fields = Settings.model_fields
         ordered_keys = list(env_entries)
@@ -378,10 +395,17 @@ class SettingsService:
         raw_updates: dict[str, str] = {}
 
         for item in update_items:
-            if item.key in seen_keys:
-                raise HTTPException(status_code=400, detail=f"Duplicate config key: {item.key}")
-            seen_keys.add(item.key)
-            raw_updates[item.key] = item.value
+            key = item.key
+            replacement = DEPRECATED_CONFIG_KEY_REPLACEMENTS.get(key)
+            if replacement:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Config key {key} is deprecated; use {replacement}",
+                )
+            if key in seen_keys:
+                raise HTTPException(status_code=400, detail=f"Duplicate config key: {key}")
+            seen_keys.add(key)
+            raw_updates[key] = item.value
 
         merged_known_values = {key: getattr(settings, key) for key in Settings.model_fields}
         for key, value in raw_updates.items():
@@ -403,12 +427,13 @@ class SettingsService:
             if key in normalized_updates:
                 normalized_updates[key] = cls._serialize_value(getattr(validated, key))
 
-        cls._write_env_entries(normalized_updates)
+        EnvFileStore(ENV_FILE).update(normalized_updates, parse_line=cls._parse_env_line)
 
         for key in Settings.model_fields:
             setattr(settings, key, getattr(validated, key))
 
         invalidate_settings_config_cache()
+        logger.info("Environment config updated keys=%s", sorted(normalized_updates))
         return cls._build_config_entries()
 
     @classmethod
@@ -459,33 +484,3 @@ class SettingsService:
                 key, value = parsed
                 entries[key] = value
         return entries
-
-    @classmethod
-    def _write_env_entries(cls, updates: dict[str, str]) -> None:
-        existing_lines = []
-        if ENV_FILE.exists():
-            existing_lines = ENV_FILE.read_text(encoding="utf-8").splitlines()
-
-        remaining = dict(updates)
-        rendered_lines: list[str] = []
-        for line in existing_lines:
-            parsed = cls._parse_env_line(line)
-            if not parsed:
-                rendered_lines.append(line)
-                continue
-
-            key, _ = parsed
-            if key in updates:
-                rendered_lines.append(f"{key}={updates[key]}")
-                remaining.pop(key, None)
-            else:
-                rendered_lines.append(line)
-
-        if remaining and rendered_lines and rendered_lines[-1].strip():
-            rendered_lines.append("")
-
-        for key, value in remaining.items():
-            rendered_lines.append(f"{key}={value}")
-
-        contents = "\n".join(rendered_lines).rstrip()
-        ENV_FILE.write_text(f"{contents}\n" if contents else "", encoding="utf-8")

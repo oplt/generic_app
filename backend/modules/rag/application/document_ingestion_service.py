@@ -5,6 +5,7 @@ import logging
 from datetime import UTC, datetime
 
 from backend.lib.project_access import ProjectAccessPort, SqlAlchemyProjectAccessPort
+from backend.lib.retrieval_cache import invalidate_retrieval_cache_for_document
 from backend.modules.rag.application.chunking_service import ChunkingService
 from backend.modules.rag.application.document_parser_service import DocumentParserService
 from backend.modules.rag.application.embedding_service import EmbeddingService
@@ -15,8 +16,7 @@ from backend.modules.rag.infrastructure.file_storage_adapter import FileStorageA
 from backend.modules.rag.infrastructure.rag_config import RagConfig
 from backend.modules.rag.infrastructure.repositories import RagRepository
 from backend.modules.rag.infrastructure.vector_store_adapter import build_vector_store
-from backend.modules.rag.workers import queue_document_indexing
-from backend.lib.retrieval_cache import invalidate_retrieval_cache_for_document
+from backend.modules.rag.workers import queue_document_cleanup, queue_document_indexing
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -140,9 +140,7 @@ class DocumentIngestionService:
                 user_id=user_id,
                 project_id=document.project_id,
             )
-        await self.repo.update_ingestion_job(
-            job, status=IngestionJobStatus.RUNNING, started=True
-        )
+        await self.repo.update_ingestion_job(job, status=IngestionJobStatus.RUNNING, started=True)
         await self.repo.update_document_status(document, DocumentStatus.PARSING)
         await self.db.commit()
 
@@ -256,14 +254,29 @@ class DocumentIngestionService:
             metrics.rag_permission_denied_total.inc()
             raise HTTPException(status_code=403, detail="You cannot delete this document")
 
-        await self.vector_store.delete_document(document_id, document.user_id)
-        await self.storage.delete_document(document.storage_path)
         await self.repo.soft_delete_document(document)
         await self.db.commit()
         await invalidate_retrieval_cache_for_document(
             user_id=document.user_id,
             project_id=document.project_id,
         )
+        queue_document_cleanup(
+            document_id=document_id,
+            user_id=document.user_id,
+            storage_path=document.storage_path,
+        )
+
+    async def cleanup_deleted_document(
+        self,
+        *,
+        document_id: str,
+        user_id: str,
+        storage_path: str | None,
+    ) -> None:
+        await self.vector_store.delete_document(document_id, user_id)
+        await self.storage.delete_document(storage_path)
+        await self.db.commit()
+        logger.info("RAG document cleanup completed document=%s user=%s", document_id, user_id)
 
     async def _get_document_for_indexing(
         self,

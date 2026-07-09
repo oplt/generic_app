@@ -36,5 +36,24 @@ describe("queryKeys", () => {
         expect(queryKeys.platform.apiKeys).toEqual(["platform", "api-keys"]);
         expect(queryKeys.platform.webhooks).toEqual(["platform", "webhooks"]);
         expect(queryKeys.platform.featureFlags).toEqual(["platform", "feature-flags"]);
+        expect(queryKeys.platform.admin.config).toEqual(["platform", "admin", "config"]);
+        expect(queryKeys.platform.admin.plans).toEqual(["platform", "admin", "plans"]);
+        expect(queryKeys.platform.admin.featureFlags).toEqual([
+            "platform",
+            "admin",
+            "feature-flags",
+        ]);
+        expect(queryKeys.platform.admin.emailTemplates).toEqual([
+            "platform",
+            "admin",
+            "email-templates",
+        ]);
+    });
+
+    it("builds stable settings and observability keys", () => {
+        expect(queryKeys.settings.config).toEqual(["settings", "config"]);
+        expect(queryKeys.settings.database).toEqual(["settings", "database"]);
+        expect(queryKeys.observability.links).toEqual(["observability", "links"]);
+        expect(queryKeys.observability.status).toEqual(["observability", "status"]);
     });
 });

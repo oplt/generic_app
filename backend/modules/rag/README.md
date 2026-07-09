@@ -9,7 +9,7 @@ Document upload, parsing, chunking, embedding, retrieval, and cited answers — 
 ```text
 backend/modules/rag/
   domain/           # ParsedDocument, DocumentChunk, RagAnswer, enums
-  application/      # ingestion, retrieval, answer, agent context, legacy AI docs
+  application/      # ingestion, retrieval, answer, prompt context, legacy AI docs
   infrastructure/   # LangChain splitters/loaders, vector store, repos
   api/              # /api/v1/rag routes
 ```
@@ -17,7 +17,7 @@ backend/modules/rag/
 Application services include:
 
 - `legacy_ai_document_service.py` — backs `/api/v1/ai/documents*` when RAG is enabled
-- `agent_context_service.py` — builds RAG context blocks for `AgentService`
+- `prompt_context_service.py` — shared bounded RAG + memory context for all generation paths
 - `rag_tool.py` — low-level agent retrieval helper
 
 LangChain is used **only** in `infrastructure/` (`langchain_text_splitters`, optional `langchain_community` loaders). PDF/DOCX/CSV parsing and text splitting run via `asyncio.to_thread` so the API event loop stays responsive during indexing.
@@ -27,7 +27,7 @@ LangChain is used **only** in `infrastructure/` (`langchain_text_splitters`, opt
 1. System/developer prompt
 2. Authenticated user identity (JWT — never from message text)
 3. User/project memory (`MemoryService`)
-4. RAG document chunks (`agent_context_service` → `rag_search_tool`)
+4. RAG document chunks (`PromptContextService` → `RetrievalService`)
 5. Session/working context
 6. User question
 
@@ -43,6 +43,8 @@ RAG_CHUNK_OVERLAP=150
 RAG_TOP_K=5
 RAG_SCORE_THRESHOLD=0.3
 RAG_MAX_CONTEXT_TOKENS=6000
+RAG_RERANK_ENABLED=false
+RAG_RERANK_CANDIDATE_MULTIPLIER=3
 RAG_ALLOWED_FILE_TYPES=pdf,txt,md,docx,csv
 RAG_MAX_FILE_BYTES=10485760
 ```
@@ -55,7 +57,6 @@ Embeddings use the same provider registry as `/api/v1/ai` — no hardcoded API k
 |---------|--------|
 | `pgvector` | Default — `rag_chunks.embedding` column with HNSW cosine index; SQL `ORDER BY embedding <=> query` |
 | JSON fallback | Bounded scan of `embedding_json` when pgvector is unavailable or vectors were not indexed |
-| `qdrant` | Adapter stub for future external DB |
 
 Local heuristic embeddings use `RAG_EMBEDDING_DIMENSIONS` (default 1536) so dev indexes can use pgvector. Re-index existing documents after changing dimensions.
 
@@ -131,11 +132,16 @@ POST /api/v1/rag/ask
 
 Returns `answer`, `citations[]`, `no_context_found` when nothing matches, and `ai_run_id` linking to the `ai_runs` record (cost/tokens/review parity with `/ai/runs`).
 
+The request is bounded by `RAG_ASK_TIMEOUT_SECONDS`. Degradation fields identify retrieval or
+memory failures, and `injection_chunks_filtered` reports excluded unsafe chunks. See
+[`docs/runbooks/ai-rag-degraded-mode.md`](../../../docs/runbooks/ai-rag-degraded-mode.md).
+
 Generation goes through `GenerationPort` (`backend/lib/generation_port.py`, adapter: `AiServiceGenerationPort`) using the prompt template keyed by `RAG_ASK_PROMPT_TEMPLATE_KEY` (default `rag-answer`), with built-in defaults when that template is absent.
 
 ## Agent integration
 
-`AgentService` calls `rag_search_tool()` before LLM generation when `RAG_ENABLED=true`. Same tool is available for future explicit agent tool loops.
+`AgentService` calls the same `PromptContextService` as `/rag/ask` and `/ai/runs` when
+`RAG_ENABLED=true`.
 
 ## Access control
 

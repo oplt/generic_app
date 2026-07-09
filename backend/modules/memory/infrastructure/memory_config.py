@@ -48,3 +48,15 @@ class MemoryConfig:
         if self.mem0_mode == "oss":
             return True
         return bool(self.mem0_api_key or self.mem0_base_url)
+
+
+def validate_memory_config(config: MemoryConfig | None = None) -> None:
+    resolved = config or MemoryConfig.from_settings()
+    if resolved.mem0_mode not in {"hosted", "self_hosted", "oss"}:
+        raise RuntimeError(f"Unsupported MEM0_MODE={resolved.mem0_mode!r}")
+    if resolved.default_limit < 1:
+        raise RuntimeError("MEMORY_DEFAULT_LIMIT must be at least 1")
+    if not 0 <= resolved.min_confidence <= 1:
+        raise RuntimeError("MEMORY_MIN_CONFIDENCE must be between 0 and 1")
+    if resolved.session_ttl_days < 1:
+        raise RuntimeError("MEMORY_SESSION_TTL_DAYS must be at least 1")

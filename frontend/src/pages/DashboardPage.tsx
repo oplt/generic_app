@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
     Box,
     Button,
-    Chip,
     Stack,
     Typography,
 } from "@mui/material";

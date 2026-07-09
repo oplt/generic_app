@@ -28,6 +28,7 @@ import {
     type SignUpValues,
 } from "../features/auth/schemas";
 import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
+import { getQueryErrorMessage } from "../utils/queryErrors";
 
 type Mode = "signIn" | "signUp";
 
@@ -92,7 +93,7 @@ function SignInForm({ onSuccess, mfaEnabled }: { onSuccess: () => void; mfaEnabl
             onSuccess();
             navigate("/dashboard");
         } catch (error) {
-            setServerError(error instanceof Error ? error.message : "Sign in failed.");
+            setServerError(getQueryErrorMessage(error, "Sign in failed."));
         }
     }
 
@@ -102,7 +103,7 @@ function SignInForm({ onSuccess, mfaEnabled }: { onSuccess: () => void; mfaEnabl
             await forgotPassword(values);
             setForgotDone(true);
         } catch (error) {
-            setForgotError(error instanceof Error ? error.message : "Request failed.");
+            setForgotError(getQueryErrorMessage(error, "Request failed."));
         }
     }
 
@@ -206,7 +207,7 @@ function SignUpForm({ onSuccess }: { onSuccess: (email: string) => void }) {
             });
             onSuccess(values.email);
         } catch (error) {
-            setServerError(error instanceof Error ? error.message : "Sign up failed.");
+            setServerError(getQueryErrorMessage(error, "Sign up failed."));
         }
     }
 

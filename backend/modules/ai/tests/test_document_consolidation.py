@@ -1,7 +1,7 @@
 import unittest
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from backend.modules.ai.service import AiService
 from backend.modules.rag.application.legacy_ai_document_service import (
@@ -10,7 +10,7 @@ from backend.modules.rag.application.legacy_ai_document_service import (
     rag_document_to_ai_view,
 )
 from backend.modules.rag.domain.enums import DocumentStatus
-from backend.modules.rag.domain.models import RetrievedChunk, RetrievalOutcome
+from backend.modules.rag.domain.models import RetrievalOutcome, RetrievedChunk
 
 
 class RagDocumentMappingTest(unittest.TestCase):
@@ -35,8 +35,8 @@ class AiServiceDocumentDelegationTest(unittest.IsolatedAsyncioTestCase):
         self.db = AsyncMock()
         self.user = SimpleNamespace(id="user-1")
 
-    @patch("backend.modules.ai.service.LegacyAiDocumentService")
-    @patch("backend.modules.ai.service.settings")
+    @patch("backend.modules.ai.document_service.LegacyAiDocumentService")
+    @patch("backend.modules.ai.document_service.settings")
     async def test_list_documents_delegates_when_rag_enabled(
         self, mock_settings, legacy_service_cls
     ):
@@ -69,8 +69,8 @@ class AiServiceDocumentDelegationTest(unittest.IsolatedAsyncioTestCase):
             "user-1", limit=50, offset=0
         )
 
-    @patch("backend.modules.ai.service.LegacyAiDocumentService")
-    @patch("backend.modules.ai.service.settings")
+    @patch("backend.modules.ai.document_service.LegacyAiDocumentService")
+    @patch("backend.modules.ai.document_service.settings")
     async def test_retrieve_chunks_delegates_when_rag_enabled(
         self, mock_settings, legacy_service_cls
     ):

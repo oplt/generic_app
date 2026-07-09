@@ -9,6 +9,7 @@ from backend.core.cache import (
     cache_set_json,
     invalidate_platform_caches,
 )
+from backend.modules.platform.router import router as platform_router
 from backend.modules.platform.schemas import PlatformConfigResponse
 from backend.modules.platform.service import PlatformService
 
@@ -34,7 +35,7 @@ class PlatformConfigCacheTest(unittest.IsolatedAsyncioTestCase):
         service._load_platform_config = AsyncMock(return_value=expected)
 
         with patch(
-            "backend.modules.platform.service.cache_get_or_load_model",
+            "backend.modules.platform.config_service.cache_get_or_load_model",
             AsyncMock(side_effect=[expected, expected]),
         ) as cache_get:
             first = await service.get_platform_config()
@@ -67,6 +68,42 @@ class PlatformConfigCacheTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second, payload)
         redis_client.get.assert_not_awaited()
 
+    def test_all_capability_routes_are_registered_once(self):
+        expected = {
+            ("GET", "/metadata"),
+            ("GET", "/billing/plans"),
+            ("GET", "/billing/subscription"),
+            ("PUT", "/billing/subscription"),
+            ("GET", "/api-keys"),
+            ("POST", "/api-keys"),
+            ("DELETE", "/api-keys/{api_key_id}"),
+            ("GET", "/webhooks"),
+            ("POST", "/webhooks"),
+            ("PATCH", "/webhooks/{webhook_id}"),
+            ("DELETE", "/webhooks/{webhook_id}"),
+            ("POST", "/webhooks/{webhook_id}/test"),
+            ("GET", "/feature-flags"),
+            ("GET", "/admin/config"),
+            ("PUT", "/admin/config"),
+            ("GET", "/admin/plans"),
+            ("POST", "/admin/plans"),
+            ("PATCH", "/admin/plans/{plan_id}"),
+            ("GET", "/admin/feature-flags"),
+            ("POST", "/admin/feature-flags"),
+            ("PATCH", "/admin/feature-flags/{feature_flag_id}"),
+            ("GET", "/admin/email-templates"),
+            ("POST", "/admin/email-templates"),
+            ("PATCH", "/admin/email-templates/{template_id}"),
+        }
+        registered = [
+            (method, route.path)
+            for route in platform_router.routes
+            for method in route.methods or set()
+        ]
+
+        self.assertEqual(set(registered), expected)
+        self.assertEqual(len(registered), len(expected))
+
     async def test_list_feature_flags_uses_shared_cache_loader(self):
         db = AsyncMock()
         service = PlatformService(db)
@@ -85,7 +122,7 @@ class PlatformConfigCacheTest(unittest.IsolatedAsyncioTestCase):
         service._load_feature_flags_for_cache = AsyncMock(return_value=cached_payload)
 
         with patch(
-            "backend.modules.platform.service.cache_get_or_load_json",
+            "backend.modules.platform.feature_flag_service.cache_get_or_load_json",
             AsyncMock(side_effect=[cached_payload, cached_payload]),
         ) as cache_get:
             first = await service.list_feature_flags()
@@ -97,7 +134,11 @@ class PlatformConfigCacheTest(unittest.IsolatedAsyncioTestCase):
         service._load_feature_flags_for_cache.assert_not_called()
 
     async def test_invalidate_platform_caches_clears_local_entries(self):
-        with patch("backend.core.cache.redis_client", AsyncMock()) as redis_client:
+        with (
+            patch("backend.core.cache.settings") as mock_settings,
+            patch("backend.core.cache.redis_client", AsyncMock()) as redis_client,
+        ):
+            mock_settings.CACHE_ENABLED = True
             await cache_set_json(PLATFORM_FEATURE_FLAGS_CACHE_KEY, [{"key": "ai"}], ttl_seconds=300)
             await invalidate_platform_caches()
 

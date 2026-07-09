@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_scalars
@@ -40,6 +41,16 @@ class PlatformRepository:
         await self.db.flush()
         return plan
 
+    def add_plans(self, rows: list[dict]) -> None:
+        self.db.add_all([SubscriptionPlan(**row) for row in rows])
+
+    async def upsert_default_plans(self, rows: list[dict]) -> int:
+        statement = (
+            insert(SubscriptionPlan).values(rows).on_conflict_do_nothing(index_elements=["code"])
+        )
+        result = await self.db.execute(statement)
+        return int(result.rowcount or 0)
+
     async def list_subscriptions(self) -> list[UserSubscription]:
         result = await self.db.execute(
             select(UserSubscription).order_by(UserSubscription.created_at.desc())
@@ -65,11 +76,7 @@ class PlatformRepository:
         limit: int = DEFAULT_PAGE_LIMIT,
         offset: int = 0,
     ) -> tuple[list[ApiKey], int]:
-        stmt = (
-            select(ApiKey)
-            .where(ApiKey.user_id == user_id)
-            .order_by(ApiKey.created_at.desc())
-        )
+        stmt = select(ApiKey).where(ApiKey.user_id == user_id).order_by(ApiKey.created_at.desc())
         return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
     async def get_api_key_for_user(self, user_id: str, api_key_id: str) -> ApiKey | None:
@@ -134,6 +141,14 @@ class PlatformRepository:
         await self.db.flush()
         return flag
 
+    def add_feature_flags(self, rows: list[dict]) -> None:
+        self.db.add_all([FeatureFlag(**row) for row in rows])
+
+    async def upsert_default_feature_flags(self, rows: list[dict]) -> int:
+        statement = insert(FeatureFlag).values(rows).on_conflict_do_nothing(index_elements=["key"])
+        result = await self.db.execute(statement)
+        return int(result.rowcount or 0)
+
     async def list_email_templates(self) -> list[EmailTemplate]:
         result = await self.db.execute(select(EmailTemplate).order_by(EmailTemplate.key.asc()))
         return list(result.scalars().all())
@@ -151,3 +166,13 @@ class PlatformRepository:
         self.db.add(template)
         await self.db.flush()
         return template
+
+    def add_email_templates(self, rows: list[dict]) -> None:
+        self.db.add_all([EmailTemplate(**row) for row in rows])
+
+    async def upsert_default_email_templates(self, rows: list[dict]) -> int:
+        statement = (
+            insert(EmailTemplate).values(rows).on_conflict_do_nothing(index_elements=["key"])
+        )
+        result = await self.db.execute(statement)
+        return int(result.rowcount or 0)

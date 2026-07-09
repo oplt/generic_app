@@ -1,6 +1,8 @@
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
-import asyncio
+
+from fastapi import HTTPException
 
 from backend.core.cache import (
     OBSERVABILITY_STATUS_CACHE_KEY,
@@ -13,8 +15,9 @@ from backend.core.cache import (
     get_local_cached_json,
     invalidate_settings_config_cache,
 )
-from backend.modules.settings.schemas import ConfigSettingsResponse
-from backend.modules.settings.service import SettingsService
+from backend.core.config import Settings
+from backend.modules.settings.schemas import ConfigEntryUpdate, ConfigSettingsResponse
+from backend.modules.settings.service import CONFIG_FIELD_METADATA, SettingsService
 
 
 class SettingsCacheTest(unittest.IsolatedAsyncioTestCase):
@@ -55,15 +58,25 @@ class SettingsCacheTest(unittest.IsolatedAsyncioTestCase):
     def test_list_config_entries_uses_local_cache(self):
         expected = ConfigSettingsResponse(items=[], notice="notice")
 
-        with patch.object(
-            SettingsService,
-            "_build_config_entries",
-            return_value=expected,
-        ) as build:
+        async def run_inline(func, *args, **kwargs):
+            return func(*args, **kwargs)
+
+        with (
+            patch.object(
+                SettingsService,
+                "_build_config_entries",
+                return_value=expected,
+            ) as build,
+            patch(
+                "backend.modules.settings.service.asyncio.to_thread",
+                side_effect=run_inline,
+            ) as to_thread,
+        ):
             first = asyncio.run(SettingsService.list_config_entries())
             second = asyncio.run(SettingsService.list_config_entries())
 
         self.assertEqual(first.notice, second.notice)
+        to_thread.assert_awaited_once()
         build.assert_called_once()
 
     def test_invalidate_settings_config_cache_clears_entries(self):
@@ -136,3 +149,43 @@ class SettingsCacheTest(unittest.IsolatedAsyncioTestCase):
         service._build_status.assert_awaited_once()
         redis_client.get.assert_not_awaited()
         redis_client.setex.assert_not_awaited()
+
+
+class DeprecatedAiDocumentConfigTest(unittest.TestCase):
+    def test_admin_config_hides_legacy_keys_and_describes_rag_replacements(self):
+        with patch.object(
+            SettingsService,
+            "_read_env_entries",
+            return_value={
+                "AI_DOCUMENT_MAX_BYTES": "1234",
+                "AI_DOCUMENT_CHUNK_SIZE": "500",
+                "AI_DOCUMENT_CHUNK_OVERLAP": "50",
+            },
+        ):
+            response = SettingsService._build_config_entries()
+
+        keys = {item.key for item in response.items}
+        self.assertFalse(any(key.startswith("AI_DOCUMENT_") for key in keys))
+        self.assertFalse(any(key.startswith("AI_DOCUMENT_") for key in Settings.model_fields))
+        for key in ("RAG_MAX_FILE_BYTES", "RAG_CHUNK_SIZE", "RAG_CHUNK_OVERLAP"):
+            self.assertIn(key, keys)
+            self.assertTrue(CONFIG_FIELD_METADATA[key]["description"])
+
+    def test_legacy_key_updates_are_rejected_with_replacement(self):
+        replacements = {
+            "AI_DOCUMENT_MAX_BYTES": "RAG_MAX_FILE_BYTES",
+            "AI_DOCUMENT_CHUNK_SIZE": "RAG_CHUNK_SIZE",
+            "AI_DOCUMENT_CHUNK_OVERLAP": "RAG_CHUNK_OVERLAP",
+        }
+        for legacy_key, replacement in replacements.items():
+            with self.subTest(legacy_key=legacy_key):
+                with self.assertRaises(HTTPException) as raised:
+                    SettingsService._update_config_entries_sync(
+                        [ConfigEntryUpdate(key=legacy_key, value="500")]
+                    )
+
+                self.assertEqual(raised.exception.status_code, 422)
+                self.assertEqual(
+                    raised.exception.detail,
+                    f"Config key {legacy_key} is deprecated; use {replacement}",
+                )

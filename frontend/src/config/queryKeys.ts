@@ -37,6 +37,20 @@ export const queryKeys = {
         apiKeys: ["platform", "api-keys"] as const,
         webhooks: ["platform", "webhooks"] as const,
         featureFlags: ["platform", "feature-flags"] as const,
+        admin: {
+            config: ["platform", "admin", "config"] as const,
+            plans: ["platform", "admin", "plans"] as const,
+            featureFlags: ["platform", "admin", "feature-flags"] as const,
+            emailTemplates: ["platform", "admin", "email-templates"] as const,
+        },
+    },
+    settings: {
+        config: ["settings", "config"] as const,
+        database: ["settings", "database"] as const,
+    },
+    observability: {
+        links: ["observability", "links"] as const,
+        status: ["observability", "status"] as const,
     },
     ai: {
         all: ["ai"] as const,

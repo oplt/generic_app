@@ -53,3 +53,8 @@ rag_json_fallback_total = Counter(
     "rag_json_fallback_total",
     "Retrieval queries that used JSON embedding fallback",
 )
+rag_rerank_latency_ms = Histogram(
+    "rag_rerank_latency_ms",
+    "Hybrid retrieval reranking latency in milliseconds",
+    buckets=(0.1, 0.5, 1, 2, 5, 10, 25, 50),
+)

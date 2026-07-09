@@ -1,5 +1,5 @@
 import { Box, Paper, Stack, Typography, type SxProps, type Theme } from "@mui/material";
-import { colors } from "../../app/designTokens";
+import { colors, radii } from "../../app/designTokens";
 
 type SectionCardProps = {
     title?: React.ReactNode;
@@ -23,7 +23,7 @@ export function SectionCard({
             sx={[
                 (theme) => ({
                     p: { xs: 2.5, md: 3 },
-                    borderRadius: 1,
+                    borderRadius: `${radii.card}px`,
                     border: "none",
                     boxShadow: "none",
                     backgroundColor:

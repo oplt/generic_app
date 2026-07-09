@@ -33,13 +33,17 @@ import {
     SettingsBrightness as SystemModeIcon,
 } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
-import { colors } from "../../app/designTokens";
+import { colors, fonts } from "../../app/designTokens";
 import { useColorMode } from "../../app/colorModeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { usePlatformMetadata } from "../../hooks/usePlatformMetadata";
 import { useUserProfile } from "../../hooks/useUserProfile";
+import {
+    getSettingsHubLabel,
+    isSettingsHubPath,
+    useSettingsTabs,
+} from "../../hooks/useSettingsTabs";
 import { NotificationNavBadge } from "./NotificationNavBadge";
-import { getSettingsHubLabel, isSettingsHubPath, useSettingsTabs } from "./SettingsTabs";
 import { getInitials } from "../../utils/formatters";
 
 const DRAWER_WIDTH = 288;
@@ -244,7 +248,7 @@ export function AppLayout() {
                             variant="h6"
                             sx={{
                                 lineHeight: 1,
-                                fontFamily: "'Universal Sans Display', -apple-system, Arial, sans-serif",
+                                fontFamily: fonts.display,
                                 letterSpacing: "0.12em",
                             }}
                         >
@@ -255,7 +259,7 @@ export function AppLayout() {
                             <Typography
                                 variant="h6"
                                 sx={{
-                                    fontFamily: "'Universal Sans Display', -apple-system, Arial, sans-serif",
+                                    fontFamily: fonts.display,
                                     letterSpacing: "0.12em",
                                     textTransform: "uppercase",
                                 }}

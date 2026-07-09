@@ -156,6 +156,10 @@ class AiRunResponse(BaseModel):
     variables: dict[str, Any]
     retrieval_query: str | None
     retrieved_chunk_ids: list[str]
+    retrieval_degraded: bool = False
+    memory_degraded: bool = False
+    degradation_reason: str | None = None
+    injection_chunks_filtered: int = 0
     input_messages: list[dict[str, Any]]
     output_text: str | None
     output_json: dict[str, Any] | None
@@ -235,6 +239,9 @@ class AiEvaluationDatasetResponse(BaseModel):
 
 class AiEvaluationCaseCreate(RequestModel):
     input_variables: dict[str, Any] = Field(default_factory=dict)
+    retrieval_query: str | None = Field(default=None, min_length=1, max_length=4000)
+    document_ids: list[str] = Field(default_factory=list)
+    expected_chunk_ids: list[str] = Field(default_factory=list)
     expected_output_text: str | None = None
     expected_output_json: dict[str, Any] | None = None
     notes: str | None = None
@@ -246,6 +253,9 @@ class AiEvaluationCaseResponse(BaseModel):
     id: str
     dataset_id: str
     input_variables: dict[str, Any]
+    retrieval_query: str | None
+    document_ids: list[str]
+    expected_chunk_ids: list[str]
     expected_output_text: str | None
     expected_output_json: dict[str, Any] | None
     notes: str | None

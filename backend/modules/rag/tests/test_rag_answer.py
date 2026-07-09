@@ -11,7 +11,7 @@ from backend.modules.rag.application.rag_context_builder import (
     RagContextBuilder,
 )
 from backend.modules.rag.application.rag_policy_service import RagPolicyService
-from backend.modules.rag.domain.models import RetrievedChunk, RetrievalOutcome
+from backend.modules.rag.domain.models import RetrievalOutcome, RetrievedChunk
 
 
 class RagAnswerTest(unittest.IsolatedAsyncioTestCase):
@@ -60,7 +60,10 @@ class RagAnswerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.ai_run_id, "run-1")
         service.generation.run_rag_answer.assert_awaited_once()
 
-    @patch("backend.modules.rag.application.rag_answer_service.asyncio.gather", wraps=asyncio.gather)
+    @patch(
+        "backend.modules.rag.application.prompt_context_service.asyncio.gather",
+        wraps=asyncio.gather,
+    )
     async def test_answer_loads_retrieval_and_memory_in_parallel(self, gather_fn):
         db = AsyncMock()
         service = RagAnswerService(db)
@@ -70,7 +73,7 @@ class RagAnswerTest(unittest.IsolatedAsyncioTestCase):
             return_value=RetrievalOutcome(chunks=[self._chunk("c1", "PostgreSQL DB")])
         )
         service.memory = MagicMock()
-        service.memory.build_prompt_context_with_status = AsyncMock(return_value=("memory block", False))
+        service.memory.recall_for_prompt = AsyncMock(return_value=("memory block", [], False))
         service.memory_config = SimpleNamespace(enabled=True)
         service.generation = MagicMock()
         service.generation.run_rag_answer = AsyncMock(
@@ -92,7 +95,7 @@ class RagAnswerTest(unittest.IsolatedAsyncioTestCase):
 
         gather_fn.assert_called()
         service.retrieval.retrieve.assert_awaited_once()
-        service.memory.build_prompt_context_with_status.assert_awaited_once()
+        service.memory.recall_for_prompt.assert_awaited_once()
         service.generation.run_rag_answer.assert_awaited_once()
 
     async def test_no_chunks_no_invented_citations(self):

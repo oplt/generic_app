@@ -6,6 +6,7 @@ import { AuthMarketingPanel } from "../components/auth/AuthMarketingPanel";
 import { AuthShell } from "../components/auth/AuthShell";
 import { resendVerificationSchema } from "../features/auth/schemas";
 import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
+import { getQueryErrorMessage } from "../utils/queryErrors";
 
 export default function VerifyEmailPage() {
     const [searchParams] = useSearchParams();
@@ -42,7 +43,7 @@ export default function VerifyEmailPage() {
             await resendVerification({ email: parsed.data.email });
             setResendDone(true);
         } catch (error) {
-            setResendError(error instanceof Error ? error.message : "Failed to resend verification email.");
+            setResendError(getQueryErrorMessage(error, "Failed to resend verification email."));
         } finally {
             setResending(false);
         }

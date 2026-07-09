@@ -4,16 +4,18 @@ import json
 import logging
 from datetime import UTC, datetime
 
-from backend.core.config import settings
 from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_scalars
 from backend.lib.vector_search import (
     embedding_is_indexable,
     json_fallback_max_candidates,
     parse_embedding_json,
-    pgvector_is_available as check_pgvector_is_available,
     rank_embedding_matches,
     store_chunk_embeddings_batch,
 )
+from backend.lib.vector_search import (
+    pgvector_is_available as check_pgvector_is_available,
+)
+from backend.lib.vectors import vector_literal
 from backend.modules.rag.domain.enums import DocumentStatus, IngestionJobStatus
 from backend.modules.rag.domain.models import RetrievedChunk
 from backend.modules.rag.infrastructure.models import (
@@ -22,7 +24,6 @@ from backend.modules.rag.infrastructure.models import (
     RagIngestionJob,
     RagQueryRecord,
 )
-from backend.lib.vectors import vector_literal
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -189,6 +190,9 @@ class RagRepository:
         )
         await self.db.flush()
         return rows
+
+    async def delete_chunks_for_document(self, document_id: str) -> None:
+        await self.db.execute(delete(RagChunk).where(RagChunk.document_id == document_id))
 
     async def list_chunks_for_documents(self, document_ids: list[str]) -> list[RagChunk]:
         if not document_ids:
@@ -388,9 +392,7 @@ class RagRepository:
         return job
 
     async def get_ingestion_job(self, job_id: str) -> RagIngestionJob | None:
-        result = await self.db.execute(
-            select(RagIngestionJob).where(RagIngestionJob.id == job_id)
-        )
+        result = await self.db.execute(select(RagIngestionJob).where(RagIngestionJob.id == job_id))
         return result.scalar_one_or_none()
 
     async def update_ingestion_job(

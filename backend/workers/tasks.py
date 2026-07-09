@@ -1,7 +1,8 @@
+from backend.modules.memory.workers import extract_turn_memories_sync
+from backend.modules.rag.workers import cleanup_document_sync, index_document_sync
 from backend.workers.celery_app import celery_app
 from backend.workers.email import send_email_sync
 from backend.workers.evaluation import run_evaluation_sync
-from backend.modules.rag.workers import index_document_sync
 
 
 @celery_app.task(
@@ -33,10 +34,28 @@ def send_email_task(
     retry_jitter=True,
     max_retries=3,
 )
-def index_rag_document_task(
-    *, document_id: str, user_id: str, job_id: str | None = None
-) -> None:
+def index_rag_document_task(*, document_id: str, user_id: str, job_id: str | None = None) -> None:
     index_document_sync(document_id=document_id, user_id=user_id, job_id=job_id)
+
+
+@celery_app.task(
+    name="backend.workers.tasks.cleanup_rag_document_task",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=5,
+)
+def cleanup_rag_document_task(
+    *,
+    document_id: str,
+    user_id: str,
+    storage_path: str | None,
+) -> None:
+    cleanup_document_sync(
+        document_id=document_id,
+        user_id=user_id,
+        storage_path=storage_path,
+    )
 
 
 @celery_app.task(name="backend.workers.tasks.run_ai_evaluation_task")
@@ -52,4 +71,32 @@ def run_ai_evaluation_task(
         user_id=user_id,
         dataset_id=dataset_id,
         prompt_version_id=prompt_version_id,
+    )
+
+
+@celery_app.task(
+    name="backend.workers.tasks.extract_turn_memories_task",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    max_retries=3,
+)
+def extract_turn_memories_task(
+    *,
+    user_id: str,
+    agent_id: str,
+    run_id: str,
+    project_id: str | None,
+    user_message: str,
+    assistant_message: str,
+    source_message_id: str,
+) -> None:
+    extract_turn_memories_sync(
+        user_id=user_id,
+        agent_id=agent_id,
+        run_id=run_id,
+        project_id=project_id,
+        user_message=user_message,
+        assistant_message=assistant_message,
+        source_message_id=source_message_id,
     )

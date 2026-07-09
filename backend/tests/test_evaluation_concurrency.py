@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import backend.modules.ai.service as ai_service_module
+import backend.modules.ai.evaluation_service as ai_service_module
 from backend.modules.ai.service import AiService, _EvaluationCaseResult
 
 
@@ -114,7 +114,11 @@ def test_queue_evaluation_persists_running_run_and_dispatches_worker(
     dataset = SimpleNamespace(id="dataset-1")
     version = SimpleNamespace(id="version-1", prompt_template_id="template-1")
     template = SimpleNamespace(id="template-1")
-    evaluation_run = SimpleNamespace(id="run-1", dataset_id="dataset-1", prompt_version_id="version-1")
+    evaluation_run = SimpleNamespace(
+        id="run-1",
+        dataset_id="dataset-1",
+        prompt_version_id="version-1",
+    )
     user = SimpleNamespace(id="user-1")
 
     service.repo.get_dataset_for_user = AsyncMock(return_value=dataset)

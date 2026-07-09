@@ -17,7 +17,12 @@ class AiPromptTemplate(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     active_version_id: Mapped[str | None] = mapped_column(
-        ForeignKey("ai_prompt_versions.id", ondelete="SET NULL", use_alter=True, name="fk_template_active_version"),
+        ForeignKey(
+            "ai_prompt_versions.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_template_active_version",
+        ),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -140,6 +145,10 @@ class AiRun(Base):
     variables_json: Mapped[dict] = mapped_column(JSON, default=dict)
     retrieval_query: Mapped[str | None] = mapped_column(Text, nullable=True)
     retrieved_chunk_ids_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    retrieval_degraded: Mapped[bool] = mapped_column(Boolean, default=False)
+    memory_degraded: Mapped[bool] = mapped_column(Boolean, default=False)
+    degradation_reason: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    injection_chunks_filtered: Mapped[int] = mapped_column(Integer, default=0)
     input_messages_json: Mapped[list[dict]] = mapped_column(JSON, default=list)
     output_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     output_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -234,6 +243,9 @@ class AiEvaluationCase(Base):
         index=True,
     )
     input_variables_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    retrieval_query: Mapped[str | None] = mapped_column(Text, nullable=True)
+    document_ids_json: Mapped[list[str]] = mapped_column(JSON, default=list)
+    expected_chunk_ids_json: Mapped[list[str]] = mapped_column(JSON, default=list)
     expected_output_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     expected_output_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

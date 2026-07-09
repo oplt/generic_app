@@ -47,5 +47,7 @@ Trade-offs:
 
 ## Follow-ups
 
-- Optional: add `import-linter` contract in CI matching this ADR
-- Consolidate ai ↔ rag ↔ memory orchestration (`agent_service`, `prompt_context_builder`, `rag_answer_service`) behind a single composed layer
+- `backend/tests/test_module_boundaries.py` enforces router, domain/infrastructure, and observability
+  boundaries in CI without runtime imports.
+- AI ↔ RAG ↔ memory orchestration is consolidated behind RAG-owned `PromptContextService`; AI keeps
+  only a thin adapter for its agent response contract.

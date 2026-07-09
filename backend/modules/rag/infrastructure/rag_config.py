@@ -21,6 +21,8 @@ class RagConfig:
     max_context_tokens: int
     allowed_file_types: tuple[str, ...]
     max_file_bytes: int
+    rerank_enabled: bool = False
+    rerank_candidate_multiplier: int = 3
 
     @classmethod
     def from_settings(cls) -> RagConfig:
@@ -39,6 +41,8 @@ class RagConfig:
             chunk_overlap=settings.RAG_CHUNK_OVERLAP,
             top_k=settings.RAG_TOP_K,
             score_threshold=settings.RAG_SCORE_THRESHOLD,
+            rerank_enabled=settings.RAG_RERANK_ENABLED,
+            rerank_candidate_multiplier=max(1, settings.RAG_RERANK_CANDIDATE_MULTIPLIER),
             max_context_tokens=settings.RAG_MAX_CONTEXT_TOKENS,
             allowed_file_types=allowed or ("pdf", "txt", "md", "docx", "csv"),
             max_file_bytes=settings.RAG_MAX_FILE_BYTES,

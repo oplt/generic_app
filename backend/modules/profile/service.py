@@ -9,6 +9,7 @@ from backend.lib.resource_cache import (
 from backend.modules.profile.models import UserProfile
 from backend.modules.profile.repository import ProfileRepository
 from backend.modules.profile.schemas import ProfileResponse
+from backend.modules.profile.serializers import profile_to_response
 
 
 class ProfileService:
@@ -19,7 +20,7 @@ class ProfileService:
     async def get_profile_response(self, user_id: str) -> ProfileResponse:
         async def loader() -> ProfileResponse:
             profile = await self.repo.get_or_create(user_id)
-            return self._to_response(profile)
+            return profile_to_response(profile)
 
         return await cache_get_or_load_model(
             user_profile_cache_key(user_id),
@@ -79,13 +80,3 @@ class ProfileService:
         await self.db.refresh(profile)
         await invalidate_user_profile_cache(user_id)
         return previous_key
-
-    @staticmethod
-    def _to_response(profile: UserProfile) -> ProfileResponse:
-        return ProfileResponse(
-            user_id=profile.user_id,
-            bio=profile.bio,
-            avatar_url=profile.avatar_url,
-            location=profile.location,
-            website=profile.website,
-        )

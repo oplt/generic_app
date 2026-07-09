@@ -7,6 +7,8 @@ from backend.modules.ai.application.prompt_context_builder import (
     AgentPromptContext,
     AgentPromptContextBuilder,
 )
+from backend.modules.rag.application.prompt_context_service import PromptContextOutcome
+from backend.modules.rag.domain.models import RetrievedChunk
 
 
 class AgentPromptContextBuilderTest(unittest.IsolatedAsyncioTestCase):
@@ -16,18 +18,30 @@ class AgentPromptContextBuilderTest(unittest.IsolatedAsyncioTestCase):
         self.memory.recall_for_prompt = AsyncMock(return_value=("memory block", [], False))
         self.builder = AgentPromptContextBuilder(self.db, self.memory)
 
+    @staticmethod
+    def _chunk() -> RetrievedChunk:
+        return RetrievedChunk(
+            chunk_id="chunk-1",
+            document_id="doc-1",
+            content="document block",
+            score=0.9,
+            filename="doc.txt",
+            chunk_index=0,
+        )
+
     @patch(
-        "backend.modules.ai.application.prompt_context_builder.build_agent_document_context",
-        new_callable=AsyncMock,
-        return_value="document block",
+        "backend.modules.ai.application.prompt_context_builder.RagConfig.from_settings",
+        return_value=SimpleNamespace(enabled=True),
     )
-    @patch(
-        "backend.modules.ai.application.prompt_context_builder.rag_handles_prompt_retrieval",
-        return_value=True,
-    )
-    async def test_single_memory_recall_and_assembled_context(
-        self, _rag_handles, mock_document_context
-    ):
+    async def test_single_memory_recall_and_assembled_context(self, _rag_config):
+        self.builder.context.build = AsyncMock(
+            return_value=PromptContextOutcome(
+                system_context="memory block\n\ndocument block",
+                document_context="document block",
+                memory_context="memory block",
+                chunks=[self._chunk()],
+            )
+        )
         context = await self.builder.build(
             user_id="user-1",
             agent_id="default",
@@ -39,23 +53,23 @@ class AgentPromptContextBuilderTest(unittest.IsolatedAsyncioTestCase):
             top_k=3,
         )
 
-        self.memory.recall_for_prompt.assert_awaited_once()
-        self.memory.recall.assert_not_called()
-        mock_document_context.assert_awaited_once()
+        self.builder.context.build.assert_awaited_once()
         self.assertIsNone(context.effective_retrieval_query)
         self.assertIn("memory block", context.additional_system_context or "")
         self.assertIn("document block", context.additional_system_context or "")
 
     @patch(
-        "backend.modules.ai.application.prompt_context_builder.build_agent_document_context",
-        new_callable=AsyncMock,
-        return_value="",
+        "backend.modules.ai.application.prompt_context_builder.RagConfig.from_settings",
+        return_value=SimpleNamespace(enabled=False),
     )
-    @patch(
-        "backend.modules.ai.application.prompt_context_builder.rag_handles_prompt_retrieval",
-        return_value=False,
-    )
-    async def test_legacy_retrieval_when_rag_disabled(self, _rag_handles, _mock_document):
+    async def test_legacy_retrieval_when_rag_disabled(self, _rag_config):
+        self.builder.context.build = AsyncMock(
+            return_value=PromptContextOutcome(
+                system_context=None,
+                document_context="",
+                memory_context="",
+            )
+        )
         context = await self.builder.build(
             user_id="user-1",
             agent_id="default",
@@ -86,6 +100,7 @@ class AgentRetrievalConsolidationTest(unittest.IsolatedAsyncioTestCase):
         )
 
         service = AgentService(self.db)
+        service.config = SimpleNamespace(enabled=True, write_enabled=False)
         service.ai = MagicMock()
         service.ai.run_prompt = AsyncMock(return_value=MagicMock(id="run-1", output_text="ok"))
 
@@ -109,45 +124,23 @@ class AgentRetrievalConsolidationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(run_kwargs["retrieval_query"])
         self.assertEqual(run_kwargs["additional_system_context"], "combined context")
 
-    @patch("backend.modules.ai.application.agent_service.MemoryConfig.from_settings")
-    @patch("backend.modules.ai.application.agent_service.AiService")
-    @patch("backend.modules.ai.application.agent_service.MemoryService")
-    @patch(
-        "backend.modules.ai.application.prompt_context_builder.build_agent_document_context",
-        new_callable=AsyncMock,
-        return_value="",
-    )
-    @patch(
-        "backend.modules.ai.application.prompt_context_builder.rag_handles_prompt_retrieval",
-        return_value=True,
-    )
-    @patch("backend.modules.ai.application.prompt_context_builder.MemoryConfig.from_settings")
+    @patch("backend.modules.ai.application.agent_service.AgentPromptContextBuilder")
     async def test_agent_reuses_prompt_context_memories_without_second_recall(
         self,
-        builder_memory_config_fn,
-        _rag_handles,
-        _mock_document,
-        memory_cls,
-        ai_cls,
-        agent_memory_config_fn,
+        builder_cls,
     ):
-        builder_memory_config_fn.return_value = SimpleNamespace(enabled=True)
-        agent_memory_config_fn.return_value = SimpleNamespace(
-            enabled=True,
-            write_enabled=False,
-        )
         memory_item = MagicMock()
-        memory_instance = memory_cls.return_value
-        memory_instance.recall_for_prompt = AsyncMock(
-            return_value=("memory ctx", [memory_item], False)
+        builder_cls.return_value.build = AsyncMock(
+            return_value=AgentPromptContext(
+                additional_system_context="memory ctx",
+                effective_retrieval_query=None,
+                retrieved_memories=[memory_item],
+            )
         )
-        memory_instance.recall = AsyncMock()
-        ai_instance = ai_cls.return_value
-        ai_instance.run_prompt = AsyncMock(
-            return_value=MagicMock(id="run-1", output_text="ok")
-        )
-
         service = AgentService(self.db)
+        service.config = SimpleNamespace(enabled=True, write_enabled=False)
+        service.ai = MagicMock()
+        service.ai.run_prompt = AsyncMock(return_value=MagicMock(id="run-1", output_text="ok"))
 
         _run, _run_id, working = await service.run_agent_prompt(
             self.user,
@@ -160,8 +153,6 @@ class AgentRetrievalConsolidationTest(unittest.IsolatedAsyncioTestCase):
             review_required=False,
         )
 
-        memory_instance.recall_for_prompt.assert_awaited_once()
-        memory_instance.recall.assert_not_called()
         self.assertEqual(working.retrieved_memories, [memory_item])
 
     @patch("backend.modules.ai.application.agent_service.AgentPromptContextBuilder")
@@ -177,6 +168,7 @@ class AgentRetrievalConsolidationTest(unittest.IsolatedAsyncioTestCase):
         )
 
         service = AgentService(self.db)
+        service.config = SimpleNamespace(enabled=True, write_enabled=False)
         service.ai = MagicMock()
         service.ai.run_prompt = AsyncMock(return_value=MagicMock(id="run-1", output_text="ok"))
         service.memory.recall = AsyncMock()

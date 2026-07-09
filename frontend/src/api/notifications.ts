@@ -1,4 +1,4 @@
-import { apiFetch, type Paginated } from "./client";
+import { apiFetch, apiFetchItems } from "./client";
 
 export type Notification = {
     id: string;
@@ -16,8 +16,7 @@ export type NotificationPreferences = {
 };
 
 export async function getNotifications(): Promise<Notification[]> {
-    const page = await apiFetch<Paginated<Notification>>("/notifications");
-    return page.items;
+    return apiFetchItems<Notification>("/notifications");
 }
 
 export async function markRead(id: string): Promise<void> {

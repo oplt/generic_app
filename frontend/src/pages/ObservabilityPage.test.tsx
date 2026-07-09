@@ -5,8 +5,11 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ObservabilityPage from "./ObservabilityPage";
 import { getObservabilityLinks, getObservabilityStatus } from "../features/observability/api";
+import type {
+    ObservabilityLinks,
+    ObservabilityStatus,
+} from "../features/observability/types";
 import { useAuth } from "../hooks/useAuth";
-import { usePlatformMetadata } from "../hooks/usePlatformMetadata";
 
 vi.mock("../hooks/useAuth", () => ({
     useAuth: vi.fn(() => ({ isAdmin: true })),
@@ -21,7 +24,7 @@ vi.mock("../features/observability/api", () => ({
     getObservabilityStatus: vi.fn(),
 }));
 
-const links = {
+const links: ObservabilityLinks = {
     grafana_base_url: { url: "http://localhost:3001", configured: true, allowed: true },
     prometheus_url: { url: "http://localhost:9090/graph", configured: true, allowed: true },
     tempo_explore_url: { url: "http://localhost:3001/explore", configured: true, allowed: true },
@@ -41,7 +44,7 @@ const links = {
     },
 };
 
-const status = {
+const status: ObservabilityStatus = {
     api: { status: "healthy", detail: "API is responding", last_checked_at: "2026-06-13T12:00:00Z" },
     frontend: { status: "unknown", detail: "Frontend status check is not configured" },
     database: { status: "healthy", detail: "Database connection OK" },

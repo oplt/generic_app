@@ -46,21 +46,21 @@ class RagAnswerPromptTest(unittest.IsolatedAsyncioTestCase):
         ):
             spec = await resolve_rag_answer_prompt(repo, user)
 
-        repo.list_prompt_versions.assert_awaited_once_with(
-            "tpl-1", limit=200, offset=0
-        )
+        repo.list_prompt_versions.assert_awaited_once_with("tpl-1", limit=200, offset=0)
         self.assertEqual(spec.template_id, "tpl-1")
         self.assertEqual(spec.version_id, "ver-active")
         self.assertEqual(spec.system_prompt, "Custom RAG prompt")
 
 
 class AiServiceRagAnswerTest(unittest.IsolatedAsyncioTestCase):
-    @patch("backend.modules.ai.service.resolve_rag_answer_prompt")
+    @patch("backend.modules.ai.run_service.resolve_rag_answer_prompt")
     async def test_run_rag_answer_creates_run_with_retrieved_chunk_ids(self, resolve_prompt):
         db = AsyncMock()
         service = AiService(db)
         service.repo = MagicMock()
-        service.repo.create_run = AsyncMock(return_value=SimpleNamespace(id="run-1", provider_key="local"))
+        service.repo.create_run = AsyncMock(
+            return_value=SimpleNamespace(id="run-1", provider_key="local")
+        )
         service.providers = MagicMock()
         service.providers.get.return_value.generate = AsyncMock(
             return_value=SimpleNamespace(
@@ -100,12 +100,20 @@ class AiServiceRagAnswerTest(unittest.IsolatedAsyncioTestCase):
             query="What is Postgres?",
             combined_context="User question:\nWhat is Postgres?",
             retrieved_chunk_ids=["chunk-1"],
+            retrieval_degraded=True,
+            memory_degraded=True,
+            degradation_reason="provider_partial",
+            injection_chunks_filtered=2,
         )
 
         self.assertEqual(run.id, "run-1")
         create_kwargs = service.repo.create_run.await_args.kwargs
         self.assertEqual(create_kwargs["retrieved_chunk_ids_json"], ["chunk-1"])
         self.assertEqual(create_kwargs["retrieval_query"], "What is Postgres?")
+        self.assertTrue(create_kwargs["retrieval_degraded"])
+        self.assertTrue(create_kwargs["memory_degraded"])
+        self.assertEqual(create_kwargs["degradation_reason"], "provider_partial")
+        self.assertEqual(create_kwargs["injection_chunks_filtered"], 2)
         self.assertEqual(create_kwargs["input_messages_json"][0]["role"], "system")
         self.assertIn("What is Postgres?", create_kwargs["input_messages_json"][1]["content"])
         self.assertNotIn("User question:", create_kwargs["input_messages_json"][1]["content"])

@@ -79,3 +79,47 @@ def queue_document_indexing(
         job_name="rag-indexing",
     )
     logger.info("Queued RAG indexing for document=%s user=%s", document_id, user_id)
+
+
+def cleanup_document_sync(
+    *,
+    document_id: str,
+    user_id: str,
+    storage_path: str | None,
+) -> None:
+    from backend.db.session import SessionLocal
+    from backend.modules.rag.application.document_ingestion_service import DocumentIngestionService
+
+    async def _run() -> None:
+        async with SessionLocal() as db:
+            await DocumentIngestionService(db).cleanup_deleted_document(
+                document_id=document_id,
+                user_id=user_id,
+                storage_path=storage_path,
+            )
+
+    run_async_in_sync_context(_run())
+
+
+def queue_document_cleanup(
+    *,
+    document_id: str,
+    user_id: str,
+    storage_path: str | None,
+) -> None:
+    from backend.workers.tasks import cleanup_rag_document_task
+
+    payload = {
+        "document_id": document_id,
+        "user_id": user_id,
+        "storage_path": storage_path,
+    }
+    dispatch_background_sync_job(
+        target=cleanup_document_sync,
+        kwargs=payload,
+        celery_task=cleanup_rag_document_task,
+        celery_kwargs=payload,
+        queue=settings.CELERY_TASK_DEFAULT_QUEUE,
+        job_name="rag-document-cleanup",
+    )
+    logger.info("Queued RAG cleanup document=%s user=%s", document_id, user_id)

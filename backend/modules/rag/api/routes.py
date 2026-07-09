@@ -1,13 +1,17 @@
+import asyncio
 import json
 
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
+from backend.core.config import settings
 from backend.core.pagination import (
     PaginatedResponse,
     PaginationParams,
     paginated_response,
     pagination_params,
 )
+from backend.core.text_snippet import text_snippet
+from backend.modules.ai.dependencies import enforce_ai_generation_rate_limit
 from backend.modules.identity_access.models import User
 from backend.modules.rag.api.schemas import (
     RagAskRequest,
@@ -22,7 +26,6 @@ from backend.modules.rag.api.schemas import (
     RagRetrieveRequest,
     RagRetrieveResponse,
 )
-from backend.core.text_snippet import text_snippet
 from backend.modules.rag.application.document_ingestion_service import DocumentIngestionService
 from backend.modules.rag.application.rag_answer_service import RagAnswerService
 from backend.modules.rag.application.retrieval_service import RetrievalService
@@ -248,17 +251,24 @@ async def ask_rag(
     payload: RagAskRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    _rate_limit: None = Depends(enforce_ai_generation_rate_limit),
 ):
     _require_rag_enabled()
     service = RagAnswerService(db)
-    result = await service.answer(
-        payload.query,
-        user=current_user,
-        project_id=payload.project_id,
-        run_id=payload.run_id,
-        agent_id=payload.agent_id,
-        document_ids=payload.document_ids or None,
-    )
+    try:
+        result = await asyncio.wait_for(
+            service.answer(
+                payload.query,
+                user=current_user,
+                project_id=payload.project_id,
+                run_id=payload.run_id,
+                agent_id=payload.agent_id,
+                document_ids=payload.document_ids or None,
+            ),
+            timeout=settings.RAG_ASK_TIMEOUT_SECONDS,
+        )
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="RAG answer timed out") from exc
     return RagAskResponse(
         query=result.query,
         answer=result.answer,
@@ -282,6 +292,7 @@ async def ask_rag(
         retrieval_degraded=result.retrieval_degraded,
         memory_degraded=result.memory_degraded,
         degradation_reason=result.degradation_reason,
+        injection_chunks_filtered=result.injection_chunks_filtered,
     )
 
 

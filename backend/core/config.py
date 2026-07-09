@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     REQUIRE_EMAIL_VERIFICATION: bool = True
 
     # Email verification / password reset token TTLs (seconds)
-    VERIFICATION_TOKEN_TTL: int = 86400   # 24 h
+    VERIFICATION_TOKEN_TTL: int = 86400  # 24 h
     PASSWORD_RESET_TOKEN_TTL: int = 3600  # 1 h
 
     # SMTP — leave empty to skip sending (useful in dev)
@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     # Observability
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.2
-    OTLP_ENDPOINT: str = ""   # e.g. http://localhost:4317
+    OTLP_ENDPOINT: str = ""  # e.g. http://localhost:4317
     OTLP_INSECURE: bool = True
     OTEL_SERVICE_NAME: str = "fastapi-backend"
     OTEL_EXPORTER_OTLP_ENDPOINT: str = ""
@@ -129,6 +129,9 @@ class Settings(BaseSettings):
     AI_LOCAL_MODEL_NAME: str = "local-heuristic"
     AI_MAX_OUTPUT_TOKENS: int = 1024
     AI_EVALUATION_CONCURRENCY: int = 3
+    AI_RATE_LIMIT_REQUESTS: int = 30
+    AI_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    AI_REQUEST_TIMEOUT_SECONDS: float = 60.0
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OPENAI_DEFAULT_MODEL: str = "gpt-4.1-mini"
@@ -160,10 +163,13 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 150
     RAG_TOP_K: int = 5
     RAG_SCORE_THRESHOLD: float = 0.3
+    RAG_RERANK_ENABLED: bool = False
+    RAG_RERANK_CANDIDATE_MULTIPLIER: int = 3
     RAG_MAX_CONTEXT_TOKENS: int = 6000
     RAG_ALLOWED_FILE_TYPES: str = "pdf,txt,md,docx,csv"
     RAG_MAX_FILE_BYTES: int = 10 * 1024 * 1024
     RAG_ASK_PROMPT_TEMPLATE_KEY: str = "rag-answer"
+    RAG_ASK_TIMEOUT_SECONDS: float = 45.0
 
     CORS_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
@@ -269,8 +275,8 @@ class Settings(BaseSettings):
                 parsed = json.loads(normalized)
                 if not isinstance(parsed, list):
                     raise ValueError(
-                    "CORS_ALLOWED_ORIGINS must be a list or comma-separated string"
-                )
+                        "CORS_ALLOWED_ORIGINS must be a list or comma-separated string"
+                    )
                 return [str(item).strip() for item in parsed if str(item).strip()]
             return [item.strip() for item in normalized.split(",") if item.strip()]
         return value

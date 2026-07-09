@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps.admin import get_admin_user
 from backend.api.deps.db import get_db
-from backend.modules.audit.repository import AuditRepository
+from backend.modules.audit.request_logging import log_request_audit_event
 from backend.modules.identity_access.models import User
 from backend.modules.settings.schemas import (
     ConfigSettingsResponse,
@@ -15,26 +15,6 @@ from backend.modules.settings.schemas import (
 from backend.modules.settings.service import SettingsService
 
 router = APIRouter()
-
-
-async def _log_admin_settings_action(
-    db: AsyncSession,
-    request: Request,
-    admin: User,
-    action: str,
-    *,
-    resource_type: str,
-    resource_id: str | None = None,
-) -> None:
-    audit_repo = AuditRepository(db)
-    await audit_repo.log(
-        action=action,
-        user_id=admin.id,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
 
 
 @router.get("/config", response_model=ConfigSettingsResponse)
@@ -50,11 +30,11 @@ async def update_config_settings(
     admin: User = Depends(get_admin_user),
 ):
     response = await SettingsService.update_config_entries(payload.items)
-    await _log_admin_settings_action(
-        db=db,
-        request=request,
-        admin=admin,
+    await log_request_audit_event(
+        db,
+        request,
         action="admin.config_updated",
+        actor_user_id=admin.id,
         resource_type="config",
     )
     await db.commit()
@@ -79,11 +59,11 @@ async def create_database_setting(
 ):
     service = SettingsService(db)
     setting = await service.create_database_setting(payload.key, payload.value, payload.description)
-    await _log_admin_settings_action(
-        db=db,
-        request=request,
-        admin=admin,
+    await log_request_audit_event(
+        db,
+        request,
         action="admin.database_setting_created",
+        actor_user_id=admin.id,
         resource_type="app_setting",
         resource_id=setting.id,
     )
@@ -103,11 +83,11 @@ async def update_database_setting(
     setting = await service.update_database_setting(
         setting_id, payload.model_dump(exclude_unset=True)
     )
-    await _log_admin_settings_action(
-        db=db,
-        request=request,
-        admin=admin,
+    await log_request_audit_event(
+        db,
+        request,
         action="admin.database_setting_updated",
+        actor_user_id=admin.id,
         resource_type="app_setting",
         resource_id=setting.id,
     )
@@ -124,11 +104,11 @@ async def delete_database_setting(
 ):
     service = SettingsService(db)
     await service.delete_database_setting(setting_id)
-    await _log_admin_settings_action(
-        db=db,
-        request=request,
-        admin=admin,
+    await log_request_audit_event(
+        db,
+        request,
         action="admin.database_setting_deleted",
+        actor_user_id=admin.id,
         resource_type="app_setting",
         resource_id=setting_id,
     )

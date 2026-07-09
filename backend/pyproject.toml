@@ -50,3 +50,6 @@ ignore = ["B008"]  # FastAPI Depends() in defaults
 dev = [
     "honcho>=2.0.0",
 ]
+
+[tool.pytest.ini_options]
+faulthandler_timeout = 30
