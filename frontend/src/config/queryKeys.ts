@@ -14,10 +14,12 @@ export const queryKeys = {
     },
     notifications: {
         all: ["notifications"] as const,
+        unreadCount: ["notifications", "unread-count"] as const,
         preferences: ["notifications", "preferences"] as const,
     },
     projects: {
         all: ["projects"] as const,
+        summary: ["projects", "summary"] as const,
         detail: (projectId: string) => ["projects", projectId] as const,
         tasks: (projectId: string) => ["projects", projectId, "tasks"] as const,
     },
@@ -60,7 +62,27 @@ export const queryKeys = {
         promptVersions: (templateId: string) => ["ai", "prompt-versions", templateId] as const,
         datasetCases: (datasetId: string) => ["ai", "dataset-cases", datasetId] as const,
     },
+    chat: {
+        all: ["chat"] as const,
+        conversations: ["chat", "conversations"] as const,
+        conversation: (conversationId: string) => ["chat", "conversation", conversationId] as const,
+        documents: ["chat", "documents"] as const,
+        documentsForProject: (projectId?: string | null) => ["chat", "documents", projectId ?? "_"] as const,
+        ingestionJobs: ["chat", "ingestion-jobs"] as const,
+        ingestionJobsForProject: (projectId?: string | null) => ["chat", "ingestion-jobs", projectId ?? "_"] as const,
+    },
 } as const;
+
+export function isUserScopedQuery(query: { queryKey: readonly unknown[] }): boolean {
+    return query.queryKey[0] !== queryKeys.auth.all[0];
+}
+
+export async function clearUserScopedQueryState(queryClient: QueryClient): Promise<void> {
+    await queryClient.cancelQueries({ predicate: isUserScopedQuery });
+    queryClient.removeQueries({ predicate: isUserScopedQuery });
+    // Prevent late mutation observers from repopulating removed user data.
+    queryClient.getMutationCache().clear();
+}
 
 export async function invalidateUserIdentity(queryClient: QueryClient) {
     await Promise.all([

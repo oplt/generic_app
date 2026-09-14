@@ -22,13 +22,14 @@ export type CalendarItem = {
 
 export async function listCalendarItems(
     startDate: string,
-    endDate: string
+    endDate: string,
+    options: RequestInit = {}
 ): Promise<CalendarItem[]> {
     const params = new URLSearchParams({
         start_date: startDate,
         end_date: endDate,
     });
-    return apiFetch(`/calendar/items?${params.toString()}`);
+    return apiFetch(`/calendar/items?${params.toString()}`, options);
 }
 
 export async function createCalendarItem(payload: {

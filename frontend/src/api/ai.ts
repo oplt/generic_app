@@ -126,6 +126,7 @@ export type AiEvaluationCase = {
     expected_chunk_ids: string[];
     expected_output_text: string | null;
     expected_output_json: Record<string, unknown> | null;
+    evaluation_type: "standard" | "unanswerable" | "injection" | "contradiction";
     notes: string | null;
     created_at: string;
 };
@@ -135,6 +136,7 @@ export type AiEvaluationRunItem = {
     ai_run_id: string;
     score: number;
     passed: boolean;
+    metrics: Record<string, number>;
     notes: string | null;
 };
 
@@ -146,6 +148,7 @@ export type AiEvaluationRun = {
     total_cases: number;
     passed_cases: number;
     average_score: number;
+    metrics: Record<string, number>;
     created_at: string;
     completed_at: string | null;
     items: AiEvaluationRunItem[];
@@ -157,6 +160,10 @@ export type AiOverview = {
     recent_runs: AiRun[];
     documents: AiDocument[];
     datasets: AiEvaluationDataset[];
+    prompt_templates_count: number;
+    recent_runs_count: number;
+    documents_count: number;
+    datasets_count: number;
 };
 
 export type AiChunkMatch = {
@@ -168,8 +175,8 @@ export type AiChunkMatch = {
     content: string;
 };
 
-export async function getAiOverview(): Promise<AiOverview> {
-    return apiFetch("/ai/overview");
+export async function getAiOverview(options: RequestInit = {}): Promise<AiOverview> {
+    return apiFetch("/ai/overview", options);
 }
 
 export async function listPromptVersions(templateId: string): Promise<AiPromptVersion[]> {
@@ -358,6 +365,7 @@ export async function createAiDatasetCase(
         expected_chunk_ids?: string[];
         expected_output_text?: string | null;
         expected_output_json?: Record<string, unknown> | null;
+        evaluation_type?: "standard" | "unanswerable" | "injection" | "contradiction";
         notes?: string | null;
     }
 ): Promise<AiEvaluationCase> {

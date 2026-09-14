@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { Box, Stack, Typography } from "@mui/material";
+import { Box, ButtonBase, Stack, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { formatTimeValue, getMinutesFromTimeString, getWeekItemColor } from "../calendarDisplay";
 import type { DashboardCalendarModel } from "../hooks/useDashboardCalendar";
@@ -137,10 +137,13 @@ const { anchorDate, itemsByDate, openDay } = m;
                                 {allDayItems.slice(0, 2).map((item) => {
                                     const colors = getWeekItemColor(item, theme);
                                     return (
-                                        <Box
+                                        <ButtonBase
                                             key={item.id}
                                             onClick={() => openDay(day)}
+                                            aria-label={`Open ${item.title} on ${day.format("dddd, MMMM D")}`}
                                             sx={{
+                                                display: "block",
+                                                textAlign: "left",
                                                 px: 1.25,
                                                 py: 0.75,
                                                 borderRadius: 2,
@@ -153,7 +156,7 @@ const { anchorDate, itemsByDate, openDay } = m;
                                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                                 {item.title}
                                             </Typography>
-                                        </Box>
+                                        </ButtonBase>
                                     );
                                 })}
                                 {allDayItems.length > 2 && (
@@ -211,10 +214,13 @@ const { anchorDate, itemsByDate, openDay } = m;
                         {timedWeekItems[dayIndex].map((item) => {
                             const colors = getWeekItemColor(item, theme);
                             return (
-                                <Box
+                                <ButtonBase
                                     key={item.id}
                                     onClick={() => openDay(day)}
+                                    aria-label={`Open ${item.title} on ${day.format("dddd, MMMM D")}`}
                                     sx={{
+                                        display: "block",
+                                        textAlign: "left",
                                         position: "absolute",
                                         top: item.top,
                                         left: 8,
@@ -236,7 +242,7 @@ const { anchorDate, itemsByDate, openDay } = m;
                                     <Typography variant="body2" sx={{ mt: 0.4 }}>
                                         {formatTimeValue(item.start_time ?? "09:00")}
                                     </Typography>
-                                </Box>
+                                </ButtonBase>
                             );
                         })}
                     </Box>

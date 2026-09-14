@@ -15,8 +15,10 @@ export type NotificationPreferences = {
     marketing_enabled: boolean;
 };
 
-export async function getNotifications(): Promise<Notification[]> {
-    return apiFetchItems<Notification>("/notifications");
+export type NotificationUnreadCount = { count: number };
+
+export async function getNotifications(options: RequestInit = {}): Promise<Notification[]> {
+    return apiFetchItems<Notification>("/notifications", options);
 }
 
 export async function markRead(id: string): Promise<void> {
@@ -25,6 +27,10 @@ export async function markRead(id: string): Promise<void> {
 
 export async function markAllRead(): Promise<void> {
     return apiFetch("/notifications/read-all", { method: "PATCH" });
+}
+
+export async function getUnreadCount(options: RequestInit = {}): Promise<NotificationUnreadCount> {
+    return apiFetch("/notifications/unread-count", options);
 }
 
 export async function getPreferences(): Promise<NotificationPreferences> {

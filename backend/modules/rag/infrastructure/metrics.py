@@ -37,6 +37,11 @@ rag_answer_latency_ms = Histogram(
 )
 rag_permission_denied_total = Counter("rag_permission_denied_total", "RAG permission denials")
 rag_vector_unavailable_total = Counter("rag_vector_unavailable_total", "Vector store unavailable")
+rag_vector_readiness_failure_total = Counter(
+    "rag_vector_readiness_failure_total",
+    "Pgvector readiness failures by reason",
+    ["reason"],
+)
 rag_retrieval_degraded_total = Counter(
     "rag_retrieval_degraded_total",
     "Retrieval completed in degraded mode",
@@ -49,9 +54,14 @@ rag_injection_chunks_filtered_total = Counter(
     "rag_injection_chunks_filtered_total",
     "Retrieved chunks excluded due to prompt-injection flags",
 )
-rag_json_fallback_total = Counter(
-    "rag_json_fallback_total",
-    "Retrieval queries that used JSON embedding fallback",
+rag_malware_scan_total = Counter("rag_malware_scan_total", "Documents sent to malware scanning")
+rag_malware_scan_failure_total = Counter(
+    "rag_malware_scan_failure_total",
+    "Malware scanner calls that failed or returned an invalid verdict",
+)
+rag_malware_rejected_total = Counter(
+    "rag_malware_rejected_total",
+    "Documents rejected by malware scanning",
 )
 rag_rerank_latency_ms = Histogram(
     "rag_rerank_latency_ms",

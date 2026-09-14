@@ -1,6 +1,7 @@
 # .understandignore — patterns for files/dirs to exclude from analysis
 node_modules/
 .git/
+.understand-anything/
 venv/
 .venv/
 __pycache__/

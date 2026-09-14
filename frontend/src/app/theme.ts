@@ -177,6 +177,14 @@ function buildTheme(mode: PaletteMode) {
                         minHeight: "100%",
                         scrollBehavior: "smooth",
                     },
+                    "@media (prefers-reduced-motion: reduce)": {
+                        "html, html *": {
+                            scrollBehavior: "auto !important",
+                            animationDuration: "0.01ms !important",
+                            animationIterationCount: "1 !important",
+                            transitionDuration: "0.01ms !important",
+                        },
+                    },
                     body: {
                         minHeight: "100vh",
                         margin: 0,

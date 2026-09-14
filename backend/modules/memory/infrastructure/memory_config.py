@@ -19,6 +19,7 @@ class MemoryConfig:
     mem0_project_id: str
     mem0_base_url: str
     app_id: str
+    recall_timeout_seconds: float = 2.0
 
     @classmethod
     def from_settings(cls) -> MemoryConfig:
@@ -35,6 +36,7 @@ class MemoryConfig:
             mem0_project_id=settings.MEM0_PROJECT_ID,
             mem0_base_url=settings.MEM0_BASE_URL,
             app_id=settings.APP_NAME,
+            recall_timeout_seconds=getattr(settings, "MEMORY_RECALL_TIMEOUT_SECONDS", 2.0),
         )
 
     @property
@@ -60,3 +62,5 @@ def validate_memory_config(config: MemoryConfig | None = None) -> None:
         raise RuntimeError("MEMORY_MIN_CONFIDENCE must be between 0 and 1")
     if resolved.session_ttl_days < 1:
         raise RuntimeError("MEMORY_SESSION_TTL_DAYS must be at least 1")
+    if resolved.recall_timeout_seconds <= 0:
+        raise RuntimeError("MEMORY_RECALL_TIMEOUT_SECONDS must be greater than 0")

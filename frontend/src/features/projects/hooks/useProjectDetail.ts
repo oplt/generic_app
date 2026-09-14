@@ -25,13 +25,30 @@ export function useProjectDetail() {
     const select = (task: ProjectTask) => { setSelectedTaskId(task.id); taskForm.reset(taskToDraft(task)); setTaskError(""); };
     const saveCache = (task: ProjectTask) => client.setQueryData<ProjectTask[]>(queryKeys.projects.tasks(projectId), (current) => sortTasks((current ?? []).filter((item) => item.id !== task.id).concat(task)));
     const createMutation = useMutation({ mutationFn: () => { const draft = taskForm.getValues(); return createProjectTask(projectId, { title: draft.title.trim(), description: draft.description.trim() || undefined, status: draft.status, priority: draft.priority, due_date: draft.due_date || null, assignee_id: draft.assignee_id || null }); },
-        onSuccess: (task) => { saveCache(task); reset(); void client.invalidateQueries({ queryKey: queryKeys.projects.all }); showToast({ message: "Task created.", severity: "success" }); },
+        onSuccess: (task) => { saveCache(task); reset(); void client.invalidateQueries({ queryKey: queryKeys.projects.all }); void client.invalidateQueries({ queryKey: queryKeys.projects.summary }); showToast({ message: "Task created.", severity: "success" }); },
         onError: (error) => setTaskError(getQueryErrorMessage(error, "Failed to create task.")) });
     const updateMutation = useMutation({ mutationFn: () => { const draft = taskForm.getValues(); return updateProjectTask(projectId, selectedTaskId ?? "", { title: draft.title.trim(), description: draft.description.trim() || null, status: draft.status, priority: draft.priority, due_date: draft.due_date || null, assignee_id: draft.assignee_id || null }); },
         onSuccess: (task) => { saveCache(task); select(task); showToast({ message: "Task updated.", severity: "success" }); },
         onError: (error) => setTaskError(getQueryErrorMessage(error, "Failed to update task.")) });
     const deleteMutation = useMutation({ mutationFn: () => deleteProjectTask(projectId, selectedTaskId ?? ""), onSuccess: () => { client.setQueryData<ProjectTask[]>(queryKeys.projects.tasks(projectId), (current) => (current ?? []).filter((task) => task.id !== selectedTaskId)); reset(); showToast({ message: "Task deleted.", severity: "success" }); }, onError: (error) => setTaskError(getQueryErrorMessage(error, "Failed to delete task.")) });
-    const reorderMutation = useMutation({ mutationFn: (payload: { columns: Array<{ status: ProjectTaskStatus; task_ids: string[] }> }) => reorderProjectTasks(projectId, payload), onSuccess: (tasks) => client.setQueryData(queryKeys.projects.tasks(projectId), sortTasks(tasks)), onError: () => { void client.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId) }); showToast({ message: "Failed to reorder tasks.", severity: "error" }); } });
+    const reorderMutation = useMutation({
+        mutationFn: (payload: { columns: Array<{ status: ProjectTaskStatus; task_ids: string[] }>; optimisticTasks: ProjectTask[] }) =>
+            reorderProjectTasks(projectId, { columns: payload.columns }),
+        onMutate: async ({ optimisticTasks }) => {
+            await client.cancelQueries({ queryKey: queryKeys.projects.tasks(projectId) });
+            const previous = client.getQueryData<ProjectTask[]>(queryKeys.projects.tasks(projectId));
+            client.setQueryData(queryKeys.projects.tasks(projectId), optimisticTasks);
+            return { previous };
+        },
+        onSuccess: (tasks) => client.setQueryData(queryKeys.projects.tasks(projectId), sortTasks(tasks)),
+        onError: (_error, _variables, context) => {
+            if (context?.previous) {
+                client.setQueryData(queryKeys.projects.tasks(projectId), context.previous);
+            }
+            showToast({ message: "Failed to reorder tasks. Your changes were restored.", severity: "error" });
+        },
+        onSettled: () => void client.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId) }),
+    });
     const submit = taskForm.handleSubmit(() => { if (selectedTaskId) updateMutation.mutate(); else createMutation.mutate(); });
     const drop = (status: ProjectTaskStatus, beforeId?: string, overrideId?: string) => {
         const activeId = overrideId ?? draggingTaskId; const tasks = tasksQuery.data; if (!activeId || !tasks || reorderMutation.isPending) return;
@@ -39,7 +56,17 @@ export function useProjectDetail() {
         const columns = Object.fromEntries(TASK_STATUS_OPTIONS.map((option) => [option.value, [] as ProjectTask[]])) as Record<ProjectTaskStatus, ProjectTask[]>;
         tasks.forEach((task) => { if (task.id !== activeId) columns[task.status].push(task); }); const target = columns[status]; const index = beforeId ? target.findIndex((task) => task.id === beforeId) : -1;
         target.splice(index < 0 ? target.length : index, 0, { ...active, status }); const next = sortTasks(TASK_STATUS_OPTIONS.flatMap((option) => columns[option.value].map((task, position) => ({ ...task, status: option.value, position }))));
-        client.setQueryData(queryKeys.projects.tasks(projectId), next); reorderMutation.mutate({ columns: TASK_STATUS_OPTIONS.map((option) => ({ status: option.value, task_ids: next.filter((task) => task.status === option.value).sort((a, b) => a.position - b.position).map((task) => task.id) })) }); setDraggingTaskId(null);
+        reorderMutation.mutate({
+            columns: TASK_STATUS_OPTIONS.map((option) => ({
+                status: option.value,
+                task_ids: next
+                    .filter((task) => task.status === option.value)
+                    .sort((a, b) => a.position - b.position)
+                    .map((task) => task.id),
+            })),
+            optimisticTasks: next,
+        });
+        setDraggingTaskId(null);
     };
     return { projectId, navigate, projectQuery, tasksQuery, usersQuery, orderedTasks, selectedTask, selectedTaskId, taskView, setTaskView,
         taskDraft, taskForm, taskError, draggingTaskId, setDraggingTaskId,

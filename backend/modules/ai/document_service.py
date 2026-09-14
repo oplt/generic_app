@@ -26,6 +26,16 @@ class AiDocumentService(AiBaseService):
             user.id, limit=limit, offset=offset
         )
 
+    async def list_documents_cursor(self, user: User, *, limit: int, cursor: str | None):
+        self._require_rag_documents()
+        return await LegacyAiDocumentService(self.db).list_documents_cursor(
+            user.id, limit=limit, cursor=cursor
+        )
+
+    async def count_documents(self, user: User) -> int:
+        self._require_rag_documents()
+        return await LegacyAiDocumentService(self.db).repo.count_documents_for_user(user.id)
+
     async def create_document_from_text(
         self,
         user: User,

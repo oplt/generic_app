@@ -1,4 +1,4 @@
-import { useMemo, useState, type PropsWithChildren } from "react";
+import { useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { ThemeProvider, CssBaseline, useMediaQuery } from "@mui/material";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { LocalizationProvider } from "@mui/x-date-pickers";
@@ -10,8 +10,23 @@ import { SnackbarProvider } from "./SnackbarProvider";
 import { ColorModeContext } from "./colorModeContext";
 
 export function AppProviders({ children }: PropsWithChildren) {
-    const [colorMode, setColorMode] = useState<ColorMode>("system");
+    const [colorMode, setColorMode] = useState<ColorMode>(() => {
+        try {
+            const stored = window.localStorage.getItem("generic-app-color-mode");
+            return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+        } catch {
+            return "system";
+        }
+    });
     const prefersDark = useMediaQuery("(prefers-color-scheme: dark)");
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem("generic-app-color-mode", colorMode);
+        } catch {
+            // Storage can be unavailable in privacy-restricted browser contexts.
+        }
+    }, [colorMode]);
 
     const theme = useMemo(() => {
         if (colorMode === "system") return prefersDark ? darkTheme : lightTheme;

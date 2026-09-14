@@ -1,7 +1,7 @@
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_scalars
+from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_cursor_scalars, paginate_scalars
 from backend.modules.notifications.models import Notification, NotificationPreference
 
 
@@ -40,6 +40,19 @@ class NotificationsRepository:
         )
         return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
+    async def list_for_user_cursor(
+        self, user_id: str, *, limit: int, cursor: str | None
+    ) -> tuple[list[Notification], str | None, bool]:
+        stmt = select(Notification).where(Notification.user_id == user_id)
+        return await paginate_cursor_scalars(
+            self.db,
+            stmt,
+            limit=limit,
+            cursor=cursor,
+            sort_column=Notification.created_at,
+            id_column=Notification.id,
+        )
+
     async def get_by_id(self, notification_id: str) -> Notification | None:
         result = await self.db.execute(
             select(Notification).where(Notification.id == notification_id)
@@ -56,6 +69,15 @@ class NotificationsRepository:
             .where(Notification.user_id == user_id, Notification.is_read.is_(False))
             .values(is_read=True)
         )
+
+    async def unread_count(self, user_id: str) -> int:
+        count = await self.db.scalar(
+            select(func.count(Notification.id)).where(
+                Notification.user_id == user_id,
+                Notification.is_read.is_(False),
+            )
+        )
+        return int(count or 0)
 
     async def get_or_create_preferences(self, user_id: str) -> NotificationPreference:
         result = await self.db.execute(

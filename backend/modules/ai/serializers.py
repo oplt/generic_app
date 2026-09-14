@@ -36,6 +36,10 @@ def run_to_response(run) -> AiRunResponse:
         output_tokens=run.output_tokens,
         total_tokens=run.total_tokens,
         estimated_cost_micros=run.estimated_cost_micros,
+        provider_attempts=getattr(run, "provider_attempts", 0),
+        provider_retry_count=getattr(run, "provider_retry_count", 0),
+        provider_last_status_code=getattr(run, "provider_last_status_code", None),
+        provider_deadline_at=getattr(run, "provider_deadline_at", None),
         error_message=run.error_message,
         review_status=run.review_status,
         created_at=run.created_at,
@@ -106,6 +110,7 @@ def _dataset_case_to_response(case) -> AiEvaluationCaseResponse:
         expected_chunk_ids=case.expected_chunk_ids_json,
         expected_output_text=case.expected_output_text,
         expected_output_json=case.expected_output_json,
+        evaluation_type=getattr(case, "evaluation_type", "standard"),
         notes=case.notes,
         created_at=case.created_at,
     )

@@ -1,0 +1,1 @@
+"""External chat provider adapters."""

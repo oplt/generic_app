@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import { describe, expect, it } from "vitest";
 
-import { getCalendarQueryRange, shiftCalendarAnchor } from "./calendarRange";
+import { CALENDAR_MAX_RANGE_DAYS, getCalendarQueryRange, shiftCalendarAnchor } from "./calendarRange";
 
 describe("calendar range behavior", () => {
     const anchor = dayjs("2026-07-15");
@@ -13,6 +13,8 @@ describe("calendar range behavior", () => {
     it("pads month and twelve-month ranges to calendar weeks", () => {
         expect(getCalendarQueryRange("month", anchor)).toEqual({ start: "2026-06-28", end: "2026-08-01" });
         expect(getCalendarQueryRange("twelve_month", anchor)).toEqual({ start: "2026-06-28", end: "2027-07-03" });
+        const range = getCalendarQueryRange("twelve_month", anchor);
+        expect(dayjs(range.end).diff(dayjs(range.start), "day")).toBeLessThanOrEqual(CALENDAR_MAX_RANGE_DAYS);
     });
 
     it("shifts each view by its navigation unit", () => {

@@ -7,14 +7,13 @@ from backend.modules.memory.application.memory_router import MemoryRouter, Route
 from backend.modules.memory.domain.policies import contains_secret, is_ephemeral_statement
 
 EXTRACT_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(
-        r"(?i)(user prefers? .{5,120}|prefers? (beginner|detailed|concise).{0,80})"
-    ),
+    re.compile(r"(?i)(user prefers? .{5,120}|prefers? (beginner|detailed|concise).{0,80})"),
     re.compile(r"(?i)(building|working on|creating) (a |an )?.{5,80}"),
     re.compile(r"(?i)(wants?|needs?) .{0,40}(examples?|fastapi|postgres|react)"),
     re.compile(r"(?i)(for project .{3,60},? (the )?(chosen|using|db is) .{3,80})"),
     re.compile(r"(?i)(current plan|next step|working on task)[:.]? .{5,120}"),
 )
+EXTRACTION_POLICY_VERSION = "memory-extract-v2"
 
 
 @dataclass(slots=True)
@@ -22,6 +21,7 @@ class ExtractionCandidate:
     content: str
     routed: RoutedMemory
     source_message_id: str | None = None
+    requires_confirmation: bool = False
 
 
 class MemoryExtractor:
@@ -38,7 +38,7 @@ class MemoryExtractor:
         source_message_id: str | None = None,
     ) -> list[ExtractionCandidate]:
         candidates: list[ExtractionCandidate] = []
-        for text in (user_message, assistant_message):
+        for text, speaker in ((user_message, "user"), (assistant_message, "assistant")):
             for match in self._iter_sentences(text):
                 normalized = match.strip()
                 if len(normalized) < 12:
@@ -55,6 +55,7 @@ class MemoryExtractor:
                         content=normalized,
                         routed=routed,
                         source_message_id=source_message_id,
+                        requires_confirmation=speaker == "assistant",
                     )
                 )
         return self._dedupe_candidates(candidates)

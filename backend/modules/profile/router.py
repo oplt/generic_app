@@ -1,5 +1,4 @@
 import mimetypes
-from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -9,6 +8,7 @@ from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
 from backend.core.config import settings
 from backend.core.storage import ObjectStorageError, StorageNotConfiguredError, object_storage
+from backend.core.uploads import UploadTooLargeError, detect_image_content_type, read_upload_limited
 from backend.modules.identity_access.models import User
 from backend.modules.profile.schemas import ProfileResponse, ProfileUpdate
 from backend.modules.profile.serializers import profile_to_response
@@ -17,10 +17,8 @@ from backend.modules.profile.service import ProfileService
 router = APIRouter()
 
 
-def _build_avatar_object_key(user_id: str, filename: str | None, content_type: str) -> str:
-    suffix = Path(filename or "").suffix.lower()
-    if not suffix:
-        suffix = mimetypes.guess_extension(content_type) or ".bin"
+def _build_avatar_object_key(user_id: str, content_type: str) -> str:
+    suffix = mimetypes.guess_extension(content_type) or ".bin"
     return f"avatars/{user_id}/{uuid4().hex}{suffix}"
 
 
@@ -52,24 +50,25 @@ async def upload_avatar(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Avatar upload only supports image files")
-
-    payload = await file.read()
+    try:
+        payload = await read_upload_limited(
+            file,
+            max_bytes=settings.STORAGE_AVATAR_MAX_BYTES,
+        )
+    except UploadTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     if not payload:
         raise HTTPException(status_code=400, detail="Uploaded avatar file is empty")
-    if len(payload) > settings.STORAGE_AVATAR_MAX_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Avatar exceeds the maximum size of {settings.STORAGE_AVATAR_MAX_BYTES} bytes",
-        )
+    detected_content_type = detect_image_content_type(payload)
+    if detected_content_type is None:
+        raise HTTPException(status_code=400, detail="Avatar is not a supported image file")
 
-    object_key = _build_avatar_object_key(current_user.id, file.filename, file.content_type)
+    object_key = _build_avatar_object_key(current_user.id, detected_content_type)
     try:
         avatar_url = await object_storage.upload_bytes(
             object_key=object_key,
             body=payload,
-            content_type=file.content_type,
+            content_type=detected_content_type,
         )
     except StorageNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -1,9 +1,9 @@
-from fastapi import Request
+from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
-from backend.core.cache import redis_client
 from backend.core.config import settings
+from backend.core.rate_limit import check_rate_limit
 
 
 class PublicRateLimitMiddleware(BaseHTTPMiddleware):
@@ -16,15 +16,19 @@ class PublicRateLimitMiddleware(BaseHTTPMiddleware):
 
         client_ip = request.client.host if request.client else "unknown"
         key = f"rate_limit:public:{client_ip}"
-        count = await redis_client.incr(key)
-        if count == 1:
-            await redis_client.expire(key, settings.PUBLIC_RATE_LIMIT_WINDOW_SECONDS)
-        if count > settings.PUBLIC_RATE_LIMIT_REQUESTS:
-            ttl = await redis_client.ttl(key)
-            return JSONResponse(
-                status_code=429,
-                content={"detail": f"Too many requests. Try again in {ttl} seconds."},
-                headers={"Retry-After": str(ttl)},
+        try:
+            await check_rate_limit(
+                key,
+                settings.PUBLIC_RATE_LIMIT_REQUESTS,
+                settings.PUBLIC_RATE_LIMIT_WINDOW_SECONDS,
             )
+        except HTTPException as exc:
+            if exc.status_code == 429:
+                return JSONResponse(
+                    status_code=exc.status_code,
+                    content={"detail": exc.detail},
+                    headers=exc.headers,
+                )
+            raise
 
         return await call_next(request)

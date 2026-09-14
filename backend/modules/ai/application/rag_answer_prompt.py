@@ -4,13 +4,14 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 
 from backend.core.config import settings
-from backend.core.pagination import MAX_PAGE_LIMIT
+from backend.modules.ai.prompt_cache import resolve_prompt
 from backend.modules.ai.repository import AiRepository
 from backend.modules.identity_access.models import User
 
 DEFAULT_RAG_ANSWER_SYSTEM_PROMPT = (
     "You are a helpful assistant. Answer using only the provided context when relevant. "
-    "Cite sources using the [Source N] labels in the document context (include filename when helpful). "
+    "Cite sources using the [Source N] labels in the document context "
+    "(include filename when helpful). "
     "If the context does not contain enough information to answer confidently, say so "
     "explicitly instead of guessing."
 )
@@ -67,22 +68,10 @@ async def resolve_rag_answer_prompt(repo: AiRepository, user: User) -> RagAnswer
     if not template_key:
         return _default_prompt_spec()
 
-    template = await repo.get_prompt_template_by_key_for_user(user.id, template_key)
-    if not template:
+    resolved = await resolve_prompt(repo, user, template_key=template_key)
+    if not resolved:
         return _default_prompt_spec()
-
-    versions, _ = await repo.list_prompt_versions(
-        template.id, limit=MAX_PAGE_LIMIT, offset=0
-    )
-    version = None
-    if template.active_version_id:
-        version = next((item for item in versions if item.id == template.active_version_id), None)
-    if version is None:
-        version = next((item for item in versions if item.is_published), None)
-    if version is None and versions:
-        version = versions[0]
-    if version is None:
-        return _default_prompt_spec()
+    template, version = resolved
 
     return RagAnswerPromptSpec(
         template_id=template.id,

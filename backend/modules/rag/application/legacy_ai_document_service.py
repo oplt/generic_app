@@ -7,13 +7,13 @@ from datetime import datetime
 from typing import Any
 
 from backend.core.pagination import DEFAULT_PAGE_LIMIT
+from backend.core.uploads import UploadTooLargeError, read_upload_limited
 from backend.modules.rag.application.document_ingestion_service import DocumentIngestionService
 from backend.modules.rag.application.retrieval_service import RetrievalService
 from backend.modules.rag.domain.enums import DocumentStatus
 from backend.modules.rag.infrastructure.models import RagDocument
 from backend.modules.rag.infrastructure.rag_config import RagConfig
 from backend.modules.rag.infrastructure.repositories import RagRepository
-from backend.modules.rag.workers import queue_document_indexing
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +43,8 @@ def _map_ingestion_status(rag_status: str) -> str:
     if rag_status == DocumentStatus.FAILED.value:
         return "failed"
     if rag_status in {
+        DocumentStatus.VALIDATING.value,
+        DocumentStatus.EXTRACTING.value,
         DocumentStatus.PARSING.value,
         DocumentStatus.CHUNKING.value,
         DocumentStatus.EMBEDDING.value,
@@ -105,6 +107,18 @@ class LegacyAiDocumentService:
         )
         return [rag_document_to_ai_view(doc) for doc in documents], total
 
+    async def list_documents_cursor(
+        self,
+        user_id: str,
+        *,
+        limit: int,
+        cursor: str | None,
+    ) -> tuple[list[AiDocumentView], str | None, bool]:
+        documents, next_cursor, has_more = await self.repo.list_documents_for_user_cursor(
+            user_id, project_id=None, limit=limit, cursor=cursor
+        )
+        return [rag_document_to_ai_view(doc) for doc in documents], next_cursor, has_more
+
     async def create_from_text(
         self,
         *,
@@ -118,7 +132,7 @@ class LegacyAiDocumentService:
     ) -> AiDocumentView:
         payload = content.encode("utf-8")
         resolved_filename = filename or _filename_for_text(title, content_type)
-        document, job, raw_content = await self.ingestion.upload_document(
+        document, job = await self.ingestion.upload_document(
             user_id=user_id,
             filename=resolved_filename,
             content=payload,
@@ -130,11 +144,6 @@ class LegacyAiDocumentService:
                 "size_bytes": len(payload),
             },
         )
-        queue_document_indexing(
-            document_id=document.id,
-            user_id=user_id,
-            job_id=job.id,
-        )
         return rag_document_to_ai_view(document)
 
     async def create_from_upload(
@@ -144,11 +153,14 @@ class LegacyAiDocumentService:
         file: UploadFile,
         description: str | None,
     ) -> AiDocumentView:
-        content = await file.read()
+        try:
+            content = await read_upload_limited(file, max_bytes=self.config.max_file_bytes)
+        except UploadTooLargeError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
         if not content:
             raise HTTPException(status_code=400, detail="Uploaded document file is empty")
         title = file.filename or "Untitled document"
-        document, job, raw_content = await self.ingestion.upload_document(
+        document, job = await self.ingestion.upload_document(
             user_id=user_id,
             filename=file.filename or "upload.bin",
             content=content,
@@ -158,11 +170,6 @@ class LegacyAiDocumentService:
                 "description": description,
                 "size_bytes": len(content),
             },
-        )
-        queue_document_indexing(
-            document_id=document.id,
-            user_id=user_id,
-            job_id=job.id,
         )
         return rag_document_to_ai_view(document)
 
@@ -183,13 +190,6 @@ class LegacyAiDocumentService:
         else:
             candidate_ids = None
 
-        doc_ids_for_titles = set(document_ids or [])
-        allowed_doc_map = {}
-        for doc_id in doc_ids_for_titles:
-            document = await self.repo.get_document(doc_id)
-            if document and document.user_id == user_id:
-                allowed_doc_map[doc_id] = document
-
         filters = {"document_ids": candidate_ids} if candidate_ids else None
         outcome = await self.retrieval.retrieve(
             query,
@@ -202,8 +202,7 @@ class LegacyAiDocumentService:
             {
                 "document_id": match.document_id,
                 "chunk_id": match.chunk_id,
-                "document_title": match.filename
-                or allowed_doc_map[match.document_id].original_filename,
+                "document_title": match.filename or "Untitled document",
                 "chunk_index": match.chunk_index,
                 "score": match.score,
                 "content": match.content,

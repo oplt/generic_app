@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { QueryClient } from "@tanstack/react-query";
 
-import { queryKeys } from "./queryKeys";
+import { clearUserScopedQueryState, queryKeys } from "./queryKeys";
 
 describe("queryKeys", () => {
     it("builds stable auth and user identity keys", () => {
@@ -55,5 +56,18 @@ describe("queryKeys", () => {
         expect(queryKeys.settings.database).toEqual(["settings", "database"]);
         expect(queryKeys.observability.links).toEqual(["observability", "links"]);
         expect(queryKeys.observability.status).toEqual(["observability", "status"]);
+    });
+
+    it("clears user-scoped cache while preserving auth state", async () => {
+        const client = new QueryClient();
+        client.setQueryData(queryKeys.auth.me, { id: "user-a" });
+        client.setQueryData(queryKeys.projects.all, [{ id: "private-project" }]);
+        client.setQueryData(queryKeys.notifications.all, [{ id: "private-notification" }]);
+
+        await clearUserScopedQueryState(client);
+
+        expect(client.getQueryData(queryKeys.auth.me)).toEqual({ id: "user-a" });
+        expect(client.getQueryData(queryKeys.projects.all)).toBeUndefined();
+        expect(client.getQueryData(queryKeys.notifications.all)).toBeUndefined();
     });
 });

@@ -112,16 +112,24 @@ async def list_audit_logs(
 ):
     _require_memory_enabled()
     service = MemoryService(db)
-    logs, total = await service.audit_repo.list_for_user(
-        current_user.id,
-        limit=pagination.limit,
-        offset=pagination.offset,
-    )
+    next_cursor = None
+    has_more = False
+    if getattr(pagination, "cursor", None):
+        logs, next_cursor, has_more = await service.audit_repo.list_for_user_cursor(
+            current_user.id, limit=pagination.limit, cursor=pagination.cursor
+        )
+        total = None
+    else:
+        logs, total = await service.audit_repo.list_for_user(
+            current_user.id, limit=pagination.limit, offset=pagination.offset
+        )
     return paginated_response(
         [MemoryAuditLogResponse.model_validate(log) for log in logs],
         total=total,
         limit=pagination.limit,
         offset=pagination.offset,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
 

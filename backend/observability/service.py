@@ -8,8 +8,8 @@ from sqlalchemy import text
 from backend.core.cache import (
     OBSERVABILITY_STATUS_CACHE_KEY,
     cache_get_or_load_model,
+    redis_client,
 )
-from backend.core.cache import redis_client
 from backend.core.config import Settings
 from backend.db.session import engine
 from backend.observability.schemas import (
@@ -19,6 +19,7 @@ from backend.observability.schemas import (
     ObservabilityStatusItem,
     ObservabilityToolLink,
 )
+from backend.workers.readiness import worker_readiness
 
 TECHNICAL_ACCESS_REQUIRED = True
 
@@ -79,9 +80,7 @@ class ObservabilityService:
 
         def dashboard(path: str) -> ObservabilityToolLink:
             url = (
-                build_public_url(self._settings.GRAFANA_PUBLIC_URL, path)
-                if path.strip()
-                else None
+                build_public_url(self._settings.GRAFANA_PUBLIC_URL, path) if path.strip() else None
             )
             return _tool_link(url, has_technical_access)
 
@@ -116,13 +115,19 @@ class ObservabilityService:
         grafana_url = build_public_url(self._settings.GRAFANA_PUBLIC_URL)
         tempo_url = build_public_url(self._settings.TEMPO_PUBLIC_URL)
 
-        database, cache, prometheus, grafana, tempo = await asyncio.gather(
+        database, cache, prometheus, grafana, tempo, workers = await asyncio.gather(
             self._database_status(checked_at),
             self._cache_status(checked_at),
             self._http_status(prometheus_url, "Prometheus", checked_at),
             self._http_status(grafana_url, "Grafana", checked_at),
             self._http_status(tempo_url, "Tempo", checked_at),
+            worker_readiness(),
         )
+
+        worker_status = {
+            "ok": "healthy",
+            "error": "down",
+        }.get(workers.status, "unknown")
 
         return ObservabilityStatus(
             api=ObservabilityStatusItem(
@@ -138,14 +143,27 @@ class ObservabilityService:
             database=database,
             cache=cache,
             workers=ObservabilityStatusItem(
-                status="unknown",
-                detail="Worker queue depth check is not configured",
-                queue_depth=None,
+                status=worker_status,
+                detail=workers.detail,
+                queue_depth=workers.queue_depth,
+                oldest_job_age_seconds=workers.oldest_job_age_seconds,
+                retry_count=workers.retry_count,
+                failed_job_count=workers.failed_job_count,
+                last_successful_heartbeat_at=workers.last_successful_heartbeat_at,
                 last_checked_at=checked_at,
             ),
             background_jobs=ObservabilityStatusItem(
-                status="unknown",
-                detail="Background job health check is not configured",
+                status=worker_status,
+                detail=(
+                    "Application job metrics are available"
+                    if workers.retry_count is not None
+                    else "Application job metrics are unavailable"
+                ),
+                queue_depth=workers.queue_depth,
+                oldest_job_age_seconds=workers.oldest_job_age_seconds,
+                retry_count=workers.retry_count,
+                failed_job_count=workers.failed_job_count,
+                last_successful_heartbeat_at=workers.last_successful_heartbeat_at,
                 last_checked_at=checked_at,
             ),
             error_rate=ObservabilityStatusItem(

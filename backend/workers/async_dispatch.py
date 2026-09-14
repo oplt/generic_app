@@ -6,7 +6,7 @@ import asyncio
 import logging
 import threading
 from collections.abc import Callable, Coroutine
-from typing import Any, TypeVar
+from typing import Any
 
 from backend.core.config import settings
 
@@ -14,10 +14,7 @@ logger = logging.getLogger(__name__)
 
 _eager_warning_logged = False
 
-T = TypeVar("T")
-
-
-def run_async_in_sync_context(coro: Coroutine[Any, Any, T]) -> T:
+def run_async_in_sync_context[T](coro: Coroutine[Any, Any, T]) -> T:
     """Run a coroutine from a sync worker entrypoint (Celery task thread)."""
     return asyncio.run(coro)
 
@@ -35,6 +32,10 @@ def dispatch_background_sync_job(
     global _eager_warning_logged
 
     if settings.CELERY_TASK_ALWAYS_EAGER:
+        if settings.is_production:
+            raise RuntimeError(
+                "CELERY_TASK_ALWAYS_EAGER is forbidden in production; run a Celery worker"
+            )
         if not _eager_warning_logged:
             logger.warning(
                 "CELERY_TASK_ALWAYS_EAGER=true: %s jobs run in background threads inside "

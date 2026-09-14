@@ -6,9 +6,10 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from backend.core.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT
+from backend.core.pagination import DEFAULT_PAGE_LIMIT
 from backend.modules.ai.base_service import AiBaseService
 from backend.modules.ai.models import AiPromptTemplate, AiPromptVersion
+from backend.modules.ai.prompt_cache import invalidate_prompt_resolution_cache, resolve_prompt
 from backend.modules.identity_access.models import User
 
 PLACEHOLDER_PATTERN = re.compile(r"{{\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*}}")
@@ -54,6 +55,7 @@ class AiPromptService(AiBaseService):
         )
         await self.db.commit()
         await self.db.refresh(template)
+        await invalidate_prompt_resolution_cache(user.id, template_key=template.key)
         return template
 
     async def update_prompt_template(self, user: User, template_id: str, updates: dict[str, Any]):
@@ -72,10 +74,12 @@ class AiPromptService(AiBaseService):
                     status_code=422,
                     detail="Only published versions can be activated",
                 )
+        template_key = template.key
         for field, value in updates.items():
             setattr(template, field, value)
         await self.db.commit()
         await self.db.refresh(template)
+        await invalidate_prompt_resolution_cache(user.id, template_key=template_key)
         return template
 
     async def create_prompt_version(self, user: User, template_id: str, payload: dict[str, Any]):
@@ -107,6 +111,11 @@ class AiPromptService(AiBaseService):
         await self.db.commit()
         await self.db.refresh(version)
         await self.db.refresh(template)
+        await invalidate_prompt_resolution_cache(
+            user.id,
+            template_key=template.key,
+            version_id=version.id,
+        )
         return version
 
     async def update_prompt_version(
@@ -125,6 +134,11 @@ class AiPromptService(AiBaseService):
                 setattr(version, field, value)
         await self.db.commit()
         await self.db.refresh(version)
+        await invalidate_prompt_resolution_cache(
+            user.id,
+            template_key=template.key,
+            version_id=version.id,
+        )
         return version
 
     async def list_prompt_versions(
@@ -148,35 +162,25 @@ class AiPromptService(AiBaseService):
         prompt_version_id: str | None,
     ) -> tuple[AiPromptTemplate | None, AiPromptVersion]:
         if prompt_version_id:
-            version = await self.repo.get_prompt_version(prompt_version_id)
-            if not version:
-                raise HTTPException(status_code=404, detail="Prompt version not found")
-            template = await self.repo.get_prompt_template_for_user(
-                user.id, version.prompt_template_id
+            resolved = await resolve_prompt(
+                self.repo,
+                user,
+                version_id=prompt_version_id,
             )
-            if not template:
-                raise HTTPException(status_code=404, detail="Prompt template not found")
-            return template, version
+            if not resolved:
+                raise HTTPException(status_code=404, detail="Prompt version not found")
+            return resolved
         if not prompt_template_key:
             raise HTTPException(
                 status_code=422,
                 detail="prompt_template_key or prompt_version_id is required",
             )
-        template = await self.repo.get_prompt_template_by_key_for_user(user.id, prompt_template_key)
-        if not template:
-            raise HTTPException(status_code=404, detail="Prompt template not found")
-        versions, _ = await self.repo.list_prompt_versions(
-            template.id, limit=MAX_PAGE_LIMIT, offset=0
-        )
-        version = None
-        if template.active_version_id:
-            version = next(
-                (item for item in versions if item.id == template.active_version_id), None
+        resolved = await resolve_prompt(self.repo, user, template_key=prompt_template_key)
+        if not resolved:
+            template = await self.repo.get_prompt_template_by_key_for_user(
+                user.id, prompt_template_key
             )
-        if version is None:
-            version = next((item for item in versions if item.is_published), None)
-        if version is None and versions:
-            version = versions[0]
-        if version is None:
+            if not template:
+                raise HTTPException(status_code=404, detail="Prompt template not found")
             raise HTTPException(status_code=422, detail="This prompt template has no versions yet")
-        return template, version
+        return resolved

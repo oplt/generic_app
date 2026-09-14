@@ -30,6 +30,7 @@ from backend.modules.identity_access.schemas import (
     VerifyEmailRequest,
 )
 from backend.modules.identity_access.service import IdentityService
+from backend.observability.workflow import observe_async_workflow
 
 router = APIRouter()
 logger = logging.getLogger("backend.auth")
@@ -101,7 +102,9 @@ def _build_user(user: User) -> AuthUserResponse:
 
 # ------------------------------------------------------------------ core auth
 
+
 @router.post("/sign-up", response_model=GenericMessageResponse, status_code=202)
+@observe_async_workflow("auth", "sign_up")
 async def sign_up(
     payload: SignUpRequest,
     request: Request,
@@ -131,6 +134,7 @@ async def sign_up(
 
 
 @router.post("/sign-in", response_model=AuthSessionResponse)
+@observe_async_workflow("auth", "sign_in")
 async def sign_in(
     payload: SignInRequest,
     request: Request,
@@ -154,10 +158,11 @@ async def sign_in(
         if exc.status_code in {401, 403}:
             await increment_rate_limit(failure_key, settings.AUTH_FAILURE_WINDOW_SECONDS)
             logger.warning(
-                "authentication_failed email=%s ip=%s status=%s",
-                payload.email,
-                request.client.host if request.client else "unknown",
-                exc.status_code,
+                "authentication_failed",
+                extra={
+                    "event_name": "authentication_failed",
+                    "status_code": exc.status_code,
+                },
             )
         raise
 
@@ -171,6 +176,7 @@ async def sign_in(
 
 
 @router.post("/refresh", response_model=AuthSessionResponse)
+@observe_async_workflow("auth", "refresh")
 async def refresh(
     response: Response,
     refresh_token: str | None = Cookie(default=None, alias=settings.REFRESH_COOKIE_NAME),
@@ -189,6 +195,7 @@ async def refresh(
 
 
 @router.post("/logout", status_code=204)
+@observe_async_workflow("auth", "logout")
 async def logout(
     response: Response,
     refresh_token: str | None = Cookie(default=None, alias=settings.REFRESH_COOKIE_NAME),
@@ -201,13 +208,16 @@ async def logout(
 
 
 @router.get("/me", response_model=AuthUserResponse)
+@observe_async_workflow("auth", "me")
 async def me(current_user: User = Depends(get_authenticated_user)):
     return _build_user(current_user)
 
 
 # ------------------------------------------------------------------ email verification
 
+
 @router.post("/verify-email", status_code=204)
+@observe_async_workflow("auth", "verify_email")
 async def verify_email(
     payload: VerifyEmailRequest,
     request: Request,
@@ -223,6 +233,7 @@ async def verify_email(
 
 
 @router.post("/resend-verification", status_code=204)
+@observe_async_workflow("auth", "resend_verification")
 async def resend_verification(
     payload: ResendVerificationRequest,
     request: Request,
@@ -239,7 +250,9 @@ async def resend_verification(
 
 # ------------------------------------------------------------------ password reset
 
+
 @router.post("/forgot-password", status_code=204)
+@observe_async_workflow("auth", "forgot_password")
 async def forgot_password(
     payload: ForgotPasswordRequest,
     request: Request,
@@ -258,6 +271,7 @@ async def forgot_password(
 
 
 @router.post("/reset-password", status_code=204)
+@observe_async_workflow("auth", "reset_password")
 async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
     service = IdentityService(db)
     await service.reset_password(payload.token, payload.new_password)
@@ -265,7 +279,9 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depen
 
 # ------------------------------------------------------------------ MFA
 
+
 @router.post("/mfa/enable", response_model=MfaEnableResponse)
+@observe_async_workflow("auth", "mfa_enable")
 async def mfa_enable(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_authenticated_user),
@@ -275,6 +291,7 @@ async def mfa_enable(
 
 
 @router.post("/mfa/verify", status_code=204)
+@observe_async_workflow("auth", "mfa_verify")
 async def mfa_verify(
     payload: MfaVerifyRequest,
     db: AsyncSession = Depends(get_db),
@@ -285,6 +302,7 @@ async def mfa_verify(
 
 
 @router.post("/mfa/disable", status_code=204)
+@observe_async_workflow("auth", "mfa_disable")
 async def mfa_disable(
     payload: MfaDisableRequest,
     db: AsyncSession = Depends(get_db),

@@ -79,6 +79,39 @@ def test_post_with_retry_retries_transient_status_codes(monkeypatch) -> None:
     sleep_mock.assert_awaited_once_with(1)
 
 
+def test_post_with_retry_does_not_retry_ambiguous_non_idempotent_request() -> None:
+    client = MagicMock()
+    client.post = AsyncMock(return_value=MagicMock(status_code=503, text="unavailable"))
+
+    result = asyncio.run(
+        providers._post_with_retry(
+            client,
+            "/chat/completions",
+            idempotent=False,
+            provider_key="test",
+            operation="generation",
+            json={},
+        )
+    )
+
+    assert result.status_code == 503
+    client.post.assert_awaited_once()
+
+
+def test_retry_after_header_controls_retry_delay(monkeypatch) -> None:
+    first = MagicMock(status_code=429, text="rate limited")
+    first.headers = {"Retry-After": "0"}
+    second = MagicMock(status_code=200, text="ok")
+    client = MagicMock()
+    client.post = AsyncMock(side_effect=[first, second])
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(providers.asyncio, "sleep", sleep_mock)
+
+    asyncio.run(providers._post_with_retry(client, "/embeddings", json={}))
+
+    sleep_mock.assert_awaited_once_with(0.0)
+
+
 def test_close_ai_provider_http_clients_closes_open_clients() -> None:
     open_client = MagicMock()
     open_client.is_closed = False

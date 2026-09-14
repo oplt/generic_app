@@ -3,25 +3,26 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Box, Skeleton, Stack } from "@mui/material";
 import { ProtectedRoute } from "../components/guards/ProtectedRoute";
 import { useAuth } from "../hooks/useAuth";
-import AuthHomePage from "../pages/AuthHomePage";
 
+const AuthHomePage = lazy(() => import("../features/auth/views/AuthHomeView"));
 const AppLayout = lazy(() =>
     import("../components/layout/AppLayout").then((module) => ({ default: module.AppLayout }))
 );
-const DashboardPage = lazy(() => import("../pages/DashboardPage"));
-const CalendarPage = lazy(() => import("../pages/CalendarPage"));
-const ProjectsPage = lazy(() => import("../pages/ProjectsPage"));
-const ProjectDetailPage = lazy(() => import("../pages/ProjectDetailPage"));
-const PlatformPage = lazy(() => import("../pages/PlatformPage"));
-const ProfilePage = lazy(() => import("../pages/ProfilePage"));
-const NotificationsPage = lazy(() => import("../pages/NotificationsPage"));
-const ObservabilityPage = lazy(() => import("../pages/ObservabilityPage"));
-const ResetPasswordPage = lazy(() => import("../pages/ResetPasswordPage"));
-const VerifyEmailPage = lazy(() => import("../pages/VerifyEmailPage"));
-const AdminUsersPage = lazy(() => import("../pages/AdminUsersPage"));
-const AdminPlatformPage = lazy(() => import("../pages/AdminPlatformPage"));
-const AdminSettingsPage = lazy(() => import("../pages/AdminSettingsPage"));
-const AiStudioPage = lazy(() => import("../pages/AiStudioPage"));
+const DashboardPage = lazy(() => import("../features/dashboard/views/DashboardView"));
+const CalendarPage = lazy(() => import("../features/calendar/views/CalendarView"));
+const ProjectsPage = lazy(() => import("../features/projects/views/ProjectsView"));
+const ProjectDetailPage = lazy(() => import("../features/projects/views/ProjectDetailView"));
+const PlatformPage = lazy(() => import("../features/platform/views/PlatformView"));
+const ProfilePage = lazy(() => import("../features/profile/views/ProfileView"));
+const NotificationsPage = lazy(() => import("../features/notifications/views/NotificationsView"));
+const ObservabilityPage = lazy(() => import("../features/observability/views/ObservabilityView"));
+const ResetPasswordPage = lazy(() => import("../features/auth/views/ResetPasswordView"));
+const VerifyEmailPage = lazy(() => import("../features/auth/views/VerifyEmailView"));
+const AdminUsersPage = lazy(() => import("../features/admin-users/views/AdminUsersView"));
+const AdminPlatformPage = lazy(() => import("../features/platform-admin/views/AdminPlatformView"));
+const AdminSettingsPage = lazy(() => import("../features/settings-admin/views/AdminSettingsView"));
+const AiStudioPage = lazy(() => import("../features/ai/views/AiStudioView"));
+const KnowledgeChatPage = lazy(() => import("../features/chat/views/KnowledgeChatView"));
 
 function PageLoader() {
     return (
@@ -49,7 +50,7 @@ export function AppRouter() {
     return (
         <BrowserRouter>
             <Routes>
-                <Route path="/" element={<AuthHomePage />} />
+                <Route path="/" element={<SuspensePage><AuthHomePage /></SuspensePage>} />
                 <Route path="/reset-password" element={<SuspensePage><ResetPasswordPage /></SuspensePage>} />
                 <Route path="/verify-email" element={<SuspensePage><VerifyEmailPage /></SuspensePage>} />
 
@@ -68,6 +69,8 @@ export function AppRouter() {
                     <Route path="/projects/:projectId" element={<SuspensePage><ProjectDetailPage /></SuspensePage>} />
                     <Route path="/platform" element={<SuspensePage><PlatformPage /></SuspensePage>} />
                     <Route path="/ai" element={<SuspensePage><AiStudioPage /></SuspensePage>} />
+                    <Route path="/knowledge-chat" element={<SuspensePage><KnowledgeChatPage /></SuspensePage>} />
+                    <Route path="/knowledge" element={<Navigate to="/knowledge-chat" replace />} />
                     <Route path="/observability" element={<SuspensePage><ObservabilityPage /></SuspensePage>} />
                     <Route path="/profile" element={<SuspensePage><ProfilePage /></SuspensePage>} />
                     <Route path="/notifications" element={<SuspensePage><NotificationsPage /></SuspensePage>} />

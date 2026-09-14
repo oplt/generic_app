@@ -75,7 +75,7 @@ def queue_document_indexing(
         },
         celery_task=index_rag_document_task,
         celery_kwargs=payload,
-        queue=settings.CELERY_TASK_DEFAULT_QUEUE,
+        queue=settings.CELERY_INGESTION_QUEUE,
         job_name="rag-indexing",
     )
     logger.info("Queued RAG indexing for document=%s user=%s", document_id, user_id)
@@ -119,7 +119,7 @@ def queue_document_cleanup(
         kwargs=payload,
         celery_task=cleanup_rag_document_task,
         celery_kwargs=payload,
-        queue=settings.CELERY_TASK_DEFAULT_QUEUE,
+        queue=settings.CELERY_CLEANUP_QUEUE,
         job_name="rag-document-cleanup",
     )
     logger.info("Queued RAG cleanup document=%s user=%s", document_id, user_id)

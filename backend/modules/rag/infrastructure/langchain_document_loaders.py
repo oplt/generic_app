@@ -145,8 +145,12 @@ def _parse_with_langchain_loader(file_path: str, loader_name: str) -> list[Parse
             for doc in lc_docs
             if doc.page_content.strip()
         ]
-    except Exception:
-        logger.debug("LangChain loader %s unavailable, using native parser", loader_name)
+    except (ImportError, OSError, RuntimeError, ValueError) as exc:
+        logger.debug(
+            "LangChain loader %s unavailable, using native parser reason=%s",
+            loader_name,
+            type(exc).__name__,
+        )
         return []
 
 

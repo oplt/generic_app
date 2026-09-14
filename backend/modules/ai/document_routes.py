@@ -29,14 +29,24 @@ async def list_documents(
     current_user: User = Depends(get_current_user),
 ):
     service = AiDocumentService(db)
-    documents, total = await service.list_documents(
-        current_user, limit=pagination.limit, offset=pagination.offset
-    )
+    next_cursor = None
+    has_more = False
+    if pagination.cursor:
+        documents, next_cursor, has_more = await service.list_documents_cursor(
+            current_user, limit=pagination.limit, cursor=pagination.cursor
+        )
+        total = None
+    else:
+        documents, total = await service.list_documents(
+            current_user, limit=pagination.limit, offset=pagination.offset
+        )
     return paginated_response(
         [_document_to_response(item) for item in documents],
         total=total,
         limit=pagination.limit,
         offset=pagination.offset,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
 

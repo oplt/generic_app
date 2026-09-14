@@ -20,6 +20,7 @@ class AiRouteRegistrationTest(unittest.TestCase):
             ("POST", "/retrieve"),
             ("GET", "/runs"),
             ("POST", "/runs"),
+            ("POST", "/runs/async"),
             ("GET", "/reviews"),
             ("POST", "/runs/{run_id}/reviews"),
             ("POST", "/reviews/{review_id}/decision"),

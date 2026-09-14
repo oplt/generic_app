@@ -52,9 +52,8 @@ class IdentityService:
         configured_invite_code = settings.ADMIN_SIGNUP_INVITE_CODE.strip()
         is_admin = False
         if invite_code:
-            if (
-                not configured_invite_code
-                or not secrets.compare_digest(invite_code, configured_invite_code)
+            if not configured_invite_code or not secrets.compare_digest(
+                invite_code, configured_invite_code
             ):
                 raise HTTPException(status_code=403, detail="Invalid admin invite code")
             is_admin = True
@@ -66,6 +65,7 @@ class IdentityService:
             is_admin=is_admin,
             is_verified=not settings.REQUIRE_EMAIL_VERIFICATION,
         )
+        await self.repo.create_personal_organization(user)
         await self.db.commit()
         await self.db.refresh(user)
 
@@ -84,7 +84,7 @@ class IdentityService:
                 fallback_subject="Verify your email address",
                 fallback_html=(
                     "<p>Thanks for signing up. Click the link below to verify your email:</p>"
-                    f"<p><a href=\"{verification_link}\">{verification_link}</a></p>"
+                    f'<p><a href="{verification_link}">{verification_link}</a></p>'
                     "<p>This link expires in 24 hours.</p>"
                 ),
                 fallback_text=(
@@ -127,9 +127,7 @@ class IdentityService:
                 )
 
         raw_refresh = generate_refresh_token()
-        expires_at = datetime.now(UTC) + timedelta(
-            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
-        )
+        expires_at = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         session = await self.repo.create_refresh_session(
             user_id=user.id,
             token_hash=hash_refresh_token(raw_refresh),
@@ -158,7 +156,10 @@ class IdentityService:
         if settings.REQUIRE_EMAIL_VERIFICATION and not user.is_verified:
             raise HTTPException(status_code=403, detail="Verify your email before signing in")
 
-        await self.repo.revoke_refresh_session(session)
+        rotated = await self.repo.rotate_refresh_session(session.id, refresh_hash)
+        if not rotated:
+            await self.db.rollback()
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
 
         new_raw = generate_refresh_token()
         new_expires = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
@@ -227,7 +228,7 @@ class IdentityService:
             fallback_subject="Verify your email address",
             fallback_html=(
                 "<p>Thanks for signing up. Click the link below to verify your email:</p>"
-                f"<p><a href=\"{verification_link}\">{verification_link}</a></p>"
+                f'<p><a href="{verification_link}">{verification_link}</a></p>'
                 "<p>This link expires in 24 hours.</p>"
             ),
             fallback_text=(
@@ -266,7 +267,7 @@ class IdentityService:
             fallback_subject="Reset your password",
             fallback_html=(
                 "<p>We received a request to reset your password. Click the link below:</p>"
-                f"<p><a href=\"{reset_link}\">{reset_link}</a></p>"
+                f'<p><a href="{reset_link}">{reset_link}</a></p>'
                 "<p>This link expires in 1 hour."
                 " If you did not request this, ignore this email.</p>"
             ),

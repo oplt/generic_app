@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from backend.lib.vectors import estimate_tokens
 from backend.modules.rag.application.citation_service import CitationService
 from backend.modules.rag.domain.models import RetrievedChunk
@@ -26,6 +28,7 @@ class RagContextBuilder:
         *,
         max_tokens: int,
         reserved_tokens: int = 512,
+        model_name: str | None = None,
     ) -> list[RetrievedChunk]:
         """Keep highest-scoring chunks that fit within the context token budget."""
         if not chunks or max_tokens <= 0:
@@ -37,16 +40,51 @@ class RagContextBuilder:
         selected: list[RetrievedChunk] = []
         used = 0
         for chunk in sorted(chunks, key=lambda item: item.score, reverse=True):
-            chunk_tokens = estimate_tokens(chunk.content) + 48
+            chunk_tokens = estimate_tokens(chunk.content, model=model_name) + 48
             if selected and used + chunk_tokens > budget:
                 continue
             if not selected and chunk_tokens > budget:
-                selected.append(chunk)
+                content_budget = max(1, budget - 48)
+                truncated_content = RagContextBuilder._truncate_to_tokens(
+                    chunk.content, content_budget, model_name=model_name
+                )
+                if truncated_content:
+                    selected.append(
+                        replace(
+                            chunk,
+                            content=truncated_content,
+                            metadata={**chunk.metadata, "context_truncated": True},
+                        )
+                    )
+                    used = budget
                 break
             selected.append(chunk)
             used += chunk_tokens
         selected.sort(key=lambda item: item.score, reverse=True)
         return selected
+
+    @staticmethod
+    def _truncate_to_tokens(
+        content: str, max_tokens: int, *, model_name: str | None = None
+    ) -> str:
+        if max_tokens <= 0:
+            return ""
+        if estimate_tokens(content, model=model_name) <= max_tokens:
+            return content
+        # The embedding tokenizer is provider-specific; this bounded binary
+        # search keeps the context contract safe with the repository's
+        # conservative character/token estimate.
+        low, high = 0, len(content)
+        best = ""
+        while low <= high:
+            middle = (low + high) // 2
+            candidate = content[:middle].rstrip()
+            if estimate_tokens(candidate, model=model_name) <= max_tokens:
+                best = candidate
+                low = middle + 1
+            else:
+                high = middle - 1
+        return best
 
     def build_document_context_block(self, chunks: list[RetrievedChunk]) -> str:
         if not chunks:
@@ -67,6 +105,12 @@ class RagContextBuilder:
                 ]
             )
         return "\n".join(lines).rstrip()
+
+    @staticmethod
+    def trim_text_to_token_budget(text: str, *, max_tokens: int) -> str:
+        if not text or max_tokens <= 0:
+            return ""
+        return RagContextBuilder._truncate_to_tokens(text, max_tokens)
 
     def build_combined_context(
         self,

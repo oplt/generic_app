@@ -1,6 +1,5 @@
-from datetime import date
-
 import asyncio
+from datetime import date
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +16,7 @@ from backend.lib.resource_cache import (
 from backend.modules.identity_access.models import User
 from backend.modules.notifications.repository import NotificationsRepository
 from backend.modules.projects.models import Project, ProjectTask
-from backend.modules.projects.repository import ProjectsRepository
+from backend.modules.projects.repository import TASK_POSITION_GAP, ProjectsRepository
 from backend.modules.projects.schemas import (
     ProjectResponse,
     ProjectTaskCreate,
@@ -40,6 +39,9 @@ class ProjectsService:
         await self.db.refresh(project)
         await invalidate_project_list_cache(owner_id)
         return project
+
+    async def project_summary(self, user_id: str) -> tuple[int, int]:
+        return await self.repo.summary_for_user(user_id)
 
     async def list_projects(
         self,
@@ -73,6 +75,24 @@ class ProjectsService:
         )
         return items, total
 
+    async def list_projects_cursor(self, user_id: str, *, limit: int, cursor: str | None):
+        projects, next_cursor, has_more = await self.repo.list_accessible_by_user_cursor(
+            user_id, limit=limit, cursor=cursor
+        )
+        return (
+            [
+                ProjectResponse(
+                    id=project.id,
+                    name=project.name,
+                    description=project.description,
+                    created_at=project.created_at,
+                )
+                for project in projects
+            ],
+            next_cursor,
+            has_more,
+        )
+
     async def get_project(self, user_id: str, project_id: str) -> Project:
         return await self._get_project_or_404(user_id, project_id)
 
@@ -85,8 +105,14 @@ class ProjectsService:
         offset: int = 0,
     ) -> tuple[list[tuple[ProjectTask, User | None]], int]:
         project = await self._get_project_or_404(user_id, project_id)
-        return await self.repo.list_tasks_with_assignees(
-            project.id, limit=limit, offset=offset
+        return await self.repo.list_tasks_with_assignees(project.id, limit=limit, offset=offset)
+
+    async def list_tasks_cursor(
+        self, user_id: str, project_id: str, *, limit: int, cursor: str | None
+    ):
+        project = await self._get_project_or_404(user_id, project_id)
+        return await self.repo.list_tasks_with_assignees_cursor(
+            project.id, limit=limit, cursor=cursor
         )
 
     async def create_task(
@@ -161,7 +187,6 @@ class ProjectsService:
             task.status = payload.status
             task.position = await self.repo.get_next_task_position(project.id, payload.status)
 
-        await self._normalize_positions(project.id)
         await self._notify_assignment(project, task, actor, previous_assignee_id, assignee)
         await self._notify_due_date_change(project, task, actor, previous_due_date, assignee)
         await self._notify_status_change(project, task, actor, previous_status)
@@ -183,7 +208,6 @@ class ProjectsService:
             raise HTTPException(status_code=404, detail="Task not found")
 
         await self.repo.delete_task(task)
-        await self._normalize_positions(project.id)
         await self.db.commit()
         if task.due_date is not None:
             await invalidate_calendar_cache(user_id)
@@ -198,9 +222,7 @@ class ProjectsService:
         payload: ProjectTaskReorderRequest,
     ) -> list[tuple[ProjectTask, User | None]]:
         project = await self._get_project_or_404(user_id, project_id)
-        task_rows, _ = await self.repo.list_tasks_with_assignees(
-            project.id, limit=MAX_PAGE_LIMIT
-        )
+        task_rows, _ = await self.repo.list_tasks_with_assignees(project.id, limit=MAX_PAGE_LIMIT)
         tasks_by_id = {task.id: task for task, _ in task_rows}
         previous_status_by_id = {task.id: task.status for task, _ in task_rows}
 
@@ -211,7 +233,7 @@ class ProjectsService:
                 if not task:
                     raise HTTPException(status_code=404, detail="Task not found in reorder payload")
                 task.status = column.status
-                task.position = position
+                task.position = (position + 1) * TASK_POSITION_GAP
                 seen_ids.append(task_id)
 
         if len(seen_ids) != len(tasks_by_id) or set(seen_ids) != set(tasks_by_id):
@@ -219,8 +241,6 @@ class ProjectsService:
                 status_code=400,
                 detail="Reorder payload must include every task exactly once",
             )
-
-        await self._normalize_positions(project.id)
 
         await asyncio.gather(
             *[
@@ -247,18 +267,6 @@ class ProjectsService:
             raise HTTPException(status_code=404, detail="Assignee not found")
         return assignee
 
-    async def _normalize_positions(self, project_id: str) -> None:
-        rows, _ = await self.repo.list_tasks_with_assignees(project_id, limit=MAX_PAGE_LIMIT)
-        grouped: dict[str, list[ProjectTask]] = {}
-        for task, _ in rows:
-            grouped.setdefault(task.status, []).append(task)
-
-        for tasks in grouped.values():
-            for index, task in enumerate(tasks):
-                task.position = index
-
-        await self.db.flush()
-
     async def _notify_assignment(
         self,
         project: Project,
@@ -276,7 +284,7 @@ class ProjectsService:
             title=f"Task assigned: {task.title}",
             body=(
                 f"{self._actor_label(actor)} assigned you the task "
-                f"\"{task.title}\" in project \"{project.name}\"."
+                f'"{task.title}" in project "{project.name}".'
             ),
         )
 
@@ -301,8 +309,8 @@ class ProjectsService:
             type="task_due_date_updated",
             title=f"Due date updated: {task.title}",
             body=(
-                f"{self._actor_label(actor)} set the due date for \"{task.title}\" "
-                f"to {task.due_date.isoformat()} in project \"{project.name}\"."
+                f'{self._actor_label(actor)} set the due date for "{task.title}" '
+                f'to {task.due_date.isoformat()} in project "{project.name}".'
             ),
         )
 
@@ -325,8 +333,8 @@ class ProjectsService:
             type="task_status_changed",
             title=f"Task moved to {target_label}: {task.title}",
             body=(
-                f"{self._actor_label(actor)} moved \"{task.title}\" to {target_label} "
-                f"in project \"{project.name}\"."
+                f'{self._actor_label(actor)} moved "{task.title}" to {target_label} '
+                f'in project "{project.name}".'
             ),
         )
 

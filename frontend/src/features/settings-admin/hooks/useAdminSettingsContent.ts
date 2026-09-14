@@ -5,11 +5,13 @@ import {
     type ConfigSettingsResponse, type DatabaseSetting,
 } from "../../../api/settings";
 import { queryKeys } from "../../../config/queryKeys";
+import { useSnackbar } from "../../../app/snackbarContext";
 import { useMutationErrorToast } from "../../../hooks/useMutationErrorToast";
 import { buildConfigGroups, type DatabaseSettingDrafts, type SettingsTabValue } from "../settingsModel";
 
 export function useAdminSettingsContent(configData: ConfigSettingsResponse, databaseSettings: DatabaseSetting[], activeTab: SettingsTabValue) {
     const queryClient = useQueryClient();
+    const { showToast } = useSnackbar();
     const toastError = useMutationErrorToast();
     const configGroups = buildConfigGroups(configData.items);
     const [configDrafts, setConfigDrafts] = useState<Record<string, string>>(() => Object.fromEntries(configData.items.map((item) => [item.key, item.value])));
@@ -20,23 +22,24 @@ export function useAdminSettingsContent(configData: ConfigSettingsResponse, data
         onSuccess: (data) => {
             queryClient.setQueryData(queryKeys.settings.config, data);
             setConfigDrafts(Object.fromEntries(data.items.map((item) => [item.key, item.value])));
+            showToast({ message: "Config settings saved.", severity: "success" });
         },
         onError: (error) => toastError(error, "Failed to save config."),
     });
     const refreshDatabase = () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.database });
     const createDatabaseMutation = useMutation({
         mutationFn: createDatabaseSetting,
-        onSuccess: async () => { setNewSetting({ key: "", value: "", description: "" }); await refreshDatabase(); },
+        onSuccess: async () => { setNewSetting({ key: "", value: "", description: "" }); await refreshDatabase(); showToast({ message: "Database setting created.", severity: "success" }); },
         onError: (error) => toastError(error, "Failed to create database setting."),
     });
     const updateDatabaseMutation = useMutation({
         mutationFn: ({ id, value, description }: { id: string; value: string; description: string }) => updateDatabaseSetting(id, { value, description }),
-        onSuccess: refreshDatabase,
+        onSuccess: async () => { await refreshDatabase(); showToast({ message: "Database setting updated.", severity: "success" }); },
         onError: (error) => toastError(error, "Failed to update database setting."),
     });
     const deleteDatabaseMutation = useMutation({
         mutationFn: deleteDatabaseSetting,
-        onSuccess: refreshDatabase,
+        onSuccess: async () => { await refreshDatabase(); showToast({ message: "Database setting deleted.", severity: "success" }); },
         onError: (error) => toastError(error, "Failed to delete database setting."),
     });
     const activeConfigGroup = activeTab === "database" ? null : configGroups.find((group) => group.id === activeTab) ?? configGroups[0] ?? null;

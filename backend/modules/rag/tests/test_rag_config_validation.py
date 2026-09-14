@@ -61,3 +61,23 @@ def test_validate_rag_config_rejects_unimplemented_backend():
                 max_file_bytes=10_000_000,
             )
         )
+
+
+def test_validate_rag_config_rejects_pgvector_dimension_drift():
+    with pytest.raises(RuntimeError, match="incompatible with the pgvector schema"):
+        validate_rag_config(
+            RagConfig(
+                enabled=True,
+                vector_backend="pgvector",
+                embedding_provider="openai",
+                embedding_model="text-embedding-3-small",
+                embedding_dimensions=768,
+                chunk_size=1000,
+                chunk_overlap=150,
+                top_k=5,
+                score_threshold=0.0,
+                max_context_tokens=4000,
+                allowed_file_types=("pdf", "txt"),
+                max_file_bytes=10_000_000,
+            )
+        )

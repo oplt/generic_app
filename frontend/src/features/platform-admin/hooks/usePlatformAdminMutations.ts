@@ -9,6 +9,7 @@ import {
     updateAdminFeatureFlag,
     updateAdminPlan,
     updatePlatformConfig,
+    type FeatureFlag,
 } from "../../../api/platform";
 import { useSnackbar } from "../../../app/snackbarContext";
 import { queryKeys } from "../../../config/queryKeys";
@@ -99,8 +100,31 @@ export function usePlatformAdminMutations({
             module_key: draft.module_key || null, is_enabled: draft.is_enabled,
             rollout_percentage: Number(draft.rollout_percentage),
         }),
-        onSuccess: () => success("featureFlags", "Feature flag updated."),
-        onError: (error) => toastMutationError(error, "Failed to update feature flag."),
+        onMutate: async ({ id, draft }) => {
+            await queryClient.cancelQueries({ queryKey: queryKeys.platform.admin.featureFlags });
+            const previous = queryClient.getQueryData<FeatureFlag[]>(queryKeys.platform.admin.featureFlags);
+            queryClient.setQueryData<FeatureFlag[]>(queryKeys.platform.admin.featureFlags, (current) =>
+                current?.map((flag) => flag.id === id
+                    ? {
+                        ...flag,
+                        name: draft.name,
+                        description: draft.description || null,
+                        module_key: draft.module_key || null,
+                        is_enabled: draft.is_enabled,
+                        rollout_percentage: Number(draft.rollout_percentage),
+                    }
+                    : flag)
+            );
+            return { previous };
+        },
+        onError: (error, _variables, context) => {
+            if (context?.previous) {
+                queryClient.setQueryData(queryKeys.platform.admin.featureFlags, context.previous);
+            }
+            toastMutationError(error, "Failed to update feature flag.");
+        },
+        onSettled: () => void invalidatePlatformAdminCapability(queryClient, "featureFlags"),
+        onSuccess: () => showToast({ message: "Feature flag updated.", severity: "success" }),
     });
     const createTemplateMutation = useMutation({
         mutationFn: createAdminEmailTemplate,

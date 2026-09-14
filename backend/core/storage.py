@@ -20,6 +20,8 @@ PRIVATE_UPLOAD_CACHE_CONTROL = "private, max-age=3600"
 
 
 class ObjectStorage:
+    _last_bootstrap_error: str | None = None
+
     @property
     def is_configured(self) -> bool:
         return bool(settings.STORAGE_BUCKET)
@@ -44,6 +46,9 @@ class ObjectStorage:
             use_ssl=settings.STORAGE_USE_SSL,
             config=Config(
                 signature_version="s3v4",
+                connect_timeout=2,
+                read_timeout=3,
+                retries={"max_attempts": 0},
                 s3={"addressing_style": "path" if settings.STORAGE_FORCE_PATH_STYLE else "auto"},
             ),
         )
@@ -51,6 +56,7 @@ class ObjectStorage:
     async def ensure_bucket(self) -> None:
         if not self.is_configured or not settings.STORAGE_AUTO_CREATE_BUCKET:
             return
+        self._last_bootstrap_error = None
 
         def _ensure_bucket() -> None:
             try:
@@ -81,7 +87,26 @@ class ObjectStorage:
         try:
             await asyncio.to_thread(_ensure_bucket)
         except Exception as exc:
-            logger.warning("failed to ensure storage bucket %s: %s", settings.STORAGE_BUCKET, exc)
+            self._last_bootstrap_error = type(exc).__name__
+            logger.error(
+                "failed to ensure storage bucket bucket=%s reason=%s",
+                settings.STORAGE_BUCKET,
+                type(exc).__name__,
+                exc_info=True,
+            )
+
+    async def readiness(self) -> tuple[bool, str]:
+        if not self.is_configured:
+            return False, "object storage is not configured"
+
+        try:
+            await asyncio.to_thread(self._client.head_bucket, Bucket=settings.STORAGE_BUCKET)
+        except Exception:
+            detail = "object storage bucket is unavailable"
+            if self._last_bootstrap_error:
+                detail = f"{detail}; bootstrap failed ({self._last_bootstrap_error})"
+            return False, detail
+        return True, "object storage bucket is reachable"
 
     async def upload_bytes(
         self,
@@ -89,7 +114,7 @@ class ObjectStorage:
         object_key: str,
         body: bytes,
         content_type: str,
-        cache_control: str = AVATAR_CACHE_CONTROL,
+        cache_control: str = PRIVATE_UPLOAD_CACHE_CONTROL,
     ) -> str:
         if not self.is_configured:
             raise StorageNotConfiguredError(
@@ -114,7 +139,7 @@ class ObjectStorage:
 
         return self.public_url_for(object_key)
 
-    async def delete_object(self, object_key: str | None) -> None:
+    async def delete_object(self, object_key: str | None, *, raise_on_error: bool = False) -> None:
         if not self.is_configured or not object_key:
             return
 
@@ -125,8 +150,22 @@ class ObjectStorage:
             await asyncio.to_thread(_delete)
         except Exception as exc:
             logger.warning("failed to delete storage object %s: %s", object_key, exc)
+            if raise_on_error:
+                raise ObjectStorageError("Failed to delete object storage content") from exc
+
+    def signed_url_for(self, object_key: str) -> str:
+        try:
+            return self._client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": settings.STORAGE_BUCKET, "Key": object_key},
+                ExpiresIn=settings.STORAGE_SIGNED_URL_EXPIRES_SECONDS,
+            )
+        except Exception as exc:
+            raise ObjectStorageError("Failed to create a signed object URL") from exc
 
     def public_url_for(self, object_key: str) -> str:
+        if not settings.STORAGE_PUBLIC_READ:
+            return self.signed_url_for(object_key)
         if settings.STORAGE_PUBLIC_BASE_URL:
             return f"{settings.STORAGE_PUBLIC_BASE_URL.rstrip('/')}/{object_key}"
 

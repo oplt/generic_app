@@ -17,6 +17,7 @@ from backend.modules.audit.repository import AuditRepository
 from backend.modules.identity_access.models import User
 from backend.modules.identity_access.repository import IdentityRepository
 from backend.modules.notifications.models import Notification
+from backend.observability.workflow import observe_async_workflow
 
 router = APIRouter()
 
@@ -40,6 +41,7 @@ def _user_to_response(user: User) -> AdminUserResponse:
 
 
 @router.get("/users", response_model=AdminUserListResponse)
+@observe_async_workflow("admin", "list_users")
 async def list_users(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -65,9 +67,7 @@ async def list_users(
         data_query = data_query.where(*filters)
 
     total = await db.scalar(total_query)
-    result = await db.execute(
-        data_query.offset((page - 1) * page_size).limit(page_size)
-    )
+    result = await db.execute(data_query.offset((page - 1) * page_size).limit(page_size))
 
     return AdminUserListResponse(
         items=[_user_to_response(user) for user in result.scalars().all()],
@@ -78,6 +78,7 @@ async def list_users(
 
 
 @router.get("/users/{user_id}", response_model=AdminUserResponse)
+@observe_async_workflow("admin", "get_user")
 async def get_user(
     user_id: str,
     db: AsyncSession = Depends(get_db),
@@ -91,6 +92,7 @@ async def get_user(
 
 
 @router.patch("/users/{user_id}/status", response_model=AdminUserResponse)
+@observe_async_workflow("admin", "update_user_status")
 async def update_user_status(
     user_id: str,
     payload: AdminUserStatusUpdate,
@@ -117,6 +119,7 @@ async def update_user_status(
 
 
 @router.get("/audit-logs", response_model=list[AuditLogResponse])
+@observe_async_workflow("admin", "list_audit_logs")
 async def list_audit_logs(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
@@ -125,24 +128,27 @@ async def list_audit_logs(
     logs = await repo.list_recent(limit=100)
     return [
         AuditLogResponse(
-            id=log.id, user_id=log.user_id, action=log.action,
-            resource_type=log.resource_type, resource_id=log.resource_id,
-            ip_address=log.ip_address, created_at=log.created_at,
+            id=log.id,
+            user_id=log.user_id,
+            action=log.action,
+            resource_type=log.resource_type,
+            resource_id=log.resource_id,
+            ip_address=log.ip_address,
+            created_at=log.created_at,
         )
         for log in logs
     ]
 
 
 @router.get("/metrics", response_model=MetricsResponse)
+@observe_async_workflow("admin", "metrics")
 async def get_metrics(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
     total, verified, active, notifs = await asyncio.gather(
         db.scalar(select(func.count()).select_from(User)),
-        db.scalar(
-            select(func.count()).select_from(User).where(User.is_verified.is_(True))
-        ),
+        db.scalar(select(func.count()).select_from(User).where(User.is_verified.is_(True))),
         db.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True))),
         db.scalar(select(func.count()).select_from(Notification)),
     )

@@ -1,0 +1,73 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"expr": "sum by (queue) (worker_queue_depth)", "legendFormat": "{{queue}}", "refId": "A"}],
+      "title": "Queue depth",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "worker_oldest_job_age_seconds", "legendFormat": "oldest job", "refId": "A"}],
+      "title": "Oldest queued/running job age",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [
+        {"expr": "worker_retry_count", "legendFormat": "retries", "refId": "A"},
+        {"expr": "worker_failed_job_count", "legendFormat": "failed", "refId": "B"}
+      ],
+      "title": "Retries and failed jobs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "id": 4,
+      "targets": [{"expr": "time() - worker_heartbeat_timestamp_seconds", "legendFormat": "{{worker}} heartbeat age", "refId": "A"}],
+      "title": "Worker heartbeat age",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "id": 5,
+      "targets": [{"expr": "sum by (job_type, outcome) (rate(worker_jobs_total[5m]))", "legendFormat": "{{job_type}} / {{outcome}}", "refId": "A"}],
+      "title": "Worker job outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "id": 6,
+      "targets": [{"expr": "sum by (workflow, operation, outcome) (rate(workflow_events_total[5m]))", "legendFormat": "{{workflow}} / {{operation}} / {{outcome}}", "refId": "A"}],
+      "title": "Auth, email, admin, and notification workflows",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["workers", "queues", "workflow"],
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Background workers",
+  "uid": "background-workers",
+  "version": 1
+}

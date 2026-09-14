@@ -28,7 +28,7 @@ export function useAiStudioForms() {
     const [datasetCaseForm, setDatasetCaseForm] = useState({
         input_variables_json: "{\n  \"task\": \"What is the return policy?\"\n}",
         retrieval_query: "", expected_chunk_ids: "", expected_output_text: "",
-        expected_output_json: "", notes: "",
+        expected_output_json: "", evaluation_type: "standard" as const, notes: "",
     });
 
     const toggle = (setter: typeof setSelectedDocumentIds, documentId: string) => setter((current) =>

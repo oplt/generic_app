@@ -115,14 +115,13 @@ class UploadCreatesDocumentTest(unittest.IsolatedAsyncioTestCase):
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
 
-        document, job_result, content = await service.upload_document(
+        document, job_result = await service.upload_document(
             user_id="user-a",
             filename="notes.txt",
             content=b"hello world content",
             content_type="text/plain",
         )
         self.assertEqual(document.id, "doc-1")
-        self.assertEqual(content, b"hello world content")
         service.repo.create_document.assert_awaited_once()
 
 
@@ -170,3 +169,34 @@ class EnqueueDocumentIndexingTest(unittest.IsolatedAsyncioTestCase):
             job_id="job-1",
         )
         service.repo.create_ingestion_job.assert_awaited_once()
+
+
+class IndexingIdempotencyTest(unittest.IsolatedAsyncioTestCase):
+    async def test_completed_job_is_not_indexed_again(self):
+        from backend.modules.rag.application.document_ingestion_service import (
+            DocumentIngestionService,
+        )
+
+        service = object.__new__(DocumentIngestionService)
+        document = SimpleNamespace(id="doc-1", user_id="user-a")
+        job = SimpleNamespace(
+            id="job-1",
+            document_id="doc-1",
+            status="completed",
+        )
+        service._get_document_for_indexing = AsyncMock(return_value=document)
+        service.repo = MagicMock()
+        service.repo.get_ingestion_job = AsyncMock(return_value=job)
+        service.parser = MagicMock()
+        service.embeddings = MagicMock()
+
+        result_document, chunks, result_job = await service.index_document(
+            document_id="doc-1",
+            user_id="user-a",
+            job_id="job-1",
+        )
+
+        self.assertIs(result_document, document)
+        self.assertEqual(chunks, [])
+        self.assertIs(result_job, job)
+        service.parser.parse_bytes.assert_not_called()

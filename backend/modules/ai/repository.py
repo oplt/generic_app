@@ -1,7 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_scalars
+from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_cursor_scalars, paginate_scalars
 from backend.modules.ai.models import (
     AiEvaluationCase,
     AiEvaluationDataset,
@@ -32,6 +32,14 @@ class AiRepository:
             .order_by(AiPromptTemplate.updated_at.desc())
         )
         return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
+
+    async def count_prompt_templates_for_user(self, user_id: str) -> int:
+        return int(
+            await self.db.scalar(
+                select(func.count(AiPromptTemplate.id)).where(AiPromptTemplate.user_id == user_id)
+            )
+            or 0
+        )
 
     async def get_prompt_template_for_user(
         self, user_id: str, template_id: str
@@ -106,12 +114,26 @@ class AiRepository:
         limit: int = DEFAULT_PAGE_LIMIT,
         offset: int = 0,
     ) -> tuple[list[AiRun], int]:
-        stmt = (
-            select(AiRun)
-            .where(AiRun.user_id == user_id)
-            .order_by(AiRun.created_at.desc())
-        )
+        stmt = select(AiRun).where(AiRun.user_id == user_id).order_by(AiRun.created_at.desc())
         return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
+
+    async def count_runs_for_user(self, user_id: str) -> int:
+        return int(
+            await self.db.scalar(select(func.count(AiRun.id)).where(AiRun.user_id == user_id)) or 0
+        )
+
+    async def list_runs_for_user_cursor(
+        self, user_id: str, *, limit: int, cursor: str | None
+    ) -> tuple[list[AiRun], str | None, bool]:
+        stmt = select(AiRun).where(AiRun.user_id == user_id)
+        return await paginate_cursor_scalars(
+            self.db,
+            stmt,
+            limit=limit,
+            cursor=cursor,
+            sort_column=AiRun.created_at,
+            id_column=AiRun.id,
+        )
 
     async def list_reviews_for_user(
         self,
@@ -175,6 +197,16 @@ class AiRepository:
         )
         return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
 
+    async def count_datasets_for_user(self, user_id: str) -> int:
+        return int(
+            await self.db.scalar(
+                select(func.count(AiEvaluationDataset.id)).where(
+                    AiEvaluationDataset.user_id == user_id
+                )
+            )
+            or 0
+        )
+
     async def get_dataset_for_user(
         self, user_id: str, dataset_id: str
     ) -> AiEvaluationDataset | None:
@@ -205,6 +237,17 @@ class AiRepository:
             .order_by(AiEvaluationCase.created_at.asc())
         )
         return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
+
+    async def list_dataset_cases_for_evaluation(
+        self, dataset_id: str, *, limit: int
+    ) -> list[AiEvaluationCase]:
+        result = await self.db.execute(
+            select(AiEvaluationCase)
+            .where(AiEvaluationCase.dataset_id == dataset_id)
+            .order_by(AiEvaluationCase.created_at.asc(), AiEvaluationCase.id.asc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
 
     async def get_dataset_case(self, case_id: str) -> AiEvaluationCase | None:
         result = await self.db.execute(

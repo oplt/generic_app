@@ -9,11 +9,32 @@ from time import monotonic
 from typing import Any, TypeVar
 
 import redis.asyncio as redis
+from prometheus_client import Counter, Histogram
 from pydantic import BaseModel
 
+from backend.core.cache_loader import coordinated_cache_load
 from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+cache_hits_total = Counter(
+    "cache_hits_total", "Cache hits by namespace", ["namespace"]
+)
+cache_misses_total = Counter(
+    "cache_misses_total", "Cache misses by namespace", ["namespace"]
+)
+cache_errors_total = Counter(
+    "cache_errors_total", "Cache backend or payload errors", ["namespace"]
+)
+cache_stale_total = Counter(
+    "cache_stale_total", "Expired or invalid cache payloads", ["namespace"]
+)
+cache_invalidations_total = Counter(
+    "cache_invalidations_total", "Cache invalidations by namespace", ["namespace"]
+)
+cache_payload_bytes = Histogram(
+    "cache_payload_bytes", "Approximate serialized cache payload size", ["namespace"]
+)
 
 redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
@@ -74,6 +95,12 @@ class _LocalTTLCache:
 
 
 _local_cache = _LocalTTLCache()
+_local_generations: dict[str, int] = {}
+
+
+def _cache_namespace(key: str) -> str:
+    parts = key.split(":")
+    return parts[1] if len(parts) > 1 else "unknown"
 
 
 def _uses_local_cache(key: str) -> bool:
@@ -127,7 +154,9 @@ def embedding_cache_key(
     *,
     dimensions: int | None = None,
 ) -> str:
-    resolved_dimensions = dimensions if dimensions is not None else settings.RAG_EMBEDDING_DIMENSIONS
+    resolved_dimensions = (
+        dimensions if dimensions is not None else settings.RAG_EMBEDDING_DIMENSIONS
+    )
     digest = hashlib.sha256(
         f"{provider}\0{model}\0{resolved_dimensions}\0{text}".encode()
     ).hexdigest()
@@ -138,6 +167,7 @@ async def cache_get_json(key: str) -> Any | None:
     if _uses_local_cache(key):
         local_value = _local_cache.get(key)
         if local_value is not None:
+            cache_hits_total.labels(namespace=_cache_namespace(key)).inc()
             return local_value
 
     if not _uses_redis_cache(key):
@@ -145,14 +175,60 @@ async def cache_get_json(key: str) -> Any | None:
     try:
         raw = await redis_client.get(key)
         if raw is None:
+            cache_misses_total.labels(namespace=_cache_namespace(key)).inc()
             return None
         value = json.loads(raw)
+        cache_hits_total.labels(namespace=_cache_namespace(key)).inc()
         if _uses_local_cache(key):
             _local_cache.set(key, value, ttl_seconds=_local_ttl_for_key(key))
         return value
+    except json.JSONDecodeError:
+        cache_stale_total.labels(namespace=_cache_namespace(key)).inc()
+        cache_errors_total.labels(namespace=_cache_namespace(key)).inc()
+        logger.debug("cache payload invalid for key=%s", key, exc_info=True)
+        return None
     except Exception:
+        cache_errors_total.labels(namespace=_cache_namespace(key)).inc()
         logger.debug("cache get failed for key=%s", key, exc_info=True)
         return None
+
+
+async def cache_get_many_json(keys: list[str]) -> dict[str, Any]:
+    """Read multiple cache entries in one Redis round trip when possible."""
+    if not keys:
+        return {}
+
+    values: dict[str, Any] = {}
+    redis_keys: list[str] = []
+    for key in keys:
+        if _uses_local_cache(key):
+            local_value = _local_cache.get(key)
+            if local_value is not None:
+                values[key] = local_value
+                continue
+        if _uses_redis_cache(key):
+            redis_keys.append(key)
+
+    if not redis_keys:
+        return values
+
+    try:
+        raw_values = await redis_client.mget(redis_keys)
+        for key, raw in zip(redis_keys, raw_values, strict=True):
+            if raw is None:
+                continue
+            value = json.loads(raw)
+            values[key] = value
+            if _uses_local_cache(key):
+                _local_cache.set(key, value, ttl_seconds=_local_ttl_for_key(key))
+    except json.JSONDecodeError:
+        cache_stale_total.labels(namespace=_cache_namespace(redis_keys[0])).inc()
+        cache_errors_total.labels(namespace=_cache_namespace(redis_keys[0])).inc()
+        logger.debug("cache batch payload invalid for keys=%s", redis_keys, exc_info=True)
+    except Exception:
+        cache_errors_total.labels(namespace=_cache_namespace(redis_keys[0])).inc()
+        logger.debug("cache batch get failed for keys=%s", redis_keys, exc_info=True)
+    return values
 
 
 async def cache_set_json(key: str, value: Any, *, ttl_seconds: int) -> None:
@@ -161,24 +237,77 @@ async def cache_set_json(key: str, value: Any, *, ttl_seconds: int) -> None:
     if not _uses_redis_cache(key):
         return
     try:
+        serialized = json.dumps(value, ensure_ascii=True, default=str)
+        if len(serialized.encode("utf-8")) > settings.CACHE_MAX_PAYLOAD_BYTES:
+            cache_errors_total.labels(namespace=_cache_namespace(key)).inc()
+            logger.warning(
+                "cache payload exceeds configured limit key=%s bytes=%s",
+                key,
+                len(serialized.encode("utf-8")),
+            )
+            return
+        cache_payload_bytes.labels(namespace=_cache_namespace(key)).observe(len(serialized))
         await redis_client.setex(
             key,
             ttl_seconds,
-            json.dumps(value, ensure_ascii=True, default=str),
+            serialized,
         )
     except Exception:
+        cache_errors_total.labels(namespace=_cache_namespace(key)).inc()
         logger.debug("cache set failed for key=%s", key, exc_info=True)
+
+
+async def cache_set_many_json(entries: list[tuple[str, Any, int]]) -> None:
+    """Write multiple cache entries with one Redis pipeline when possible."""
+    if not entries:
+        return
+
+    redis_entries: list[tuple[str, Any, int]] = []
+    for key, value, ttl_seconds in entries:
+        if _uses_local_cache(key):
+            _local_cache.set(key, value, ttl_seconds=ttl_seconds)
+        if _uses_redis_cache(key):
+            redis_entries.append((key, value, ttl_seconds))
+
+    if not redis_entries:
+        return
+
+    try:
+        pipeline = redis_client.pipeline(transaction=False)
+        for key, value, ttl_seconds in redis_entries:
+            serialized = json.dumps(value, ensure_ascii=True, default=str)
+            if len(serialized.encode("utf-8")) > settings.CACHE_MAX_PAYLOAD_BYTES:
+                cache_errors_total.labels(namespace=_cache_namespace(key)).inc()
+                logger.warning("cache payload exceeds configured limit key=%s", key)
+                continue
+            cache_payload_bytes.labels(namespace=_cache_namespace(key)).observe(len(serialized))
+            pipeline.setex(
+                key,
+                ttl_seconds,
+                serialized,
+            )
+        await pipeline.execute()
+    except Exception:
+        cache_errors_total.labels(namespace=_cache_namespace(redis_entries[0][0])).inc()
+        logger.debug(
+            "cache batch set failed for keys=%s",
+            [key for key, _, _ in redis_entries],
+            exc_info=True,
+        )
 
 
 async def cache_delete(*keys: str) -> None:
     if keys:
         _local_cache.delete(*keys)
+        for key in keys:
+            cache_invalidations_total.labels(namespace=_cache_namespace(key)).inc()
     redis_keys = [key for key in keys if _uses_redis_cache(key)]
     if not redis_keys:
         return
     try:
         await redis_client.delete(*redis_keys)
     except Exception:
+        cache_errors_total.labels(namespace=_cache_namespace(redis_keys[0])).inc()
         logger.debug("cache delete failed for keys=%s", redis_keys, exc_info=True)
 
 
@@ -186,6 +315,7 @@ async def cache_delete_pattern(pattern: str, *, batch_size: int = 100) -> None:
     if not settings.CACHE_ENABLED:
         return
     try:
+        cache_invalidations_total.labels(namespace=_cache_namespace(pattern)).inc()
         batch: list[str] = []
         async for key in redis_client.scan_iter(match=pattern, count=batch_size):
             batch.append(key)
@@ -195,7 +325,37 @@ async def cache_delete_pattern(pattern: str, *, batch_size: int = 100) -> None:
         if batch:
             await redis_client.delete(*batch)
     except Exception:
+        cache_errors_total.labels(namespace=_cache_namespace(pattern)).inc()
         logger.debug("cache delete pattern failed for pattern=%s", pattern, exc_info=True)
+
+
+async def cache_get_generation(scope: str) -> int:
+    key = cache_key("generation", scope)
+    if settings.CACHE_ENABLED:
+        try:
+            raw = await redis_client.get(key)
+            if raw is not None:
+                return int(raw)
+        except Exception:
+            cache_errors_total.labels(namespace="generation").inc()
+            logger.debug("cache generation read failed for scope=%s", scope, exc_info=True)
+    return _local_generations.get(scope, 0)
+
+
+async def cache_bump_generation(scope: str) -> int:
+    key = cache_key("generation", scope)
+    next_value = _local_generations.get(scope, 0) + 1
+    _local_generations[scope] = next_value
+    if settings.CACHE_ENABLED:
+        try:
+            next_value = int(await redis_client.incr(key))
+            await redis_client.expire(key, settings.CACHE_RETRIEVAL_TTL_SECONDS * 10)
+            _local_generations[scope] = next_value
+        except Exception:
+            cache_errors_total.labels(namespace="generation").inc()
+            logger.debug("cache generation bump failed for scope=%s", scope, exc_info=True)
+    cache_invalidations_total.labels(namespace="generation").inc()
+    return next_value
 
 
 async def cache_get_model(key: str, model: type[T]) -> T | None:  # noqa: UP047
@@ -218,13 +378,22 @@ async def cache_get_or_load_model(
     ttl_seconds: int,
     loader: Callable[[], Awaitable[T]],
 ) -> T:
-    cached = await cache_get_model(key, model)
-    if cached is not None:
-        return cached
-    loaded = await loader()
-    if isinstance(loaded, BaseModel):
-        await cache_set_model(key, loaded, ttl_seconds=ttl_seconds)
-    return loaded
+    async def get_cached() -> T | None:
+        return await cache_get_model(key, model)
+
+    async def set_loaded(value: T) -> None:
+        if isinstance(value, BaseModel):
+            await cache_set_model(key, value, ttl_seconds=ttl_seconds)
+
+    return await coordinated_cache_load(
+        key,
+        kind="model",
+        get_cached=get_cached,
+        set_loaded=set_loaded,
+        loader=loader,
+        redis_client=redis_client,
+        redis_enabled=_uses_redis_cache,
+    )
 
 
 async def cache_get_or_load_json(
@@ -233,12 +402,21 @@ async def cache_get_or_load_json(
     ttl_seconds: int,
     loader: Callable[[], Awaitable[Any]],
 ) -> Any:
-    cached = await cache_get_json(key)
-    if cached is not None:
-        return cached
-    loaded = await loader()
-    await cache_set_json(key, loaded, ttl_seconds=ttl_seconds)
-    return loaded
+    async def get_cached() -> Any | None:
+        return await cache_get_json(key)
+
+    async def set_loaded(value: Any) -> None:
+        await cache_set_json(key, value, ttl_seconds=ttl_seconds)
+
+    return await coordinated_cache_load(
+        key,
+        kind="json",
+        get_cached=get_cached,
+        set_loaded=set_loaded,
+        loader=loader,
+        redis_client=redis_client,
+        redis_enabled=_uses_redis_cache,
+    )
 
 
 async def invalidate_platform_caches() -> None:

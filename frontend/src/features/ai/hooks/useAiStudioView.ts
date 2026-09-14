@@ -18,7 +18,7 @@ export function useAiStudioView() {
         refetch,
     } = useQuery({
         queryKey: queryKeys.ai.overview,
-        queryFn: getAiOverview,
+        queryFn: ({ signal }) => getAiOverview({ signal }),
         staleTime: QUERY_STALE_TIMES.aiOverview,
     });
     const {

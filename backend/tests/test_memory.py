@@ -91,6 +91,13 @@ class MemoryConsolidatorTest(unittest.TestCase):
         consolidated = MemoryConsolidator().consolidate(items)
         self.assertEqual(len(consolidated), 1)
 
+    def test_contradictory_older_memory_is_removed(self):
+        older = _item("1", "User does not prefer FastAPI examples.")
+        newer = _item("2", "User prefers FastAPI examples.")
+        newer.metadata.last_confirmed_at = datetime.now(UTC)
+        result = MemoryConsolidator().consolidate([older, newer])
+        self.assertEqual([item.id for item in result], ["2"])
+
 
 class MemoryContextBuilderTest(unittest.IsolatedAsyncioTestCase):
     async def test_memory_retrieval_included_in_prompt_context(self):
@@ -381,6 +388,13 @@ class MemoryExtractorTest(unittest.TestCase):
         )
         self.assertTrue(any("prefers" in c.content.lower() for c in candidates))
         self.assertFalse(any("hello" in c.content.lower() for c in candidates))
+        self.assertTrue(
+            all(
+                candidate.requires_confirmation
+                for candidate in candidates
+                if "prefers" in candidate.content.lower()
+            )
+        )
 
 
 class NullMem0AdapterTest(unittest.IsolatedAsyncioTestCase):

@@ -1,8 +1,10 @@
+import json
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from backend.core.config import settings
 from backend.core.schemas import RequestModel
 
 AI_KEY_PATTERN = r"^[a-z0-9_][a-z0-9_\-\.]{1,127}$"
@@ -142,6 +144,13 @@ class AiRunRequest(RequestModel):
     top_k: int = Field(default=4, ge=1, le=20)
     review_required: bool = False
 
+    @model_validator(mode="after")
+    def validate_variable_budget(self):
+        variables_bytes = len(json.dumps(self.variables, default=str).encode("utf-8"))
+        if variables_bytes > settings.AI_MAX_PROMPT_BYTES:
+            raise ValueError("AI variables exceed the configured prompt budget")
+        return self
+
 
 class AiRunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -168,7 +177,16 @@ class AiRunResponse(BaseModel):
     output_tokens: int
     total_tokens: int
     estimated_cost_micros: int
+    provider_attempts: int = 0
+    provider_retry_count: int = 0
+    provider_last_status_code: int | None = None
+    provider_deadline_at: datetime | None = None
     error_message: str | None
+
+
+class AiAsyncRunResponse(BaseModel):
+    status: Literal["queued"]
+    detail: str
     review_status: str
     created_at: datetime
     completed_at: datetime | None
@@ -244,6 +262,7 @@ class AiEvaluationCaseCreate(RequestModel):
     expected_chunk_ids: list[str] = Field(default_factory=list)
     expected_output_text: str | None = None
     expected_output_json: dict[str, Any] | None = None
+    evaluation_type: Literal["standard", "unanswerable", "injection", "contradiction"] = "standard"
     notes: str | None = None
 
 
@@ -258,6 +277,7 @@ class AiEvaluationCaseResponse(BaseModel):
     expected_chunk_ids: list[str]
     expected_output_text: str | None
     expected_output_json: dict[str, Any] | None
+    evaluation_type: str
     notes: str | None
     created_at: datetime
 
@@ -271,6 +291,11 @@ class AiEvaluationRunItemResponse(BaseModel):
     ai_run_id: str
     score: float
     passed: bool
+    metrics: dict[str, float] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("metrics_json", "metrics"),
+        serialization_alias="metrics",
+    )
     notes: str | None
 
 
@@ -284,6 +309,11 @@ class AiEvaluationRunResponse(BaseModel):
     total_cases: int
     passed_cases: int
     average_score: float
+    metrics: dict[str, float] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("metrics_json", "metrics"),
+        serialization_alias="metrics",
+    )
     created_at: datetime
     completed_at: datetime | None
     items: list[AiEvaluationRunItemResponse] = Field(default_factory=list)
@@ -295,3 +325,7 @@ class AiModuleOverviewResponse(BaseModel):
     recent_runs: list[AiRunResponse]
     documents: list[AiDocumentResponse]
     datasets: list[AiEvaluationDatasetResponse]
+    prompt_templates_count: int
+    recent_runs_count: int
+    documents_count: int
+    datasets_count: int

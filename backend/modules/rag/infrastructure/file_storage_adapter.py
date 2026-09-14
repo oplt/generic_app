@@ -3,14 +3,19 @@ from __future__ import annotations
 import logging
 from uuid import uuid4
 
-from backend.core.storage import PRIVATE_UPLOAD_CACHE_CONTROL, StorageNotConfiguredError, object_storage
+from backend.core.storage import (
+    PRIVATE_UPLOAD_CACHE_CONTROL,
+    StorageNotConfiguredError,
+    object_storage,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def build_document_object_key(user_id: str, filename: str) -> str:
-    safe_name = filename.replace("/", "_").replace("\\", "_")
-    return f"rag/{user_id}/{uuid4().hex}_{safe_name}"
+def build_document_object_key(user_id: str, filename: str | None = None) -> str:
+    """Build opaque object key; display filename never enters storage path."""
+    del filename
+    return f"rag/{user_id}/{uuid4().hex}"
 
 
 class FileStorageAdapter:
@@ -39,7 +44,7 @@ class FileStorageAdapter:
 
     async def delete_document(self, storage_path: str | None) -> None:
         if storage_path:
-            await object_storage.delete_object(storage_path)
+            await object_storage.delete_object(storage_path, raise_on_error=True)
 
     async def download_document(self, storage_path: str) -> bytes:
         if not object_storage.is_configured:
@@ -52,7 +57,13 @@ class FileStorageAdapter:
                 Bucket=settings.STORAGE_BUCKET,
                 Key=storage_path,
             )
-            return response["Body"].read()
+            content_length = response.get("ContentLength")
+            if isinstance(content_length, int) and content_length > settings.RAG_MAX_FILE_BYTES:
+                raise ValueError("Stored document exceeds the configured size limit")
+            body = response["Body"].read(settings.RAG_MAX_FILE_BYTES + 1)
+            if len(body) > settings.RAG_MAX_FILE_BYTES:
+                raise ValueError("Stored document exceeds the configured size limit")
+            return body
 
         import asyncio
 

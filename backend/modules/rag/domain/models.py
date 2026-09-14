@@ -62,6 +62,16 @@ class Citation:
 
 
 @dataclass(slots=True)
+class WebCitation:
+    source_id: str
+    title: str
+    url: str
+    snippet: str
+    rank: int
+    published_at: str | None = None
+
+
+@dataclass(slots=True)
 class RagAnswer:
     query: str
     answer: str
@@ -75,6 +85,10 @@ class RagAnswer:
     memory_degraded: bool = False
     degradation_reason: str | None = None
     injection_chunks_filtered: int = 0
+    citation_validated: bool = True
+    needs_review: bool = False
+    mode: str = "documents"
+    web_citations: list[WebCitation] = field(default_factory=list)
 
 
 @dataclass(slots=True)

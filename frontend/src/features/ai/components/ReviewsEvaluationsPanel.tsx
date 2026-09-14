@@ -95,6 +95,12 @@ export function ReviewsEvaluationsPanel({ m }: { m: AiStudioModel }) {
                 </Stack>
                 <TextField label="Expected output text" value={datasetCaseForm.expected_output_text} onChange={(event) => setDatasetCaseForm((current) => ({ ...current, expected_output_text: event.target.value }))} fullWidth multiline minRows={2} />
                 <TextField label="Expected output JSON" value={datasetCaseForm.expected_output_json} onChange={(event) => setDatasetCaseForm((current) => ({ ...current, expected_output_json: event.target.value }))} fullWidth multiline minRows={2} />
+                <TextField select label="Evaluation case type" value={datasetCaseForm.evaluation_type} onChange={(event) => setDatasetCaseForm((current) => ({ ...current, evaluation_type: event.target.value as typeof current.evaluation_type }))} fullWidth>
+                    <MenuItem value="standard">Standard answer</MenuItem>
+                    <MenuItem value="unanswerable">Unanswerable / refuse</MenuItem>
+                    <MenuItem value="injection">Prompt injection resistance</MenuItem>
+                    <MenuItem value="contradiction">Contradictory sources</MenuItem>
+                </TextField>
                 <TextField label="Notes" value={datasetCaseForm.notes} onChange={(event) => setDatasetCaseForm((current) => ({ ...current, notes: event.target.value }))} fullWidth />
                 <Button
                     variant="outlined"
@@ -117,6 +123,7 @@ export function ReviewsEvaluationsPanel({ m }: { m: AiStudioModel }) {
                                     expected_output_json: result.data.expected_output_json.trim()
                                         ? parseJsonObject(result.data.expected_output_json)
                                         : null,
+                                    evaluation_type: result.data.evaluation_type,
                                     notes: result.data.notes || null,
                                 },
                             });
@@ -183,6 +190,8 @@ export function ReviewsEvaluationsPanel({ m }: { m: AiStudioModel }) {
                             </Box>
                         ))}
                     </Stack>
+                ) : selectedDatasetId ? (
+                    <EmptyState icon={<ReviewIcon />} title="No evaluation cases yet" description="Add a case to this dataset to start measuring prompt quality." />
                 ) : null}
                 {evaluationRunsIsError && (
                     <QueryErrorAlert
@@ -217,11 +226,16 @@ export function ReviewsEvaluationsPanel({ m }: { m: AiStudioModel }) {
                                     ? `Running (${run.total_cases} cases)...`
                                     : run.status === "failed"
                                       ? "Evaluation failed"
-                                      : `${run.passed_cases}/${run.total_cases} passed, average score ${run.average_score}`}
+                                      : `${run.passed_cases}/${run.total_cases} passed, score ${run.average_score}; ` +
+                                        `retrieval ${(run.metrics?.retrieval_recall ?? 0).toFixed(2)}, ` +
+                                        `groundedness ${(run.metrics?.groundedness ?? 0).toFixed(2)}, ` +
+                                        `citations ${(run.metrics?.citation_recall ?? 0).toFixed(2)}`}
                             </Alert>
                         ))}
                     </Stack>
-                ) : null}
+                ) : (
+                    <EmptyState icon={<ReviewIcon />} title="No evaluation runs yet" description="Run a dataset against a prompt version to see regression results here." />
+                )}
             </Stack>
         </Stack>
     </SectionCard>

@@ -53,6 +53,9 @@ export const datasetCaseDraftSchema = z.object({
             context.addIssue({ code: "custom", message: error instanceof Error ? error.message : "Invalid JSON object." });
         }
     }),
+    evaluation_type: z
+        .enum(["standard", "unanswerable", "injection", "contradiction"])
+        .default("standard"),
     notes: z.string(),
 });
 

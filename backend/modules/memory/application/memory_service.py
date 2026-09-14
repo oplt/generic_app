@@ -17,9 +17,13 @@ from backend.lib.memory_search_cache import (
     set_cached_memory_search,
 )
 from backend.lib.project_access import ProjectAccessPort, SqlAlchemyProjectAccessPort
+from backend.modules.memory.application.memory_authorization import MemoryAuthorization
 from backend.modules.memory.application.memory_consolidator import MemoryConsolidator
 from backend.modules.memory.application.memory_context_builder import MemoryContextBuilder
-from backend.modules.memory.application.memory_extractor import MemoryExtractor
+from backend.modules.memory.application.memory_extractor import (
+    EXTRACTION_POLICY_VERSION,
+    MemoryExtractor,
+)
 from backend.modules.memory.application.memory_policy_service import MemoryPolicyService
 from backend.modules.memory.application.memory_router import MemoryRouter
 from backend.modules.memory.domain.enums import (
@@ -57,12 +61,23 @@ class MemoryService:
         self.mem0 = Mem0Client(self.config)
         self.audit_repo = MemoryAuditRepository(db)
         self.registry_repo = MemoryRegistryRepository(db)
-        self.project_access: ProjectAccessPort = SqlAlchemyProjectAccessPort(db)
+        self._project_access: ProjectAccessPort = SqlAlchemyProjectAccessPort(db)
+        self.authorization = MemoryAuthorization(self._project_access)
         self.policy = MemoryPolicyService(self.config.min_confidence)
         self.router = MemoryRouter()
         self.extractor = MemoryExtractor(self.router)
         self.consolidator = MemoryConsolidator()
         self.context_builder = MemoryContextBuilder(self)
+
+    @property
+    def project_access(self) -> ProjectAccessPort:
+        return self._project_access
+
+    @project_access.setter
+    def project_access(self, value: ProjectAccessPort) -> None:
+        self._project_access = value
+        if hasattr(self, "authorization"):
+            self.authorization.project_access = value
 
     async def remember(
         self,
@@ -103,7 +118,7 @@ class MemoryService:
         mtype = MemoryType(memory_type or MemoryType.FACT.value)
         privacy_level = MemoryPrivacy(privacy)
 
-        await self._authorize_write(
+        await self.authorization.authorize_write(
             user_id=user_id,
             memory_level=level,
             project_id=project_id,
@@ -224,12 +239,10 @@ class MemoryService:
         resolved_limit = limit or self.config.default_limit
         levels = [MemoryLevel(level) for level in memory_levels] if memory_levels else None
         if project_id:
-            await self._ensure_project_access(user_id, project_id)
+            await self.authorization.ensure_project_access(user_id, project_id)
 
         level_values = (
-            [level.value for level in levels]
-            if levels
-            else [level.value for level in MemoryLevel]
+            [level.value for level in levels] if levels else [level.value for level in MemoryLevel]
         )
         cached = await get_cached_memory_search(
             user_id=user_id,
@@ -261,15 +274,27 @@ class MemoryService:
                 project_id=project_id,
                 top_k=resolved_limit,
             )
-            return await self._filter_authorized_read_items(user_id, items)
+            return items
 
         try:
-            level_results = await asyncio.gather(
-                *[_search_level(level) for level in search_levels]
+            level_results = await asyncio.wait_for(
+                asyncio.gather(*[_search_level(level) for level in search_levels]),
+                timeout=getattr(self.config, "recall_timeout_seconds", 2.0),
             )
             for level_items in level_results:
                 collected.extend(level_items)
+            collected = await self.authorization.filter_authorized_read_items(
+                user_id, collected
+            )
             metrics.memory_search_success.inc()
+        except TimeoutError:
+            metrics.memory_search_failure.inc()
+            logger.warning(
+                "Memory search exceeded latency budget user=%s timeout_seconds=%.2f",
+                user_id,
+                getattr(self.config, "recall_timeout_seconds", 2.0),
+            )
+            return []
         except Exception:
             metrics.memory_search_failure.inc()
             logger.exception("Mem0 search failed for user=%s", user_id)
@@ -336,7 +361,7 @@ class MemoryService:
             raise HTTPException(status_code=403, detail="You cannot forget another user's memory")
 
         if registry.project_id:
-            await self._ensure_project_access(user_id, registry.project_id)
+            await self.authorization.ensure_project_access(user_id, registry.project_id)
 
         try:
             await self.mem0.delete(memory_id)
@@ -376,7 +401,7 @@ class MemoryService:
             return [], 0
 
         if project_id:
-            await self._ensure_project_access(user_id, project_id)
+            await self.authorization.ensure_project_access(user_id, project_id)
 
         resolved_limit = limit or self.config.default_limit
         fetch_cap = min(offset + resolved_limit, MAX_PAGE_LIMIT)
@@ -391,7 +416,7 @@ class MemoryService:
                 project_id=project_id,
                 top_k=fetch_cap,
             )
-            return await self._filter_authorized_read_items(user_id, rows)
+            return await self.authorization.filter_authorized_read_items(user_id, rows)
 
         level_results = await asyncio.gather(*[_fetch_level(level) for level in levels])
         items: list[MemoryItem] = []
@@ -409,12 +434,12 @@ class MemoryService:
         if registry and registry.user_id and registry.user_id != user_id:
             raise HTTPException(status_code=403, detail="You cannot access another user's memory")
         if registry and registry.project_id:
-            await self._ensure_project_access(user_id, registry.project_id)
+            await self.authorization.ensure_project_access(user_id, registry.project_id)
 
         item = await self.mem0.get(memory_id)
         if not item:
             raise HTTPException(status_code=404, detail="Memory not found")
-        if not await self._authorize_read_item(user_id, item):
+        if not await self.authorization.authorize_read_item(user_id, item):
             raise HTTPException(status_code=403, detail="You cannot access this memory")
         return item
 
@@ -436,6 +461,9 @@ class MemoryService:
         try:
             items = await self.context_builder.recall_ranked(request)
             return self.context_builder.format_context_block(items), items, False
+        except HTTPException:
+            # Authorization failures are contract errors, not provider degradation.
+            raise
         except Exception:
             logger.exception("Memory recall failed for user=%s", request.user_id)
             return "", [], True
@@ -461,6 +489,14 @@ class MemoryService:
         )
         if not candidates:
             return []
+        candidates = [
+            candidate
+            for candidate in candidates
+            if not candidate.requires_confirmation and candidate.routed.confidence >= 0.8
+        ]
+        if not candidates:
+            logger.info("Memory candidates require explicit user confirmation")
+            return []
 
         semaphore = asyncio.Semaphore(_MEMORY_WRITE_CONCURRENCY)
 
@@ -479,80 +515,12 @@ class MemoryService:
                     confidence=candidate.routed.confidence,
                     source=candidate.routed.source.value,
                     source_ref=source_message_id,
+                    metadata={"extraction_policy_version": EXTRACTION_POLICY_VERSION},
                 )
 
-        return list(await asyncio.gather(*[_remember_candidate(candidate) for candidate in candidates]))
-
-    async def _authorize_write(
-        self,
-        *,
-        user_id: str,
-        memory_level: MemoryLevel,
-        project_id: str | None,
-    ) -> None:
-        if memory_level == MemoryLevel.PROJECT:
-            if not project_id:
-                raise HTTPException(
-                    status_code=422,
-                    detail="project_id is required for project memory",
-                )
-            await self._ensure_project_access(user_id, project_id)
-
-    async def _authorize_read_item(self, user_id: str, item: MemoryItem) -> bool:
-        filtered = await self._filter_authorized_read_items(user_id, [item])
-        return bool(filtered)
-
-    async def _filter_authorized_read_items(
-        self,
-        user_id: str,
-        items: list[MemoryItem],
-    ) -> list[MemoryItem]:
-        if not items:
-            return []
-
-        project_ids = {
-            item.metadata.project_id
-            for item in items
-            if item.metadata.memory_level == MemoryLevel.PROJECT
-            and item.metadata.project_id
-            and item.metadata.user_id == user_id
-        }
-        accessible_project_ids = await self.project_access.filter_accessible_project_ids(
-            user_id,
-            project_ids,
+        return list(
+            await asyncio.gather(*[_remember_candidate(candidate) for candidate in candidates])
         )
-        return [
-            item
-            for item in items
-            if self._item_authorized_for_read(user_id, item, accessible_project_ids)
-        ]
-
-    def _item_authorized_for_read(
-        self,
-        user_id: str,
-        item: MemoryItem,
-        accessible_project_ids: set[str],
-    ) -> bool:
-        level = item.metadata.memory_level
-        if level in {MemoryLevel.USER, MemoryLevel.SESSION, MemoryLevel.EPISODIC}:
-            return item.metadata.user_id == user_id
-        if level == MemoryLevel.PROJECT:
-            if item.metadata.user_id != user_id:
-                return False
-            if item.metadata.project_id:
-                return item.metadata.project_id in accessible_project_ids
-            return True
-        if level == MemoryLevel.AGENT:
-            scope = item.metadata.scope
-            if scope and scope.value == "global_agent":
-                return True
-            return item.metadata.user_id in {"", user_id}
-        return False
-
-    async def _ensure_project_access(self, user_id: str, project_id: str) -> None:
-        project = await self.project_access.get_project_for_user(project_id, user_id)
-        if not project:
-            raise HTTPException(status_code=403, detail="Project access denied")
 
     @staticmethod
     def _extract_memory_id(result: dict[str, Any]) -> str:

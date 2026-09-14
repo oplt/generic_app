@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from time import perf_counter
 
+from backend.core.config import settings
 from backend.lib.embedding_cache import embed_texts_with_cache
 from backend.modules.rag.infrastructure import metrics
 from backend.modules.rag.infrastructure.langchain_embeddings import LangChainEmbeddingAdapter
@@ -23,6 +24,9 @@ class EmbeddingService:
             model=self.config.embedding_model,
             texts=texts,
             embed_fn=self._adapter.embed_texts,
+            dimensions=getattr(
+                self.config, "embedding_dimensions", settings.RAG_EMBEDDING_DIMENSIONS
+            ),
         )
         metrics.rag_embedding_latency_ms.observe((perf_counter() - started) * 1000)
         return vectors

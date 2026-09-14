@@ -3,7 +3,7 @@ import {
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { logout as logoutRequest, me, type AuthUser } from "../../../api/auth";
-import { queryKeys } from "../../../config/queryKeys";
+import { clearUserScopedQueryState, queryKeys } from "../../../config/queryKeys";
 import { QUERY_STALE_TIMES } from "../../../config/queryTiming";
 import { AuthContext } from "./authContext";
 
@@ -24,8 +24,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const isReady = !isPending || isError;
 
     async function logout() {
-        await logoutRequest().catch(() => undefined);
+        // Clear local identity first so protected screens unmount immediately;
+        // network logout must not keep the previous user's data visible.
+        await clearUserScopedQueryState(queryClient);
         queryClient.setQueryData(queryKeys.auth.me, null);
+        try {
+            await logoutRequest();
+        } catch {
+            // Local logout still succeeds when the server/session is unavailable.
+        } finally {
+            // Catch responses that raced cancellation during the transition.
+            await clearUserScopedQueryState(queryClient);
+        }
     }
 
     function setAuthenticated(user: AuthUser) {

@@ -1,9 +1,15 @@
+import inspect
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.modules.identity_access.models import RefreshSession, User
+from backend.modules.identity_access.models import (
+    Organization,
+    OrganizationMembership,
+    RefreshSession,
+    User,
+)
 
 
 class IdentityRepository:
@@ -16,7 +22,36 @@ class IdentityRepository:
 
     async def get_user_by_id(self, user_id: str) -> User | None:
         result = await self.db.execute(select(User).where(User.id == user_id))
-        return result.scalar_one_or_none()
+        value = result.scalar_one_or_none()
+        if inspect.isawaitable(value):
+            value = await value
+        return value
+
+    async def create_personal_organization(self, user: User) -> Organization:
+        organization = Organization(name=(user.full_name or user.email).strip()[:255])
+        self.db.add(organization)
+        await self.db.flush()
+        self.db.add(
+            OrganizationMembership(
+                organization_id=organization.id,
+                user_id=user.id,
+                role="owner",
+            )
+        )
+        await self.db.flush()
+        return organization
+
+    async def get_default_organization_id(self, user_id: str) -> str | None:
+        result = await self.db.execute(
+            select(OrganizationMembership.organization_id)
+            .where(OrganizationMembership.user_id == user_id)
+            .order_by(OrganizationMembership.created_at.asc())
+            .limit(1)
+        )
+        value = result.scalar_one_or_none()
+        if inspect.isawaitable(value):
+            value = await value
+        return value
 
     async def create_user(
         self,
@@ -38,7 +73,7 @@ class IdentityRepository:
         return user
 
     async def create_refresh_session(
-            self, user_id: str, token_hash: str, expires_at: datetime
+        self, user_id: str, token_hash: str, expires_at: datetime
     ) -> RefreshSession:
         session = RefreshSession(
             user_id=user_id,
@@ -58,6 +93,21 @@ class IdentityRepository:
     async def revoke_refresh_session(self, session: RefreshSession) -> None:
         session.is_revoked = True
         await self.db.flush()
+
+    async def rotate_refresh_session(self, session_id: str, token_hash: str) -> bool:
+        """Revoke a refresh token exactly once for race-safe rotation."""
+        result = await self.db.execute(
+            update(RefreshSession)
+            .where(
+                RefreshSession.id == session_id,
+                RefreshSession.token_hash == token_hash,
+                RefreshSession.is_revoked.is_(False),
+                RefreshSession.expires_at > datetime.now(UTC),
+            )
+            .values(is_revoked=True)
+        )
+        await self.db.flush()
+        return result.rowcount == 1
 
     async def revoke_all_refresh_sessions_for_user(self, user_id: str) -> None:
         sessions = await self.list_active_sessions(user_id, limit=None)

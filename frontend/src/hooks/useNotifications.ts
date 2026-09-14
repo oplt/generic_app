@@ -15,7 +15,7 @@ type UseNotificationsOptions = Pick<
 export function useNotifications(options?: UseNotificationsOptions) {
     return useQuery({
         queryKey: queryKeys.notifications.all,
-        queryFn: getNotifications,
+        queryFn: ({ signal }) => getNotifications({ signal }),
         staleTime: QUERY_STALE_TIMES.notifications,
         refetchInterval: NOTIFICATIONS_REFETCH_INTERVAL_MS,
         ...options,

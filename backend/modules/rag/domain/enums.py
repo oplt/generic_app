@@ -3,6 +3,8 @@ from enum import StrEnum
 
 class DocumentStatus(StrEnum):
     UPLOADED = "uploaded"
+    VALIDATING = "validating"
+    EXTRACTING = "extracting"
     PARSING = "parsing"
     CHUNKING = "chunking"
     EMBEDDING = "embedding"

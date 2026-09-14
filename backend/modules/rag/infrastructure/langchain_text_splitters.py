@@ -9,6 +9,7 @@ def split_documents(
     *,
     chunk_size: int,
     chunk_overlap: int,
+    tokenizer_model: str | None = None,
 ) -> list[tuple[str, dict]]:
     """Split parsed documents using LangChain RecursiveCharacterTextSplitter.
 
@@ -22,7 +23,7 @@ def split_documents(
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        length_function=estimate_tokens,
+        length_function=lambda value: estimate_tokens(value, model=tokenizer_model),
     )
     results: list[tuple[str, dict]] = []
     for doc in documents:

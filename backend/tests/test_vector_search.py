@@ -1,46 +1,51 @@
 import unittest
+from unittest.mock import AsyncMock, MagicMock
 
 from backend.lib.vector_search import (
-    json_fallback_max_candidates,
-    rank_embedding_matches,
+    pgvector_readiness,
+    reset_pgvector_readiness_cache,
 )
 from backend.lib.vectors import cosine_similarity
 
 
-class VectorSearchHelpersTest(unittest.TestCase):
-    def test_json_fallback_max_candidates_scales_with_top_k(self):
-        self.assertEqual(json_fallback_max_candidates(5), 250)
-        self.assertEqual(json_fallback_max_candidates(200), 5000)
+class PgVectorReadinessTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        reset_pgvector_readiness_cache()
 
-    def test_rank_embedding_matches_returns_top_scoring_rows(self):
-        rows = [
-            {"id": "a", "embedding": [1.0, 0.0]},
-            {"id": "b", "embedding": [0.0, 1.0]},
-            {"id": "c", "embedding": [0.9, 0.1]},
-        ]
+    async def test_readiness_requires_extension_column_and_hnsw_index(self):
+        db = AsyncMock()
+        db.bind = None
+        result = MagicMock()
+        result.mappings.return_value.one.return_value = {
+            "extension_available": True,
+            "embedding_column_available": True,
+            "hnsw_index_available": False,
+        }
+        db.execute.return_value = result
 
-        ranked = rank_embedding_matches(
-            [1.0, 0.0],
-            rows,
-            top_k=2,
-            score_threshold=0.1,
-            build_match=lambda row, score: {"id": row["id"], "score": score},
-        )
+        readiness = await pgvector_readiness(db)
 
-        self.assertEqual([item["id"] for item in ranked], ["a", "c"])
-        self.assertAlmostEqual(ranked[0]["score"], 1.0)
-        self.assertGreater(ranked[1]["score"], 0.8)
+        self.assertFalse(readiness.available)
+        self.assertEqual(readiness.reason, "hnsw_index_missing")
+        self.assertEqual(db.execute.await_count, 1)
 
-    def test_rank_embedding_matches_respects_threshold(self):
-        rows = [{"id": "low", "embedding": [0.0, 1.0]}]
-        ranked = rank_embedding_matches(
-            [1.0, 0.0],
-            rows,
-            top_k=3,
-            score_threshold=0.5,
-            build_match=lambda row, score: {"id": row["id"], "score": score},
-        )
-        self.assertEqual(ranked, [])
+    async def test_ready_result_is_cached_briefly(self):
+        db = AsyncMock()
+        db.bind = None
+        result = MagicMock()
+        result.mappings.return_value.one.return_value = {
+            "extension_available": True,
+            "embedding_column_available": True,
+            "hnsw_index_available": True,
+        }
+        db.execute.return_value = result
+
+        first = await pgvector_readiness(db)
+        second = await pgvector_readiness(db)
+
+        self.assertTrue(first.available)
+        self.assertTrue(second.available)
+        self.assertEqual(db.execute.await_count, 1)
 
 
 class CosineSimilarityTest(unittest.TestCase):

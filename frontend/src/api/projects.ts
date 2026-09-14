@@ -7,6 +7,8 @@ export type Project = {
     created_at: string;
 };
 
+export type ProjectSummary = { project_count: number; open_task_count: number };
+
 export type ProjectTaskStatus = "backlog" | "todo" | "in_progress" | "review" | "done";
 export type ProjectTaskPriority = "low" | "medium" | "high" | "urgent";
 
@@ -30,8 +32,12 @@ export type ProjectTask = {
     updated_at: string;
 };
 
-export async function listProjects(): Promise<Project[]> {
-    return apiFetchItems<Project>("/projects");
+export async function listProjects(options: RequestInit = {}): Promise<Project[]> {
+    return apiFetchItems<Project>("/projects", options);
+}
+
+export async function getProjectSummary(options: RequestInit = {}): Promise<ProjectSummary> {
+    return apiFetch("/projects/summary", options);
 }
 
 export async function getProject(projectId: string): Promise<Project> {

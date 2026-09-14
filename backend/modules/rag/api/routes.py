@@ -11,6 +11,7 @@ from backend.core.pagination import (
     pagination_params,
 )
 from backend.core.text_snippet import text_snippet
+from backend.core.uploads import UploadTooLargeError, read_upload_limited
 from backend.modules.ai.dependencies import enforce_ai_generation_rate_limit
 from backend.modules.identity_access.models import User
 from backend.modules.rag.api.schemas import (
@@ -25,13 +26,17 @@ from backend.modules.rag.api.schemas import (
     RagRetrievedChunkResponse,
     RagRetrieveRequest,
     RagRetrieveResponse,
+    RagWebSourceResponse,
 )
+from backend.modules.rag.application.document_identity import embedding_metadata_matches
 from backend.modules.rag.application.document_ingestion_service import DocumentIngestionService
 from backend.modules.rag.application.rag_answer_service import RagAnswerService
 from backend.modules.rag.application.retrieval_service import RetrievalService
 from backend.modules.rag.infrastructure.rag_config import RagConfig
 from backend.modules.rag.infrastructure.repositories import RagRepository
-from backend.modules.rag.workers import queue_document_indexing
+from backend.modules.rag.workers import (
+    queue_document_indexing,  # noqa: F401 — compatibility patch target
+)
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +49,13 @@ def _require_rag_enabled() -> None:
 
 
 def _document_to_response(document) -> RagDocumentResponse:
+    metadata = json.loads(document.metadata_json or "{}")
+    config = RagConfig.from_settings()
+    expected_embedding = {
+        "embedding_provider": config.embedding_provider,
+        "embedding_model": config.embedding_model,
+        "embedding_dimensions": config.embedding_dimensions,
+    }
     return RagDocumentResponse(
         id=document.id,
         user_id=document.user_id,
@@ -52,12 +64,17 @@ def _document_to_response(document) -> RagDocumentResponse:
         filename=document.filename,
         original_filename=document.original_filename,
         content_type=document.content_type,
+        fingerprint=getattr(document, "content_fingerprint", None),
         storage_path=document.storage_path,
         status=document.status,
         source_type=document.source_type,
-        metadata=json.loads(document.metadata_json or "{}"),
+        metadata=metadata,
         created_at=document.created_at,
         updated_at=document.updated_at,
+        needs_reindex=(
+            document.status == "indexed"
+            and not embedding_metadata_matches(metadata, expected_embedding)
+        ),
     )
 
 
@@ -69,23 +86,27 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
 ):
     _require_rag_enabled()
-    content = await file.read()
+    try:
+        content = await read_upload_limited(
+            file, max_bytes=RagConfig.from_settings().max_file_bytes
+        )
+    except UploadTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded document file is empty")
     service = DocumentIngestionService(db)
-    document, job, _ = await service.upload_document(
+    upload_result = await service.upload_document(
         user_id=current_user.id,
         filename=file.filename or "upload.bin",
         content=content,
         content_type=file.content_type or "application/octet-stream",
         project_id=project_id,
     )
-    queue_document_indexing(
-        document_id=document.id,
-        user_id=current_user.id,
-        job_id=job.id,
-    )
+    document, job = upload_result
     return RagDocumentUploadResponse(
         document=_document_to_response(document),
         ingestion_job=RagIngestionJobResponse.model_validate(job),
+        duplicate=upload_result.duplicate,
     )
 
 
@@ -98,17 +119,24 @@ async def list_documents(
 ):
     _require_rag_enabled()
     repo = RagRepository(db)
-    docs, total = await repo.list_documents_for_user(
-        current_user.id,
-        project_id=project_id,
-        limit=pagination.limit,
-        offset=pagination.offset,
-    )
+    next_cursor = None
+    has_more = False
+    if getattr(pagination, "cursor", None):
+        docs, next_cursor, has_more = await repo.list_documents_for_user_cursor(
+            current_user.id, project_id=project_id, limit=pagination.limit, cursor=pagination.cursor
+        )
+        total = None
+    else:
+        docs, total = await repo.list_documents_for_user(
+            current_user.id, project_id=project_id, limit=pagination.limit, offset=pagination.offset
+        )
     return paginated_response(
         [_document_to_response(doc) for doc in docs],
         total=total,
         limit=pagination.limit,
         offset=pagination.offset,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
 
@@ -161,6 +189,27 @@ async def index_document(
     return RagIngestionJobResponse.model_validate(job)
 
 
+@router.post(
+    "/documents/{document_id}/reindex",
+    response_model=RagIngestionJobResponse,
+    status_code=202,
+)
+async def reindex_document(
+    document_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Semantic alias for indexing, kept for document-chat clients."""
+    _require_rag_enabled()
+    service = DocumentIngestionService(db)
+    job = await service.enqueue_document_indexing(
+        document_id=document_id,
+        user_id=current_user.id,
+        is_admin=current_user.is_admin,
+    )
+    return RagIngestionJobResponse.model_validate(job)
+
+
 @router.get(
     "/documents/{document_id}/chunks",
     response_model=PaginatedResponse[RagChunkResponse],
@@ -181,11 +230,17 @@ async def list_document_chunks(
     document = await repo.get_document(document_id)
     if not document or document.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Document not found")
-    chunks, total = await repo.list_chunks_for_document(
-        document_id,
-        limit=pagination.limit,
-        offset=pagination.offset,
-    )
+    next_cursor = None
+    has_more = False
+    if getattr(pagination, "cursor", None):
+        chunks, next_cursor, has_more = await repo.list_chunks_for_document_cursor(
+            document_id, limit=pagination.limit, cursor=pagination.cursor
+        )
+        total = None
+    else:
+        chunks, total = await repo.list_chunks_for_document(
+            document_id, limit=pagination.limit, offset=pagination.offset
+        )
 
     def chunk_content(raw: str) -> str:
         if content_mode == "full":
@@ -207,6 +262,8 @@ async def list_document_chunks(
         total=total,
         limit=pagination.limit,
         offset=pagination.offset,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
 
@@ -218,7 +275,14 @@ async def retrieve_chunks(
 ):
     _require_rag_enabled()
     service = RetrievalService(db)
-    filters = {"document_ids": payload.document_ids} if payload.document_ids else None
+    filters = {
+        key: value
+        for key, value in {
+            "document_ids": payload.document_ids,
+            "source_type": payload.source_type,
+        }.items()
+        if value
+    } or None
     outcome = await service.retrieve(
         payload.query,
         user_id=current_user.id,
@@ -264,6 +328,8 @@ async def ask_rag(
                 run_id=payload.run_id,
                 agent_id=payload.agent_id,
                 document_ids=payload.document_ids or None,
+                mode=payload.mode,
+                use_memory=payload.use_memory,
             ),
             timeout=settings.RAG_ASK_TIMEOUT_SECONDS,
         )
@@ -293,6 +359,20 @@ async def ask_rag(
         memory_degraded=result.memory_degraded,
         degradation_reason=result.degradation_reason,
         injection_chunks_filtered=result.injection_chunks_filtered,
+        citation_validated=result.citation_validated,
+        needs_review=result.needs_review,
+        mode=result.mode,
+        web_sources=[
+            RagWebSourceResponse(
+                source_id=source.source_id,
+                title=source.title,
+                url=source.url,
+                snippet=source.snippet,
+                rank=source.rank,
+                published_at=source.published_at,
+            )
+            for source in result.web_citations
+        ],
     )
 
 
@@ -304,13 +384,42 @@ async def list_queries(
 ):
     _require_rag_enabled()
     repo = RagRepository(db)
-    rows, total = await repo.list_queries_for_user(
+    next_cursor = None
+    has_more = False
+    if getattr(pagination, "cursor", None):
+        rows, next_cursor, has_more = await repo.list_queries_for_user_cursor(
+            current_user.id, limit=pagination.limit, cursor=pagination.cursor
+        )
+        total = None
+    else:
+        rows, total = await repo.list_queries_for_user(
+            current_user.id, limit=pagination.limit, offset=pagination.offset
+        )
+    return paginated_response(
+        [RagQueryResponse.model_validate(row) for row in rows],
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
+
+
+@router.get("/jobs", response_model=PaginatedResponse[RagIngestionJobResponse])
+async def list_jobs(
+    pagination: PaginationParams = Depends(pagination_params),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_rag_enabled()
+    repo = RagRepository(db)
+    jobs, total = await repo.list_ingestion_jobs_for_user(
         current_user.id,
         limit=pagination.limit,
         offset=pagination.offset,
     )
     return paginated_response(
-        [RagQueryResponse.model_validate(row) for row in rows],
+        [RagIngestionJobResponse.model_validate(job) for job in jobs],
         total=total,
         limit=pagination.limit,
         offset=pagination.offset,
@@ -329,3 +438,26 @@ async def get_job(
     if not job or job.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Job not found")
     return RagIngestionJobResponse.model_validate(job)
+
+
+@router.post("/jobs/{job_id}/retry", response_model=RagIngestionJobResponse, status_code=202)
+async def retry_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a fresh durable outbox attempt for a failed/stuck ingestion job."""
+    _require_rag_enabled()
+    repo = RagRepository(db)
+    old_job = await repo.get_ingestion_job(job_id)
+    if not old_job or old_job.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if old_job.status == "completed":
+        raise HTTPException(status_code=409, detail="Ingestion job is already complete")
+    service = DocumentIngestionService(db)
+    return await service.enqueue_document_indexing(
+        document_id=old_job.document_id,
+        user_id=current_user.id,
+        is_admin=current_user.is_admin,
+        force_new_attempt=True,
+    )

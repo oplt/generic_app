@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { Box, Button, Stack, Typography } from "@mui/material";
+import { Box, Button, ButtonBase, Stack, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import { formatDateOnly, humanizeKey } from "../../../utils/formatters";
 import { formatItemTime, getMinutesFromTimeString, getWeekItemColor } from "../calendarDisplay";
@@ -91,10 +91,12 @@ const { anchorDate, itemsByDate, openDay } = m;
                             {allDayItems.map((item) => {
                                 const colors = getWeekItemColor(item, theme);
                                 return (
-                                    <Box
+                                    <ButtonBase
                                         key={item.id}
                                         onClick={() => openDay(anchorDate)}
+                                        aria-label={`Open ${item.title} on ${formatDateOnly(dayKey)}`}
                                         sx={{
+                                            textAlign: "left",
                                             px: 1.25,
                                             py: 0.8,
                                             borderRadius: 2,
@@ -107,7 +109,7 @@ const { anchorDate, itemsByDate, openDay } = m;
                                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                             {item.title}
                                         </Typography>
-                                    </Box>
+                                    </ButtonBase>
                                 );
                             })}
                         </Stack>
@@ -195,10 +197,13 @@ const { anchorDate, itemsByDate, openDay } = m;
                             );
 
                             return (
-                                <Box
+                                <ButtonBase
                                     key={item.id}
                                     onClick={() => openDay(anchorDate)}
+                                    aria-label={`Open ${item.title} on ${formatDateOnly(dayKey)}`}
                                     sx={{
+                                        display: "block",
+                                        textAlign: "left",
                                         position: "absolute",
                                         top,
                                         left: 12,
@@ -221,7 +226,7 @@ const { anchorDate, itemsByDate, openDay } = m;
                                     <Typography variant="body2" sx={{ mt: 0.4 }}>
                                         {formatItemTime(item)}
                                     </Typography>
-                                </Box>
+                                </ButtonBase>
                             );
                         })}
                     </Box>

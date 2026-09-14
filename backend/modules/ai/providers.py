@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+import asyncio  # noqa: F401 — compatibility patch target for retry tests
 import hashlib
 import json
 import math
@@ -11,18 +11,25 @@ from fastapi import HTTPException
 
 from backend.core.config import settings
 from backend.lib.vectors import estimate_tokens
+from backend.modules.ai.provider_retry import (
+    ProviderHTTPError,
+    post_with_retry,
+    provider_timeout,
+    result_retry_fields,
+)
+
+_post_with_retry = post_with_retry
+_result_retry_fields = result_retry_fields
 
 _openai_http_client: httpx.AsyncClient | None = None
 _anthropic_http_client: httpx.AsyncClient | None = None
-_RETRYABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
-_MAX_HTTP_RETRIES = 3
 
 
 def _get_openai_http_client() -> httpx.AsyncClient:
     global _openai_http_client
     if _openai_http_client is None or _openai_http_client.is_closed:
         _openai_http_client = httpx.AsyncClient(
-            timeout=60.0,
+            timeout=provider_timeout(settings.AI_REQUEST_TIMEOUT_SECONDS),
             base_url=settings.OPENAI_BASE_URL,
         )
     return _openai_http_client
@@ -32,7 +39,7 @@ def _get_anthropic_http_client() -> httpx.AsyncClient:
     global _anthropic_http_client
     if _anthropic_http_client is None or _anthropic_http_client.is_closed:
         _anthropic_http_client = httpx.AsyncClient(
-            timeout=60.0,
+            timeout=provider_timeout(settings.AI_REQUEST_TIMEOUT_SECONDS),
             base_url=settings.ANTHROPIC_BASE_URL,
         )
     return _anthropic_http_client
@@ -47,18 +54,6 @@ async def close_ai_provider_http_clients() -> None:
     _anthropic_http_client = None
 
 
-async def _post_with_retry(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
-    last_response: httpx.Response | None = None
-    for attempt in range(_MAX_HTTP_RETRIES):
-        response = await client.post(url, **kwargs)
-        last_response = response
-        if response.status_code not in _RETRYABLE_STATUS_CODES or attempt == _MAX_HTTP_RETRIES - 1:
-            return response
-        await asyncio.sleep(min(2**attempt, 8))
-    assert last_response is not None
-    return last_response
-
-
 @dataclass(slots=True)
 class ProviderGenerateRequest:
     model: str
@@ -66,6 +61,7 @@ class ProviderGenerateRequest:
     user_prompt: str
     response_format: str
     temperature: float
+    idempotency_key: str | None = None
 
 
 @dataclass(slots=True)
@@ -76,6 +72,9 @@ class ProviderGenerateResult:
     output_json: dict | None
     input_tokens: int
     output_tokens: int
+    attempts: int = 1
+    retries: int = 0
+    last_status_code: int | None = None
 
     @property
     def total_tokens(self) -> int:
@@ -100,6 +99,10 @@ def _hash_embedding(text: str, dimensions: int = 32) -> list[float]:
         values.append(((integer % 2000) / 1000.0) - 1.0)
     norm = math.sqrt(sum(value * value for value in values)) or 1.0
     return [value / norm for value in values]
+
+
+def _hash_embeddings(texts: list[str], dimensions: int) -> list[list[float]]:
+    return [_hash_embedding(text, dimensions=dimensions) for text in texts]
 
 
 class LocalHeuristicProvider(BaseAiProvider):
@@ -135,9 +138,11 @@ class LocalHeuristicProvider(BaseAiProvider):
         )
 
     async def embed_texts(self, texts: list[str], model: str | None = None) -> list[list[float]]:
-        return [
-            _hash_embedding(text, dimensions=settings.RAG_EMBEDDING_DIMENSIONS) for text in texts
-        ]
+        return await asyncio.to_thread(
+            _hash_embeddings,
+            texts,
+            settings.RAG_EMBEDDING_DIMENSIONS,
+        )
 
 
 class OpenAIProvider(BaseAiProvider):
@@ -150,7 +155,14 @@ class OpenAIProvider(BaseAiProvider):
         response = await _post_with_retry(
             client,
             "/chat/completions",
-            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
+            idempotent=bool(request.idempotency_key),
+            provider_key=self.key,
+                operation="generation",
+                trace_attributes={"model": request.model, "cache_hit": False},
+            headers={
+                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                **({"Idempotency-Key": request.idempotency_key} if request.idempotency_key else {}),
+            },
             json={
                 "model": request.model,
                 "temperature": request.temperature,
@@ -164,8 +176,9 @@ class OpenAIProvider(BaseAiProvider):
             },
         )
         if response.status_code >= 400:
-            raise HTTPException(
-                status_code=502,
+            raise ProviderHTTPError(
+                provider=self.key,
+                response=response,
                 detail=f"OpenAI request failed: {response.text[:300]}",
             )
         payload = response.json()
@@ -184,6 +197,7 @@ class OpenAIProvider(BaseAiProvider):
             output_json=output_json,
             input_tokens=int(usage.get("prompt_tokens", 0)),
             output_tokens=int(usage.get("completion_tokens", 0)),
+            **_result_retry_fields(response),
         )
 
     async def embed_texts(self, texts: list[str], model: str | None = None) -> list[list[float]]:
@@ -193,6 +207,10 @@ class OpenAIProvider(BaseAiProvider):
         response = await _post_with_retry(
             client,
             "/embeddings",
+            idempotent=True,
+            provider_key=self.key,
+            operation="embedding",
+            trace_attributes={"model": model or settings.OPENAI_EMBEDDING_MODEL},
             headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
             json={
                 "model": model or settings.OPENAI_EMBEDDING_MODEL,
@@ -200,8 +218,9 @@ class OpenAIProvider(BaseAiProvider):
             },
         )
         if response.status_code >= 400:
-            raise HTTPException(
-                status_code=502,
+            raise ProviderHTTPError(
+                provider=self.key,
+                response=response,
                 detail=f"OpenAI embeddings request failed: {response.text[:300]}",
             )
         payload = response.json()
@@ -218,9 +237,14 @@ class AnthropicProvider(BaseAiProvider):
         response = await _post_with_retry(
             client,
             "/messages",
+            idempotent=bool(request.idempotency_key),
+            provider_key=self.key,
+                operation="generation",
+                trace_attributes={"model": request.model, "cache_hit": False},
             headers={
                 "x-api-key": settings.ANTHROPIC_API_KEY,
                 "anthropic-version": "2023-06-01",
+                **({"idempotency-key": request.idempotency_key} if request.idempotency_key else {}),
             },
             json={
                 "model": request.model,
@@ -231,8 +255,9 @@ class AnthropicProvider(BaseAiProvider):
             },
         )
         if response.status_code >= 400:
-            raise HTTPException(
-                status_code=502,
+            raise ProviderHTTPError(
+                provider=self.key,
+                response=response,
                 detail=f"Anthropic request failed: {response.text[:300]}",
             )
         payload = response.json()
@@ -254,6 +279,7 @@ class AnthropicProvider(BaseAiProvider):
             output_json=output_json,
             input_tokens=int(usage.get("input_tokens", 0)),
             output_tokens=int(usage.get("output_tokens", 0)),
+            **_result_retry_fields(response),
         )
 
     async def embed_texts(self, texts: list[str], model: str | None = None) -> list[list[float]]:

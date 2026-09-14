@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
-
-import asyncio
 
 import pytest
 from fastapi import FastAPI
@@ -24,8 +24,7 @@ from backend.core.config import Settings
 from backend.core.log_context import get_correlation_id, reset_correlation_id, set_correlation_id
 from backend.core.log_handlers import cleanup_old_logs, resolve_log_file_path
 from backend.core.log_redaction import RedactingFilter, redact_message, redact_url
-from backend.core.logging import setup_logging
-
+from backend.core.logging import JsonLogFormatter, setup_logging
 
 REQUIRED_SETTINGS = {
     "DATABASE_URL": "postgresql+asyncpg://app:app@localhost:5432/app_db",
@@ -49,6 +48,20 @@ def test_invalid_log_level_falls_back_to_info():
     with patch.dict(os.environ, env, clear=False):
         settings = Settings()
     assert settings.LOG_LEVEL == "INFO"
+
+
+def test_production_rejects_eager_celery_mode():
+    payload = Settings().model_dump()
+    payload.update(
+        APP_ENV="production",
+        COOKIE_SECURE=True,
+        FRONTEND_URL="https://example.com",
+        CORS_ALLOWED_ORIGINS=[],
+        CELERY_TASK_ALWAYS_EAGER=True,
+    )
+
+    with pytest.raises(ValueError, match="CELERY_TASK_ALWAYS_EAGER"):
+        Settings.model_validate(payload)
 
 
 def test_resolve_log_file_path_relative_to_backend():
@@ -98,8 +111,9 @@ def test_redact_url_masks_credentials():
 
 def test_setup_logging_writes_to_file(tmp_path: Path):
     log_file = tmp_path / "logs.txt"
-    with patch("backend.core.logging.settings") as mock_settings, patch(
-        "backend.core.log_handlers.settings", mock_settings
+    with (
+        patch("backend.core.logging.settings") as mock_settings,
+        patch("backend.core.log_handlers.settings", mock_settings),
     ):
         mock_settings.LOG_LEVEL = "INFO"
         mock_settings.LOG_TO_CONSOLE = False
@@ -130,6 +144,37 @@ def test_redact_message_masks_bearer_token():
     message = redact_message("Authorization: Bearer abc.def.ghi")
     assert "abc.def.ghi" not in message
     assert "[REDACTED]" in message
+
+
+def test_redact_message_masks_secret_query_parameters():
+    message = redact_message("provider=https://example.test/search?api_key=secret&q=hello")
+
+    assert "secret" not in message
+    assert "api_key=[REDACTED]" in message
+
+
+def test_json_log_formatter_preserves_safe_workflow_fields():
+    record = logging.LogRecord(
+        name="backend.workflow",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="workflow_event",
+        args=(),
+        exc_info=None,
+    )
+    record.correlation_id = "request-123"
+    record.event_name = "workflow_completed"
+    record.workflow = "auth"
+    record.operation = "sign_in"
+    record.outcome = "success"
+
+    payload = json.loads(JsonLogFormatter().format(record))
+
+    assert payload["correlation_id"] == "request-123"
+    assert payload["workflow"] == "auth"
+    assert payload["operation"] == "sign_in"
+    assert payload["outcome"] == "success"
 
 
 def test_preserves_incoming_request_id_header():

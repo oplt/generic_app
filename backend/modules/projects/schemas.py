@@ -21,6 +21,11 @@ class ProjectResponse(BaseModel):
     created_at: datetime
 
 
+class ProjectSummaryResponse(BaseModel):
+    project_count: int
+    open_task_count: int
+
+
 class ProjectTaskAssigneeResponse(BaseModel):
     id: str
     email: str

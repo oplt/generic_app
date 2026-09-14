@@ -42,12 +42,13 @@ class PromptContextService:
         db: AsyncSession,
         *,
         rag_config: RagConfig | None = None,
+        retrieval: RetrievalService | None = None,
         memory: MemoryService | None = None,
         memory_config: MemoryConfig | None = None,
     ) -> None:
         self.rag_config = rag_config or RagConfig.from_settings()
         self.memory_config = memory_config or MemoryConfig.from_settings()
-        self.retrieval = RetrievalService(db, self.rag_config)
+        self.retrieval = retrieval or RetrievalService(db, self.rag_config)
         self.memory = memory or MemoryService(db)
         self.context_builder = RagContextBuilder()
 
@@ -61,15 +62,26 @@ class PromptContextService:
         project_id: str | None,
         document_ids: list[str] | None,
         top_k: int | None,
+        organization_id: str | None = None,
         include_memory: bool = True,
+        include_documents: bool = True,
+        retrieval: RetrievalService | None = None,
+        memory: MemoryService | None = None,
+        memory_config: MemoryConfig | None = None,
     ) -> PromptContextOutcome:
+        active_retrieval = retrieval or self.retrieval
+        active_memory = memory or self.memory
+        active_memory_config = memory_config or self.memory_config
         retrieval_result, memory_result = await asyncio.gather(
             self._retrieve(
                 query=query,
                 user_id=user_id,
                 project_id=project_id,
+                organization_id=organization_id,
                 document_ids=document_ids,
                 top_k=top_k,
+                retrieval=active_retrieval,
+                include_documents=include_documents,
             ),
             self._recall_memory(
                 query=query,
@@ -78,6 +90,8 @@ class PromptContextService:
                 run_id=run_id,
                 project_id=project_id,
                 include_memory=include_memory,
+                memory=active_memory,
+                memory_config=active_memory_config,
             ),
             return_exceptions=True,
         )
@@ -87,6 +101,10 @@ class PromptContextService:
             memory_result,
             user_id=user_id,
             run_id=run_id,
+        )
+        memory_context = self.context_builder.trim_text_to_token_budget(
+            memory_context,
+            max_tokens=max(256, self.rag_config.max_context_tokens // 4),
         )
         bounded_chunks = self.context_builder.trim_chunks_to_token_budget(
             retrieval.chunks,
@@ -119,16 +137,20 @@ class PromptContextService:
         query: str,
         user_id: str,
         project_id: str | None,
+        organization_id: str | None,
         document_ids: list[str] | None,
         top_k: int | None,
+        retrieval: RetrievalService,
+        include_documents: bool,
     ) -> RetrievalOutcome:
-        if not self.rag_config.enabled or not query:
+        if not include_documents or not self.rag_config.enabled or not query:
             return RetrievalOutcome(chunks=[])
         filters = {"document_ids": document_ids} if document_ids else None
-        return await self.retrieval.retrieve(
+        return await retrieval.retrieve(
             query,
             user_id=user_id,
             project_id=project_id,
+            organization_id=organization_id,
             top_k=top_k,
             filters=filters,
         )
@@ -142,10 +164,12 @@ class PromptContextService:
         run_id: str | None,
         project_id: str | None,
         include_memory: bool,
+        memory: MemoryService,
+        memory_config: MemoryConfig,
     ) -> tuple[str, list[MemoryItem], bool]:
-        if not include_memory or not self.memory_config.enabled or not query:
+        if not include_memory or not memory_config.enabled or not query:
             return "", [], False
-        return await self.memory.recall_for_prompt(
+        return await memory.recall_for_prompt(
             MemorySearchRequest(
                 user_id=user_id,
                 agent_id=agent_id,
@@ -158,7 +182,11 @@ class PromptContextService:
     @staticmethod
     def _normalize_retrieval(result: object, *, user_id: str) -> RetrievalOutcome:
         if isinstance(result, BaseException):
-            logger.error("Prompt retrieval degraded user=%s: %s", user_id, result)
+            logger.error(
+                "Prompt retrieval degraded user=%s error_type=%s",
+                user_id,
+                type(result).__name__,
+            )
             return RetrievalOutcome(
                 chunks=[],
                 degraded=True,
@@ -180,7 +208,12 @@ class PromptContextService:
         run_id: str | None,
     ) -> tuple[str, list[MemoryItem], bool]:
         if isinstance(result, BaseException):
-            logger.error("Prompt memory degraded user=%s run=%s: %s", user_id, run_id, result)
+            logger.error(
+                "Prompt memory degraded user=%s run=%s error_type=%s",
+                user_id,
+                run_id,
+                type(result).__name__,
+            )
             return "", [], True
         if isinstance(result, tuple) and len(result) == 3:
             context, memories, degraded = result

@@ -1,6 +1,9 @@
 # Redis
 dump.rdb
 
+# Generated repository-analysis artifacts
+.understand-anything/
+
 # Created by https://www.toptal.com/developers/gitignore/api/python,pycharm,linux,react
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,pycharm,linux,react
 

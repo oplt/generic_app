@@ -14,7 +14,7 @@ from backend.core.pagination import (
 )
 from backend.modules.ai.dependencies import enforce_ai_generation_rate_limit
 from backend.modules.ai.run_service import AiRunService
-from backend.modules.ai.schemas import AiRunRequest, AiRunResponse
+from backend.modules.ai.schemas import AiAsyncRunResponse, AiRunRequest, AiRunResponse
 from backend.modules.ai.serializers import run_to_response
 from backend.modules.identity_access.models import User
 
@@ -28,14 +28,24 @@ async def list_runs(
     current_user: User = Depends(get_current_user),
 ):
     service = AiRunService(db)
-    runs, total = await service.list_runs(
-        current_user, limit=pagination.limit, offset=pagination.offset
-    )
+    next_cursor = None
+    has_more = False
+    if getattr(pagination, "cursor", None):
+        runs, next_cursor, has_more = await service.repo.list_runs_for_user_cursor(
+            current_user.id, limit=pagination.limit, cursor=pagination.cursor
+        )
+        total = None
+    else:
+        runs, total = await service.list_runs(
+            current_user, limit=pagination.limit, offset=pagination.offset
+        )
     return paginated_response(
         [run_to_response(item) for item in runs],
         total=total,
         limit=pagination.limit,
         offset=pagination.offset,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
 
@@ -64,3 +74,24 @@ async def create_run(
     except TimeoutError as exc:
         raise HTTPException(status_code=504, detail="AI run timed out") from exc
     return run_to_response(run)
+
+
+@router.post("/runs/async", response_model=AiAsyncRunResponse, status_code=202)
+async def queue_run(
+    payload: AiRunRequest,
+    current_user: User = Depends(get_current_user),
+    _rate_limit: None = Depends(enforce_ai_generation_rate_limit),
+):
+    from backend.workers.ai_generation import queue_ai_generation
+
+    queue_ai_generation(
+        user_id=current_user.id,
+        prompt_template_key=payload.prompt_template_key,
+        prompt_version_id=payload.prompt_version_id,
+        variables=payload.variables,
+        retrieval_query=payload.retrieval_query,
+        document_ids=payload.document_ids,
+        top_k=payload.top_k,
+        review_required=payload.review_required,
+    )
+    return AiAsyncRunResponse(status="queued", detail="AI run queued for background execution")

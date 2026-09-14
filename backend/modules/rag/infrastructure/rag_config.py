@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from backend.core.config import settings
 
 SUPPORTED_VECTOR_BACKENDS = frozenset({"pgvector"})
+RAG_VECTOR_DIMENSIONS = 1536
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +22,7 @@ class RagConfig:
     max_context_tokens: int
     allowed_file_types: tuple[str, ...]
     max_file_bytes: int
+    parser_timeout_seconds: float = 60.0
     rerank_enabled: bool = False
     rerank_candidate_multiplier: int = 3
 
@@ -46,6 +48,7 @@ class RagConfig:
             max_context_tokens=settings.RAG_MAX_CONTEXT_TOKENS,
             allowed_file_types=allowed or ("pdf", "txt", "md", "docx", "csv"),
             max_file_bytes=settings.RAG_MAX_FILE_BYTES,
+            parser_timeout_seconds=settings.RAG_PARSER_TIMEOUT_SECONDS,
         )
 
 
@@ -54,8 +57,16 @@ def validate_rag_config(config: RagConfig | None = None) -> None:
     resolved = config or RagConfig.from_settings()
     if not resolved.enabled:
         return
-    if resolved.vector_backend in SUPPORTED_VECTOR_BACKENDS:
+    if (
+        resolved.vector_backend in SUPPORTED_VECTOR_BACKENDS
+        and resolved.embedding_dimensions == RAG_VECTOR_DIMENSIONS
+    ):
         return
+    if resolved.vector_backend == "pgvector":
+        raise RuntimeError(
+            f"RAG_EMBEDDING_DIMENSIONS={resolved.embedding_dimensions} is incompatible with "
+            f"the pgvector schema ({RAG_VECTOR_DIMENSIONS})."
+        )
     supported = ", ".join(sorted(SUPPORTED_VECTOR_BACKENDS))
     raise RuntimeError(
         f"RAG_VECTOR_BACKEND={resolved.vector_backend!r} is not implemented. "

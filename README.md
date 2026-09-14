@@ -47,7 +47,13 @@ cd backend
 
 ```bash
 cd backend
-.venv/bin/celery -A backend.workers.celery_app:celery_app worker --loglevel=INFO --queues=default,email
+.venv/bin/celery -A backend.workers.celery_app:celery_app worker --loglevel=INFO --queues=default,email,ingestion,cleanup,memory,evaluation
+```
+
+Run the outbox scheduler as a separate production process:
+
+```bash
+.venv/bin/celery -A backend.workers.celery_app:celery_app beat --loglevel=INFO
 ```
 
 5. Configure the frontend:
@@ -79,7 +85,7 @@ Observability setup and verification steps are documented in
 - Local object storage uses MinIO on `http://localhost:9000` and its console on `http://localhost:9001`.
 - Local infrastructure secrets now come from `infra/.env`; the compose file no longer embeds credentials.
 - Redis now serves both app-level caching/token storage and the Celery broker/result backend.
-- The first Celery-backed workflow is outbound email delivery for verification and password reset flows.
+- Production background work crosses the Celery boundary: run workers for email, ingestion, cleanup, memory, and evaluation queues.
 - Local `.env.example` defaults to Mailpit plus `CELERY_TASK_ALWAYS_EAGER=true`, so signup/reset emails work without a separate worker.
 - Avatar uploads are stored in the configured S3-compatible bucket instead of a placeholder path.
 - `/admin/platform` lets you rename the app, rename the core domain labels, pick a module pack, and manage plans, flags, and email templates.

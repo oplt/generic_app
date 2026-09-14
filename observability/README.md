@@ -84,6 +84,23 @@ http://localhost:9090/targets
 
 The `fastapi-backend` target should be `UP`.
 
+Application logs default to JSON (`LOG_FORMAT=json`) and include correlation IDs,
+workflow names, operation names, outcomes, and bounded error types. Payloads,
+credentials, tokens, email addresses, and message bodies are not workflow log
+fields.
+
+The `Background workers` dashboard (`/d/background-workers/background-workers`)
+shows Redis queue depth, oldest application-job age, retry and failure gauges,
+worker heartbeat age, job outcomes, and auth/email/admin/notification workflow
+outcomes. Worker gauges refresh every 30 seconds from the API process, even when
+the health page is not being viewed.
+
+Useful metric names:
+
+- `worker_queue_depth`, `worker_oldest_job_age_seconds`, and `worker_heartbeat_timestamp_seconds`
+- `worker_retry_count`, `worker_failed_job_count`, `worker_jobs_total`, and `worker_job_duration_seconds`
+- `workflow_events_total` and `workflow_duration_seconds`
+
 ## Verify Traces
 
 1. Call a few backend endpoints, such as `http://localhost:8000/health`.

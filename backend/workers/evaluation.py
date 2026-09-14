@@ -51,7 +51,7 @@ def queue_evaluation_run(
         kwargs=payload,
         celery_task=run_ai_evaluation_task,
         celery_kwargs=payload,
-        queue=settings.CELERY_TASK_DEFAULT_QUEUE,
+        queue=settings.CELERY_EVALUATION_QUEUE,
         job_name="ai-evaluation",
     )
     logger.info(

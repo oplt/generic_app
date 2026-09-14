@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 # Test-friendly defaults must be set before backend settings are imported.
@@ -22,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from backend.core.config import settings
 
 _rag_schema_ready: bool | None = None
+_schema_ready: bool | None = None
 
 
 def integration_enabled() -> bool:
@@ -38,6 +41,8 @@ def rag_integration_ready() -> bool:
         return _rag_schema_ready
 
     async def _probe() -> bool:
+        if not await ensure_integration_schema():
+            return False
         await prepare_integration_runtime()
         from backend.db.session import SessionLocal
 
@@ -53,6 +58,31 @@ def rag_integration_ready() -> bool:
 
     _rag_schema_ready = asyncio.run(_probe())
     return _rag_schema_ready
+
+
+async def ensure_integration_schema() -> bool:
+    """Apply migrations once before integration probes and real-service tests."""
+    global _schema_ready
+    if _schema_ready is not None:
+        return _schema_ready
+    if not integration_enabled():
+        _schema_ready = False
+        return _schema_ready
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    result = await __import__("asyncio").to_thread(
+        subprocess.run,
+        [sys.executable, "-m", "alembic", "-c", "backend/alembic.ini", "upgrade", "head"],
+        cwd=repo_root,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    _schema_ready = result.returncode == 0
+    if not _schema_ready:
+        print(result.stderr[-2000:])
+    return _schema_ready
 
 
 def unique_email(prefix: str = "integration") -> str:
@@ -71,16 +101,12 @@ async def prepare_integration_runtime() -> None:
     from backend.core import cache
     from backend.db import session as db_session
 
-    try:
+    with suppress(Exception):
         await cache.redis_client.aclose()
-    except Exception:
-        pass
     cache.redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
-    try:
+    with suppress(Exception):
         await db_session.engine.dispose()
-    except Exception:
-        pass
 
     db_session.engine = create_async_engine(
         settings.DATABASE_URL,

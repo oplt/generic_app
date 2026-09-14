@@ -3,10 +3,13 @@ import { Description as DocumentIcon } from "@mui/icons-material";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { formatDateTime } from "../../../utils/formatters";
+import { useSnackbar } from "../../../app/snackbarContext";
+import { validateDocumentUpload } from "../uploadValidation";
 import type { AiStudioModel } from "../hooks/useAiStudioView";
 
 export function RetrievalDocumentsPanel({ m }: { m: AiStudioModel }) {
     const { textDocumentForm, setTextDocumentForm, createTextDocumentMutation, uploadDocumentMutation, uploadDescription, setUploadDescription, documents } = m;
+    const { showToast } = useSnackbar();
     return (
     <SectionCard title="Retrieval documents" description="Ingest source files or direct text, chunk them, and use them as retrieval context in prompt runs.">
         <Stack spacing={2}>
@@ -29,7 +32,12 @@ export function RetrievalDocumentsPanel({ m }: { m: AiStudioModel }) {
                     onChange={(event) => {
                         const file = event.target.files?.[0];
                         if (file) {
-                            uploadDocumentMutation.mutate({ file, description: uploadDescription || undefined });
+                            const validationError = validateDocumentUpload(file);
+                            if (validationError) {
+                                showToast({ message: validationError, severity: "warning" });
+                            } else {
+                                uploadDocumentMutation.mutate({ file, description: uploadDescription || undefined });
+                            }
                         }
                         event.currentTarget.value = "";
                     }}
@@ -54,4 +62,3 @@ export function RetrievalDocumentsPanel({ m }: { m: AiStudioModel }) {
     </SectionCard>
     );
 }
-

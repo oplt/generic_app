@@ -35,6 +35,10 @@ class ObservabilityStatusItem(BaseModel):
     url: str | None = None
     value: str | None = None
     queue_depth: int | None = None
+    oldest_job_age_seconds: float | None = None
+    retry_count: int | None = None
+    failed_job_count: int | None = None
+    last_successful_heartbeat_at: str | None = None
     last_checked_at: str | None = None
 
 

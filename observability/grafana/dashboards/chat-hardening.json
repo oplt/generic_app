@@ -1,0 +1,62 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"expr": "sum by (route, outcome) (rate(chat_requests_total[5m]))", "legendFormat": "{{route}} / {{outcome}}", "refId": "A"}],
+      "title": "Chat request outcomes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le, route) (rate(chat_response_latency_ms_bucket[5m])))", "legendFormat": "p95 {{route}}", "refId": "A"}],
+      "title": "Chat response latency (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [{"expr": "sum by (kind) (rate(chat_sources_total[5m]))", "legendFormat": "{{kind}}", "refId": "A"}],
+      "title": "Sources persisted",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "id": 4,
+      "targets": [{"expr": "sum by (code, route) (rate(chat_errors_total[5m]))", "legendFormat": "{{route}} / {{code}}", "refId": "A"}],
+      "title": "Chat errors",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "id": 5,
+      "targets": [{"expr": "sum by (route) (rate(chat_tokens_total[5m]))", "legendFormat": "{{route}}", "refId": "A"}],
+      "title": "Estimated output tokens",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["chat", "rag", "hardening"],
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Chat operations",
+  "uid": "chat-hardening",
+  "version": 1
+}

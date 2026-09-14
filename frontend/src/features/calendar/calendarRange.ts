@@ -2,6 +2,10 @@ import type { Dayjs } from "dayjs";
 
 export type CalendarViewMode = "day" | "week" | "month" | "twelve_month";
 
+// The backend accepts the padded 12-month grid range (roughly 371 days).
+// Keep this contract named so a future yearly endpoint can replace it in one place.
+export const CALENDAR_MAX_RANGE_DAYS = 400;
+
 export function getMonthGridColumns(viewMode: CalendarViewMode) {
     return viewMode === "twelve_month"
         ? ({ xs: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" } as const)

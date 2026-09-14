@@ -22,7 +22,8 @@ from backend.modules.projects.service import ProjectsService
 
 
 class CalendarService:
-    MAX_RANGE_DAYS = 90
+    # Month-grid views include week padding, so 12M can span ~370 days.
+    MAX_RANGE_DAYS = 400
 
     def __init__(self, db: AsyncSession):
         self.db = db

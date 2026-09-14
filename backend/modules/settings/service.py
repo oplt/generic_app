@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.cache import (
     SETTINGS_CONFIG_ENTRIES_CACHE_KEY,
     SETTINGS_DATABASE_CACHE_KEY,
+    cache_bump_generation,
+    cache_get_generation,
     cache_get_or_load_json,
+    cache_key,
     get_local_cached_json,
     invalidate_settings_config_cache,
     invalidate_settings_related_caches,
@@ -30,6 +33,19 @@ CONFIG_NOTICE = (
     "Config values are saved to backend/.env. Values read directly from"
     " `settings` update immediately, "
     "but infrastructure-bound changes may still require a backend restart."
+)
+
+DEPLOYMENT_MANAGED_CONFIG_KEYS = frozenset(
+    {
+        "DATABASE_URL",
+        "REDIS_URL",
+        "CELERY_BROKER_URL",
+        "CELERY_RESULT_BACKEND",
+        "JWT_SECRET",
+        "SMTP_PASSWORD",
+        "STORAGE_ACCESS_KEY",
+        "STORAGE_SECRET_KEY",
+    }
 )
 
 logger = logging.getLogger(__name__)
@@ -335,17 +351,27 @@ class SettingsService:
 
     @classmethod
     async def list_config_entries(cls) -> ConfigSettingsResponse:
-        cached = get_local_cached_json(SETTINGS_CONFIG_ENTRIES_CACHE_KEY)
-        if cached is not None:
-            return ConfigSettingsResponse.model_validate(cached)
-
-        response = await asyncio.to_thread(cls._build_config_entries)
+        generation = await cache_get_generation("settings-config")
+        local_payload = get_local_cached_json(SETTINGS_CONFIG_ENTRIES_CACHE_KEY)
+        if (
+            isinstance(local_payload, dict)
+            and local_payload.get("generation") == generation
+            and isinstance(local_payload.get("response"), dict)
+        ):
+            return ConfigSettingsResponse.model_validate(local_payload["response"])
+        cached = await cache_get_or_load_json(
+            cache_key("settings", "config_entries", str(generation)),
+            ttl_seconds=settings.CACHE_SETTINGS_TTL_SECONDS,
+            loader=lambda: asyncio.to_thread(
+                lambda: cls._build_config_entries().model_dump(mode="json")
+            ),
+        )
         set_local_cached_json(
             SETTINGS_CONFIG_ENTRIES_CACHE_KEY,
-            response.model_dump(mode="json"),
+            {"generation": generation, "response": cached},
             ttl_seconds=settings.CACHE_SETTINGS_TTL_SECONDS,
         )
-        return response
+        return ConfigSettingsResponse.model_validate(cached)
 
     @classmethod
     def _build_config_entries(cls) -> ConfigSettingsResponse:
@@ -440,7 +466,19 @@ class SettingsService:
     async def update_config_entries(
         cls, updates: Iterable[ConfigEntryUpdate]
     ) -> ConfigSettingsResponse:
-        return await asyncio.to_thread(cls._update_config_entries_sync, list(updates))
+        update_items = list(updates)
+        managed = DEPLOYMENT_MANAGED_CONFIG_KEYS.intersection(item.key for item in update_items)
+        if settings.is_production and managed:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Infrastructure and secret settings are deployment-managed in production: "
+                    + ", ".join(sorted(managed))
+                ),
+            )
+        response = await asyncio.to_thread(cls._update_config_entries_sync, update_items)
+        await cache_bump_generation("settings-config")
+        return response
 
     @staticmethod
     def _get_value_type(key: str) -> str:

@@ -4,6 +4,7 @@ from backend.lib.memory_ranking import memory_recency_weight
 from backend.modules.memory.application.memory_consolidator import MemoryConsolidator
 from backend.modules.memory.domain.enums import MemoryLevel
 from backend.modules.memory.domain.models import MemoryItem, MemorySearchRequest
+from backend.modules.memory.domain.policies import contains_secret
 from backend.modules.memory.infrastructure.mem0_client import MEMORY_CONTEXT_HEADER
 from backend.modules.memory.infrastructure.metrics import retrieved_memory_count
 
@@ -65,10 +66,10 @@ class MemoryContextBuilder:
             limit=request.limit,
         )
 
-        deduped = self.consolidator.mark_contradictions(collected)
+        safe_items = [item for item in collected if not contains_secret(item.content)]
+        deduped = self.consolidator.mark_contradictions(safe_items)
         deduped.sort(key=self._rank_score, reverse=True)
         return deduped[: request.limit]
-
 
     def _rank_score(self, item: MemoryItem) -> float:
         level_weight = LEVEL_WEIGHTS.get(item.metadata.memory_level, 0.5)

@@ -1,19 +1,28 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
 from backend.core.pagination import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT
-from backend.modules.ai.evaluation_scoring import _EvaluationCaseResult, score_evaluation_case
+from backend.modules.ai.evaluation_scoring import (
+    _EvaluationCaseResult,
+    evaluate_case,
+    format_evaluation_notes,
+    score_evaluation_case,
+)
 from backend.modules.ai.models import AiEvaluationRun, AiPromptTemplate, AiPromptVersion
+from backend.modules.ai.repository import AiRepository
 from backend.modules.ai.run_service import AiRunService
 from backend.modules.identity_access.models import User
 from backend.modules.identity_access.repository import IdentityRepository
+from backend.modules.rag.infrastructure.repositories import RagRepository
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +80,7 @@ class AiEvaluationService(AiRunService):
             expected_chunk_ids_json=payload["expected_chunk_ids"],
             expected_output_text=payload["expected_output_text"],
             expected_output_json=payload["expected_output_json"],
+            evaluation_type=payload.get("evaluation_type", "standard"),
             notes=payload["notes"],
         )
         await self.db.commit()
@@ -78,13 +88,22 @@ class AiEvaluationService(AiRunService):
         return case
 
     async def _list_all_dataset_cases(self, dataset_id: str):
+        if isinstance(self.repo, AiRepository) and isinstance(self.db, AsyncSession):
+            return await self.repo.list_dataset_cases_for_evaluation(
+                dataset_id, limit=settings.AI_EVALUATION_MAX_CASES
+            )
+
         cases, total = await self.repo.list_dataset_cases(
-            dataset_id, limit=MAX_PAGE_LIMIT, offset=0
+            dataset_id,
+            limit=min(MAX_PAGE_LIMIT, settings.AI_EVALUATION_MAX_CASES),
+            offset=0,
         )
         offset = len(cases)
-        while offset < total:
+        while offset < total and len(cases) < settings.AI_EVALUATION_MAX_CASES:
             page, _ = await self.repo.list_dataset_cases(
-                dataset_id, limit=MAX_PAGE_LIMIT, offset=offset
+                dataset_id,
+                limit=min(MAX_PAGE_LIMIT, settings.AI_EVALUATION_MAX_CASES - len(cases)),
+                offset=offset,
             )
             cases.extend(page)
             offset += len(page)
@@ -98,36 +117,59 @@ class AiEvaluationService(AiRunService):
         version: AiPromptVersion,
         dataset_id: str,
         case,
+        db: AsyncSession | None = None,
     ) -> _EvaluationCaseResult:
-        from backend.db.session import SessionLocal
+        if db is None:
+            from backend.db.session import SessionLocal
 
-        async with SessionLocal() as db:
-            case_service = AiRunService(db)
-            ai_run = await case_service.run_prompt(
-                user,
-                prompt_template_key=template.key,
-                prompt_version_id=version.id,
-                variables=case.input_variables_json,
-                retrieval_query=case.retrieval_query,
-                document_ids=case.document_ids_json,
-                top_k=max(4, len(case.expected_chunk_ids_json)),
-                review_required=False,
-                evaluation_dataset_id=dataset_id,
-                evaluation_case_id=case.id,
-            )
-            score, passed, notes = self._score_evaluation_case(
-                ai_run.output_text,
-                ai_run.output_json,
-                ai_run.retrieved_chunk_ids_json,
-                case,
-            )
-            return _EvaluationCaseResult(
-                case_id=case.id,
-                ai_run_id=ai_run.id,
-                score=score,
-                passed=passed,
-                notes=notes,
-            )
+            async with SessionLocal() as case_db:
+                return await self._execute_evaluation_case(
+                    user=user,
+                    template=template,
+                    version=version,
+                    dataset_id=dataset_id,
+                    case=case,
+                    db=case_db,
+                )
+
+        case_service = AiRunService(db)
+        ai_run = await case_service.run_prompt(
+            user,
+            prompt_template_key=template.key,
+            prompt_version_id=version.id,
+            variables=case.input_variables_json,
+            retrieval_query=case.retrieval_query,
+            document_ids=case.document_ids_json,
+            top_k=max(4, len(case.expected_chunk_ids_json)),
+            review_required=False,
+            evaluation_dataset_id=dataset_id,
+            evaluation_case_id=case.id,
+        )
+        retrieved_chunks = await RagRepository(db).list_chunks_for_user_by_ids(
+            user.id, ai_run.retrieved_chunk_ids_json
+        )
+        metrics = evaluate_case(
+            ai_run.output_text,
+            ai_run.output_json,
+            ai_run.retrieved_chunk_ids_json,
+            case,
+            retrieved_contents=[chunk.content for chunk in retrieved_chunks],
+            latency_ms=ai_run.latency_ms,
+            estimated_cost_micros=ai_run.estimated_cost_micros,
+        )
+        notes = (
+            f"{format_evaluation_notes(metrics, case)}; model={ai_run.model_name}; "
+            f"latency_ms={ai_run.latency_ms or 0}; "
+            f"cost_micros={ai_run.estimated_cost_micros or 0}"
+        )
+        return _EvaluationCaseResult(
+            case_id=case.id,
+            ai_run_id=ai_run.id,
+            score=metrics.score,
+            passed=metrics.passed,
+            notes=notes,
+            metrics=metrics.as_dict(),
+        )
 
     async def queue_evaluation(
         self, user: User, dataset_id: str, prompt_version_id: str
@@ -222,21 +264,73 @@ class AiEvaluationService(AiRunService):
             concurrency = max(1, settings.AI_EVALUATION_CONCURRENCY)
             semaphore = asyncio.Semaphore(concurrency)
 
-            async def _run_case(case):
-                async with semaphore:
-                    return await self._execute_evaluation_case(
-                        user=user,
-                        template=template,
-                        version=version,
-                        dataset_id=dataset.id,
-                        case=case,
-                    )
-
-            results = await asyncio.gather(*[_run_case(case) for case in cases])
+            results: list[_EvaluationCaseResult] = []
             passed_cases = 0
             scores: list[float] = []
             item_payloads: list[dict] = []
-            for result in results:
+            runner_supports_session = "db" in inspect.signature(
+                self._execute_evaluation_case
+            ).parameters
+
+            if runner_supports_session:
+                from backend.db.session import SessionLocal
+
+                case_batches = [cases[index::concurrency] for index in range(concurrency)]
+
+                async def _session_stream():
+                    result_queue: asyncio.Queue = asyncio.Queue()
+
+                    async def _streaming_worker(worker_cases):
+                        async with SessionLocal() as case_db:
+                            for case in worker_cases:
+                                try:
+                                    result = await self._execute_evaluation_case(
+                                        user=user,
+                                        template=template,
+                                        version=version,
+                                        dataset_id=dataset.id,
+                                        case=case,
+                                        db=case_db,
+                                    )
+                                except Exception as exc:
+                                    await result_queue.put(exc)
+                                    return
+                                await result_queue.put(result)
+
+                    workers = [
+                        asyncio.create_task(_streaming_worker(batch))
+                        for batch in case_batches
+                        if batch
+                    ]
+                    try:
+                        for _ in cases:
+                            result = await result_queue.get()
+                            if isinstance(result, Exception):
+                                raise result
+                            yield result
+                    finally:
+                        await asyncio.gather(*workers, return_exceptions=True)
+
+                result_stream = _session_stream()
+            else:
+                async def _run_case(case):
+                    async with semaphore:
+                        return await self._execute_evaluation_case(
+                            user=user,
+                            template=template,
+                            version=version,
+                            dataset_id=dataset.id,
+                            case=case,
+                        )
+
+                async def _fallback_stream():
+                    for completed in asyncio.as_completed([_run_case(case) for case in cases]):
+                        yield await completed
+
+                result_stream = _fallback_stream()
+
+            async for result in result_stream:
+                results.append(result)
                 scores.append(result.score)
                 if result.passed:
                     passed_cases += 1
@@ -248,13 +342,22 @@ class AiEvaluationService(AiRunService):
                         "score": result.score,
                         "passed": result.passed,
                         "notes": result.notes,
+                        "metrics_json": result.metrics,
                     }
                 )
+                if len(item_payloads) >= settings.AI_EVALUATION_WRITE_BATCH_SIZE:
+                    await self.repo.create_evaluation_run_items_batch(item_payloads)
+                    item_payloads.clear()
             if item_payloads:
                 await self.repo.create_evaluation_run_items_batch(item_payloads)
             evaluation_run.status = "completed"
             evaluation_run.passed_cases = passed_cases
             evaluation_run.average_score = round(sum(scores) / len(scores), 4) if scores else 0.0
+            metric_names = tuple(results[0].metrics) if results else ()
+            evaluation_run.metrics_json = {
+                name: round(sum(result.metrics[name] for result in results) / len(results), 4)
+                for name in metric_names
+            }
             evaluation_run.completed_at = datetime.now(UTC)
             await self.db.commit()
         except Exception:

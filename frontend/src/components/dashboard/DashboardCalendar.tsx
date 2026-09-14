@@ -11,7 +11,7 @@ import { useDashboardCalendar } from "../../features/calendar/hooks/useDashboard
 export function DashboardCalendar(props: DashboardCalendarProps) {
     const m = useDashboardCalendar(props);
     return <>
-        <SectionCard title="Workspace calendar" description="Switch between focused day planning, weekly scheduling, monthly scanning, and a 12-month horizon." action={
+        <SectionCard title="Workspace calendar" description="Switch between focused day planning, weekly scheduling, and monthly scanning." action={
             <Stack spacing={1} alignItems={{ xs: "stretch", sm: "flex-end" }}>
                 {m.allowedViews.length > 1 && <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap justifyContent="flex-end">
                     {VIEW_OPTIONS.filter((option) => m.allowedViews.includes(option.value)).map((option) => <Button key={option.value} size="small" variant={m.viewMode === option.value ? "contained" : "outlined"} onClick={() => m.setViewMode(option.value)}>{option.label}</Button>)}

@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_scalars
+from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_cursor_scalars, paginate_scalars
 from backend.modules.memory.domain.enums import MemoryOperation
 from backend.modules.memory.infrastructure.models import MemoryAuditLog, MemoryRegistry
 
@@ -58,6 +58,19 @@ class MemoryAuditRepository:
             .order_by(MemoryAuditLog.created_at.desc())
         )
         return await paginate_scalars(self.db, stmt, limit=limit, offset=offset)
+
+    async def list_for_user_cursor(
+        self, user_id: str, *, limit: int, cursor: str | None
+    ) -> tuple[list[MemoryAuditLog], str | None, bool]:
+        stmt = select(MemoryAuditLog).where(MemoryAuditLog.user_id == user_id)
+        return await paginate_cursor_scalars(
+            self.db,
+            stmt,
+            limit=limit,
+            cursor=cursor,
+            sort_column=MemoryAuditLog.created_at,
+            id_column=MemoryAuditLog.id,
+        )
 
 
 class MemoryRegistryRepository:

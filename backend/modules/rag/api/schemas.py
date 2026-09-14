@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from backend.core.schemas import RequestModel
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,17 +17,20 @@ class RagDocumentResponse(BaseModel):
     filename: str
     original_filename: str
     content_type: str
+    fingerprint: str | None = None
     storage_path: str | None
     status: str
     source_type: str
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
+    needs_reindex: bool = False
 
 
 class RagDocumentUploadResponse(BaseModel):
     document: RagDocumentResponse
     ingestion_job: RagIngestionJobResponse
+    duplicate: bool = False
 
 
 class RagChunkResponse(BaseModel):
@@ -48,6 +51,9 @@ class RagIngestionJobResponse(BaseModel):
     project_id: str | None
     status: str
     error_message: str | None
+    attempts: int
+    deadline_at: datetime | None
+    heartbeat_at: datetime | None
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
@@ -58,6 +64,7 @@ class RagRetrieveRequest(RequestModel):
     project_id: str | None = None
     document_ids: list[str] = Field(default_factory=list)
     top_k: int | None = Field(default=None, ge=1, le=20)
+    source_type: str | None = Field(default=None, max_length=32)
 
 
 class RagRetrievedChunkResponse(BaseModel):
@@ -84,6 +91,8 @@ class RagAskRequest(RequestModel):
     run_id: str | None = None
     agent_id: str | None = None
     document_ids: list[str] = Field(default_factory=list)
+    mode: Literal["documents", "general", "web", "auto"] = "documents"
+    use_memory: bool | None = None
 
 
 class RagCitationResponse(BaseModel):
@@ -94,6 +103,15 @@ class RagCitationResponse(BaseModel):
     snippet: str
     page_number: int | None = None
     chunk_index: int | None = None
+
+
+class RagWebSourceResponse(BaseModel):
+    source_id: str
+    title: str
+    url: str
+    snippet: str
+    rank: int
+    published_at: str | None = None
 
 
 class RagAskResponse(BaseModel):
@@ -109,6 +127,10 @@ class RagAskResponse(BaseModel):
     memory_degraded: bool = False
     degradation_reason: str | None = None
     injection_chunks_filtered: int = 0
+    citation_validated: bool = True
+    needs_review: bool = False
+    mode: Literal["documents", "general", "web", "auto"] = "documents"
+    web_sources: list[RagWebSourceResponse] = Field(default_factory=list)
 
 
 class RagQueryResponse(BaseModel):

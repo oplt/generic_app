@@ -20,6 +20,19 @@ def _attrs(kwargs: dict[str, Any]) -> dict[str, Any]:
     return attrs
 
 
+def set_current_span_attributes(**attributes: Any) -> None:
+    """Attach low-cardinality operational attributes to the active span."""
+    try:
+        from opentelemetry import trace
+
+        span = trace.get_current_span()
+        if span is not None and span.is_recording():
+            for key, value in _attrs(attributes).items():
+                span.set_attribute(key, value)
+    except Exception:
+        return
+
+
 @contextmanager
 def observed_span(name: str, **attributes: Any) -> Iterator[Any]:
     """Create a span, attach safe attrs, record failures, then re-raise."""

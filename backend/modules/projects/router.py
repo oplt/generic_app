@@ -14,6 +14,7 @@ from backend.modules.projects.models import Project, ProjectTask
 from backend.modules.projects.schemas import (
     ProjectCreate,
     ProjectResponse,
+    ProjectSummaryResponse,
     ProjectTaskAssigneeResponse,
     ProjectTaskCreate,
     ProjectTaskReorderRequest,
@@ -23,6 +24,18 @@ from backend.modules.projects.schemas import (
 from backend.modules.projects.service import ProjectsService
 
 router = APIRouter()
+
+
+@router.get("/summary", response_model=ProjectSummaryResponse)
+async def project_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project_count, open_task_count = await ProjectsService(db).project_summary(current_user.id)
+    return ProjectSummaryResponse(
+        project_count=project_count,
+        open_task_count=open_task_count,
+    )
 
 
 def _project_to_response(project: Project) -> ProjectResponse:
@@ -65,10 +78,25 @@ async def list_projects(
     current_user: User = Depends(get_current_user),
 ):
     service = ProjectsService(db)
-    projects, total = await service.list_projects(
-        current_user.id, limit=pagination.limit, offset=pagination.offset
+    next_cursor = None
+    has_more = False
+    if getattr(pagination, "cursor", None):
+        projects, next_cursor, has_more = await service.list_projects_cursor(
+            current_user.id, limit=pagination.limit, cursor=pagination.cursor
+        )
+        total = None
+    else:
+        projects, total = await service.list_projects(
+            current_user.id, limit=pagination.limit, offset=pagination.offset
+        )
+    return paginated_response(
+        projects,
+        total=total,
+        limit=pagination.limit,
+        offset=pagination.offset,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
-    return paginated_response(projects, total=total, limit=pagination.limit, offset=pagination.offset)
 
 
 @router.post("", response_model=ProjectResponse, status_code=201)
@@ -101,17 +129,24 @@ async def list_project_tasks(
     current_user: User = Depends(get_current_user),
 ):
     service = ProjectsService(db)
-    tasks, total = await service.list_tasks(
-        current_user.id,
-        project_id,
-        limit=pagination.limit,
-        offset=pagination.offset,
-    )
+    next_cursor = None
+    has_more = False
+    if getattr(pagination, "cursor", None):
+        tasks, next_cursor, has_more = await service.list_tasks_cursor(
+            current_user.id, project_id, limit=pagination.limit, cursor=pagination.cursor
+        )
+        total = None
+    else:
+        tasks, total = await service.list_tasks(
+            current_user.id, project_id, limit=pagination.limit, offset=pagination.offset
+        )
     return paginated_response(
         [_task_to_response(task, assignee) for task, assignee in tasks],
         total=total,
         limit=pagination.limit,
         offset=pagination.offset,
+        next_cursor=next_cursor,
+        has_more=has_more,
     )
 
 

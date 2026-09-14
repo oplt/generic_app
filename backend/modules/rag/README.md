@@ -35,7 +35,7 @@ LangChain is used **only** in `infrastructure/` (`langchain_text_splitters`, opt
 
 ```env
 RAG_ENABLED=true
-RAG_VECTOR_BACKEND=pgvector    # pgvector | qdrant
+RAG_VECTOR_BACKEND=pgvector    # pgvector only
 RAG_EMBEDDING_PROVIDER=local   # uses existing AiProviderRegistry
 RAG_EMBEDDING_MODEL=text-embedding-3-small
 RAG_CHUNK_SIZE=1000
@@ -43,7 +43,7 @@ RAG_CHUNK_OVERLAP=150
 RAG_TOP_K=5
 RAG_SCORE_THRESHOLD=0.3
 RAG_MAX_CONTEXT_TOKENS=6000
-RAG_RERANK_ENABLED=false
+RAG_RERANK_ENABLED=true
 RAG_RERANK_CANDIDATE_MULTIPLIER=3
 RAG_ALLOWED_FILE_TYPES=pdf,txt,md,docx,csv
 RAG_MAX_FILE_BYTES=10485760
@@ -55,10 +55,13 @@ Embeddings use the same provider registry as `/api/v1/ai` — no hardcoded API k
 
 | Backend | Status |
 |---------|--------|
-| `pgvector` | Default — `rag_chunks.embedding` column with HNSW cosine index; SQL `ORDER BY embedding <=> query` |
-| JSON fallback | Bounded scan of `embedding_json` when pgvector is unavailable or vectors were not indexed |
+| `pgvector` | Required production backend — `rag_chunks.embedding` column with HNSW cosine index; SQL `ORDER BY embedding <=> query` |
+| JSON embedding data | Retained only for migration/repair tooling; never read by request-path retrieval |
 
-Local heuristic embeddings use `RAG_EMBEDDING_DIMENSIONS` (default 1536) so dev indexes can use pgvector. Re-index existing documents after changing dimensions.
+The schema is fixed at 1536 dimensions. The application rejects another dimension value while
+pgvector is enabled; change the schema through a deliberate migration before changing models.
+Retrieval requires the `vector` extension, `rag_chunks.embedding`, and the cosine HNSW index.
+Missing readiness fails closed and returns degraded retrieval; it never scans `embedding_json`.
 
 ## AI document route consolidation
 
@@ -79,7 +82,9 @@ After deploy, run:
 cd backend && alembic upgrade head
 ```
 
-Migration `c4e8f2a91d03` enables the `vector` extension and creates `ix_rag_chunks_embedding_hnsw`.
+Migration `c4e8f2a91d03` enables the `vector` extension, adds the `embedding vector(1536)` column,
+creates `ix_rag_chunks_embedding_hnsw`, and adds tenant/filter indexes. Verify the live schema
+before enabling production retrieval.
 
 ## API
 
@@ -95,6 +100,7 @@ Migration `c4e8f2a91d03` enables the `vector` extension and creates `ix_rag_chun
 | POST | `/api/v1/rag/ask` | RAG answer with citations |
 | GET | `/api/v1/rag/queries` | Query history |
 | GET | `/api/v1/rag/jobs/{id}` | Ingestion job status |
+| POST | `/api/v1/rag/jobs/{id}/retry` | Repair/retry ingestion via a fresh outbox event |
 
 ## Upload and index
 
@@ -118,7 +124,16 @@ curl -X POST http://localhost:8000/api/v1/rag/documents/{document_id}/index \
 
 Returns `202 Accepted` with a pending job.
 
-With `CELERY_TASK_ALWAYS_EAGER=true` (local dev default), indexing runs in a daemon background thread inside the API process so the HTTP response is not blocked. This still consumes API CPU/memory for embedding work — use real Celery workers (`CELERY_TASK_ALWAYS_EAGER=false`) in production.
+Repair a failed or stuck job without mutating the original history:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/rag/jobs/{job_id}/retry \
+  -H "Cookie: access_token=..."
+```
+
+For local development, `CELERY_TASK_ALWAYS_EAGER=true` may run indexing in a daemon background
+thread inside the API process. Production configuration rejects eager mode; use real Celery
+workers (`CELERY_TASK_ALWAYS_EAGER=false`) so embedding work does not consume API resources.
 
 ## Ask
 
@@ -130,7 +145,7 @@ POST /api/v1/rag/ask
 }
 ```
 
-Returns `answer`, `citations[]`, `no_context_found` when nothing matches, and `ai_run_id` linking to the `ai_runs` record (cost/tokens/review parity with `/ai/runs`).
+Returns `answer`, `citations[]`, `no_context_found` when nothing matches, and `ai_run_id` linking to the `ai_runs` record (cost/tokens/review parity with `/ai/runs`). `citation_validated=false` and `needs_review=true` identify answers whose source references or claim grounding could not be verified.
 
 The request is bounded by `RAG_ASK_TIMEOUT_SECONDS`. Degradation fields identify retrieval or
 memory failures, and `injection_chunks_filtered` reports excluded unsafe chunks. See
@@ -165,7 +180,7 @@ alembic upgrade head
 ## Tests
 
 ```sh
-PYTHONPATH=. uv run --project backend python -m unittest discover -s backend/modules/rag/tests -v
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --project backend pytest -q backend/modules/rag/tests
 ```
 
 ## Vector backend

@@ -24,29 +24,42 @@ def extract_turn_memories_sync(
 
     async def _run() -> None:
         completion_key = f"memory:turn-extraction:complete:{source_message_id}"
+        claim_key = f"memory:turn-extraction:claim:{source_message_id}"
         try:
             if await redis_client.get(completion_key):
                 logger.info(
                     "Memory extraction already complete source_message=%s", source_message_id
                 )
                 return
+            claimed = await redis_client.set(claim_key, "1", ex=15 * 60, nx=True)
+            if not claimed:
+                logger.info(
+                    "Memory extraction already claimed source_message=%s", source_message_id
+                )
+                return
         except Exception:
             logger.warning("Memory extraction idempotency cache unavailable", exc_info=True)
-        async with SessionLocal() as db:
-            service = MemoryService(db)
-            await service.process_turn_memories(
-                user_id=user_id,
-                agent_id=agent_id,
-                run_id=run_id,
-                project_id=project_id,
-                user_message=user_message,
-                assistant_message=assistant_message,
-                source_message_id=source_message_id,
-            )
         try:
+            async with SessionLocal() as db:
+                service = MemoryService(db)
+                await service.process_turn_memories(
+                    user_id=user_id,
+                    agent_id=agent_id,
+                    run_id=run_id,
+                    project_id=project_id,
+                    user_message=user_message,
+                    assistant_message=assistant_message,
+                    source_message_id=source_message_id,
+                )
             await redis_client.set(completion_key, "1", ex=30 * 24 * 60 * 60)
+            await redis_client.delete(claim_key)
         except Exception:
+            try:
+                await redis_client.delete(claim_key)
+            except Exception:
+                logger.warning("Memory extraction claim cleanup failed", exc_info=True)
             logger.warning("Memory extraction completion cache unavailable", exc_info=True)
+            raise
 
     run_async_in_sync_context(_run())
 
@@ -68,7 +81,7 @@ def queue_turn_memory_extraction(**payload: str | None) -> None:
         kwargs=kwargs,
         celery_task=extract_turn_memories_task,
         celery_kwargs=kwargs,
-        queue=settings.CELERY_TASK_DEFAULT_QUEUE,
+        queue=settings.CELERY_MEMORY_QUEUE,
         job_name="memory-extraction",
     )
     logger.info("Queued memory extraction source_message=%s", kwargs["source_message_id"])

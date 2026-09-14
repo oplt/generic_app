@@ -4,9 +4,15 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from backend.core.pagination import DEFAULT_PAGE_LIMIT
+from backend.core.pagination import (
+    DEFAULT_PAGE_LIMIT,
+    paginate_cursor_rows,
+    paginate_cursor_scalars,
+)
 from backend.modules.identity_access.models import User
 from backend.modules.projects.models import Project, ProjectTask
+
+TASK_POSITION_GAP = 1000
 
 
 class ProjectsRepository:
@@ -18,6 +24,21 @@ class ProjectsRepository:
         self.db.add(project)
         await self.db.flush()
         return project
+
+    async def summary_for_user(self, user_id: str) -> tuple[int, int]:
+        access_filter = or_(Project.owner_id == user_id, ProjectTask.assignee_id == user_id)
+        project_count, open_task_count = (
+            await self.db.execute(
+                select(
+                    func.count(Project.id.distinct()),
+                    func.count(ProjectTask.id).filter(ProjectTask.status != "done"),
+                )
+                .select_from(Project)
+                .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
+                .where(access_filter)
+            )
+        ).one()
+        return int(project_count or 0), int(open_task_count or 0)
 
     async def list_accessible_by_user(
         self,
@@ -36,9 +57,7 @@ class ProjectsRepository:
             .where(access_filter)
             .distinct()
         )
-        total = int(
-            await self.db.scalar(select(func.count()).select_from(id_stmt.subquery())) or 0
-        )
+        total = int(await self.db.scalar(select(func.count()).select_from(id_stmt.subquery())) or 0)
         result = await self.db.execute(
             select(Project)
             .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
@@ -49,6 +68,25 @@ class ProjectsRepository:
             .limit(limit)
         )
         return list(result.scalars().all()), total
+
+    async def list_accessible_by_user_cursor(
+        self, user_id: str, *, limit: int, cursor: str | None
+    ) -> tuple[list[Project], str | None, bool]:
+        access_filter = or_(Project.owner_id == user_id, ProjectTask.assignee_id == user_id)
+        stmt = (
+            select(Project)
+            .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
+            .where(access_filter)
+            .distinct()
+        )
+        return await paginate_cursor_scalars(
+            self.db,
+            stmt,
+            limit=limit,
+            cursor=cursor,
+            sort_column=Project.created_at,
+            id_column=Project.id,
+        )
 
     async def get_by_id_for_user(self, project_id: str, user_id: str) -> Project | None:
         result = await self.db.execute(
@@ -130,6 +168,24 @@ class ProjectsRepository:
         result = await self.db.execute(stmt)
         return list(result.all()), total
 
+    async def list_tasks_with_assignees_cursor(
+        self, project_id: str, *, limit: int, cursor: str | None
+    ) -> tuple[list[tuple[ProjectTask, User | None]], str | None, bool]:
+        assignee = aliased(User)
+        stmt = (
+            select(ProjectTask, assignee)
+            .outerjoin(assignee, ProjectTask.assignee_id == assignee.id)
+            .where(ProjectTask.project_id == project_id)
+        )
+        return await paginate_cursor_rows(
+            self.db,
+            stmt,
+            limit=limit,
+            cursor=cursor,
+            sort_column=ProjectTask.created_at,
+            id_column=ProjectTask.id,
+        )
+
     async def get_task_with_assignee(
         self,
         project_id: str,
@@ -153,7 +209,7 @@ class ProjectsRepository:
                 ProjectTask.status == status,
             )
         )
-        return int(max_position or -1) + 1
+        return int(max_position or 0) + TASK_POSITION_GAP
 
     async def create_task(
         self,

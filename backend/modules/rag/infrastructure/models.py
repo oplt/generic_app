@@ -2,8 +2,11 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from backend.db.base import Base
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
+RAG_VECTOR_DIMENSIONS = 1536
 
 
 class RagDocument(Base):
@@ -16,6 +19,7 @@ class RagDocument(Base):
     filename: Mapped[str] = mapped_column(String(512))
     original_filename: Mapped[str] = mapped_column(String(512))
     content_type: Mapped[str] = mapped_column(String(128))
+    content_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     storage_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="uploaded", index=True)
     source_type: Mapped[str] = mapped_column(String(32), default="upload")
@@ -45,7 +49,11 @@ class RagChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     token_count: Mapped[int] = mapped_column(Integer, default=0)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Kept for migration/repair tooling only. Normal ingestion writes `embedding`.
     embedding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(RAG_VECTOR_DIMENSIONS), nullable=True
+    )
     vector_external_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
@@ -85,6 +93,9 @@ class RagIngestionJob(Base):
     project_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
