@@ -1,39 +1,41 @@
+/**
+ * Profile API — wraps the generated OpenAPI client where the wire contract is typed.
+ * Prefer importing types from `../generated/models` for new code.
+ */
 import { apiFetch } from "./client";
+import {
+    deleteAvatarApiV1ProfileAvatarDelete,
+    getProfileApiV1ProfileGet,
+    updateProfileApiV1ProfilePut,
+} from "../generated/endpoints/profile/profile";
+import type { ProfileResponse, ProfileUpdate } from "../generated/models";
 
-export type Profile = {
-    user_id: string;
-    bio: string | null;
-    avatar_url: string | null;
-    location: string | null;
-    website: string | null;
-};
+/** @deprecated Prefer `ProfileResponse` from generated models. */
+export type Profile = ProfileResponse;
 
-export async function getProfile(): Promise<Profile> {
-    return apiFetch("/profile");
+export type { ProfileResponse, ProfileUpdate };
+
+export async function getProfile(): Promise<ProfileResponse> {
+    return getProfileApiV1ProfileGet();
 }
 
-export async function updateProfile(payload: {
-    bio?: string | null;
-    location?: string | null;
-    website?: string | null;
-}): Promise<Profile> {
-    return apiFetch("/profile", {
-        method: "PUT",
-        body: JSON.stringify(payload),
-    });
+export async function updateProfile(payload: ProfileUpdate): Promise<ProfileResponse> {
+    return updateProfileApiV1ProfilePut(payload);
 }
 
-export async function uploadAvatar(file: File): Promise<Profile> {
+/**
+ * Multipart upload: OpenAPI marks the file as `string` (binary), so we keep a
+ * hand-written FormData call and still return the generated response type.
+ */
+export async function uploadAvatar(file: File): Promise<ProfileResponse> {
     const formData = new FormData();
     formData.append("file", file);
-    return apiFetch("/profile/avatar", {
+    return apiFetch<ProfileResponse>("/profile/avatar", {
         method: "POST",
         body: formData,
     });
 }
 
 export async function deleteAvatar(): Promise<void> {
-    return apiFetch("/profile/avatar", {
-        method: "DELETE",
-    });
+    return deleteAvatarApiV1ProfileAvatarDelete();
 }

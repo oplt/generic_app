@@ -28,24 +28,28 @@ class EmailTemplateService(PlatformConfigService):
         templates = await self.repo.list_email_templates()
         return [self._email_template_to_cache(template) for template in templates]
 
-    async def create_email_template(self, payload: dict) -> EmailTemplate:
+    async def create_email_template(self, payload: dict, *, commit: bool = True) -> EmailTemplate:
         if await self.repo.get_email_template_by_key(payload["key"]) is not None:
             raise HTTPException(
                 status_code=409, detail="An email template with this key already exists"
             )
         template = await self.repo.create_email_template(**payload)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         await self.db.refresh(template)
         await invalidate_platform_email_template_cache()
         return template
 
-    async def update_email_template(self, template_id: str, payload: dict) -> EmailTemplate:
+    async def update_email_template(
+        self, template_id: str, payload: dict, *, commit: bool = True
+    ) -> EmailTemplate:
         template = await self.repo.get_email_template_by_id(template_id)
         if not template:
             raise HTTPException(status_code=404, detail="Email template not found")
         for field, value in payload.items():
             setattr(template, field, value)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         await self.db.refresh(template)
         await invalidate_platform_email_template_cache()
         return template

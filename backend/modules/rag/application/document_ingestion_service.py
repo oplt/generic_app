@@ -6,6 +6,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 from backend.core.config import settings
 from backend.lib.project_access import ProjectAccessPort, SqlAlchemyProjectAccessPort
@@ -18,19 +19,28 @@ from backend.modules.rag.application.malware_scanner import (
     MalwareScanError,
     build_malware_scanner,
 )
+from backend.modules.rag.application.pipeline_versions import pipeline_version_metadata
 from backend.modules.rag.application.rag_policy_service import RagPolicyService
 from backend.modules.rag.domain.enums import DocumentStatus, IngestionJobStatus
 from backend.modules.rag.infrastructure import metrics
-from backend.modules.rag.infrastructure.file_storage_adapter import FileStorageAdapter
+from backend.modules.rag.infrastructure.file_storage_adapter import (
+    FileStorageAdapter,
+    build_document_object_key,
+)
 from backend.modules.rag.infrastructure.rag_config import RagConfig
 from backend.modules.rag.infrastructure.repositories import RagRepository
 from backend.modules.rag.infrastructure.vector_store_adapter import build_vector_store
 from backend.modules.rag.workers import queue_document_cleanup, queue_document_indexing
 from backend.workers.outbox import enqueue_job_event
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+
+class IngestionJobBusyError(RuntimeError):
+    """Transient duplicate delivery while another worker still owns the job."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,42 +120,66 @@ class DocumentIngestionService:
             document, job = duplicate
             return DocumentUploadResult(document=document, job=job, duplicate=True)
 
-        storage_path = await self.storage.store_document(
-            user_id=user_id,
-            filename=safe_filename,
-            content=content,
-            content_type=detected_content_type,
-        )
-
-        document = await self.repo.create_document(
-            user_id=user_id,
-            filename=safe_filename,
-            original_filename=safe_filename,
-            content_type=detected_content_type,
-            content_fingerprint=fingerprint,
-            storage_path=storage_path,
-            project_id=project_id,
-            organization_id=organization_id,
-            source_type="upload",
-            metadata={
-                "size_bytes": len(content),
-                "content_fingerprint": fingerprint,
-                **self._embedding_metadata(),
-                **(metadata or {}),
-            },
-        )
-        job = await self.repo.create_ingestion_job(
-            document_id=document.id,
-            user_id=user_id,
-            project_id=project_id,
-        )
-        await enqueue_job_event(
-            self.db,
-            job_id=job.id,
-            job_type="rag-indexing",
-            payload={"document_id": document.id, "user_id": user_id, "job_id": job.id},
-        )
-        await self.db.commit()
+        document_id = str(uuid4())
+        object_key = build_document_object_key(user_id, safe_filename, object_id=document_id)
+        storage_path: str | None = object_key
+        try:
+            storage_path = await self.storage.store_document(
+                user_id=user_id,
+                filename=safe_filename,
+                content=content,
+                content_type=detected_content_type,
+                object_key=object_key,
+            )
+            document = await self.repo.create_document(
+                document_id=document_id,
+                user_id=user_id,
+                filename=safe_filename,
+                original_filename=safe_filename,
+                content_type=detected_content_type,
+                content_fingerprint=fingerprint,
+                storage_path=storage_path,
+                project_id=project_id,
+                organization_id=organization_id,
+                source_type="upload",
+                metadata={
+                    "size_bytes": len(content),
+                    "content_fingerprint": fingerprint,
+                    **self._pipeline_metadata(),
+                    **(metadata or {}),
+                },
+            )
+            job = await self.repo.create_ingestion_job(
+                document_id=document.id,
+                user_id=user_id,
+                project_id=project_id,
+            )
+            await enqueue_job_event(
+                self.db,
+                job_id=job.id,
+                job_type="rag-indexing",
+                payload={"document_id": document.id, "user_id": user_id, "job_id": job.id},
+            )
+            await self.db.commit()
+        except IntegrityError:
+            await self._rollback_upload_transaction()
+            try:
+                duplicate = await self._find_duplicate(
+                    user_id=user_id,
+                    project_id=project_id,
+                    fingerprint=fingerprint,
+                    organization_id=organization_id,
+                )
+            finally:
+                await self._compensate_uploaded_object(storage_path)
+            if duplicate is not None:
+                document, job = duplicate
+                return DocumentUploadResult(document=document, job=job, duplicate=True)
+            raise
+        except Exception:
+            await self._rollback_upload_transaction()
+            await self._compensate_uploaded_object(storage_path)
+            raise
         await self.db.refresh(document)
         await self.db.refresh(job)
         metrics.rag_document_upload_total.inc()
@@ -157,6 +191,12 @@ class DocumentIngestionService:
             )
 
         return DocumentUploadResult(document=document, job=job)
+
+    async def _rollback_upload_transaction(self) -> None:
+        try:
+            await self.db.rollback()
+        except Exception:
+            logger.exception("Failed to roll back document upload transaction")
 
     async def enqueue_document_indexing(
         self,
@@ -216,10 +256,11 @@ class DocumentIngestionService:
             if (
                 job.status == IngestionJobStatus.RUNNING.value
                 and job.heartbeat_at is not None
-                and datetime.now(UTC) - job.heartbeat_at < timedelta(minutes=10)
+                and datetime.now(UTC) - job.heartbeat_at
+                < timedelta(seconds=settings.OUTBOX_DISPATCH_LEASE_SECONDS)
             ):
-                logger.info("Skipping duplicate active indexing job=%s", job.id)
-                return document, [], job
+                logger.info("Deferring duplicate active indexing job=%s", job.id)
+                raise IngestionJobBusyError(f"Ingestion job {job.id} is still active")
         else:
             job = await self.repo.create_ingestion_job(
                 document_id=document.id,
@@ -321,7 +362,7 @@ class DocumentIngestionService:
                     document.id,
                     document.user_id,
                 )
-            embedding_metadata = self._embedding_metadata()
+            embedding_metadata = self._pipeline_metadata()
             for chunk in chunks:
                 chunk.metadata.update(embedding_metadata)
             metrics.rag_chunk_count.observe(len(chunks))
@@ -353,7 +394,7 @@ class DocumentIngestionService:
             await self.repo.update_document_status(document, DocumentStatus.INDEXED)
             metadata = json.loads(document.metadata_json or "{}")
             metadata["chunk_count"] = len(chunk_rows)
-            metadata.update(self._embedding_metadata())
+            metadata.update(self._pipeline_metadata())
             document.metadata_json = json.dumps(metadata, ensure_ascii=True)
             await self.repo.update_ingestion_job(
                 job, status=IngestionJobStatus.COMPLETED, finished=True
@@ -529,19 +570,25 @@ class DocumentIngestionService:
             await self.db.commit()
         return document, job
 
+    async def _compensate_uploaded_object(self, storage_path: str | None) -> None:
+        if not storage_path:
+            return
+        try:
+            await self.storage.delete_document(storage_path)
+        except Exception:
+            metrics.rag_document_upload_compensation_total.labels(outcome="delete_failed").inc()
+            logger.exception("Failed to compensate uploaded object path=%s", storage_path)
+        else:
+            metrics.rag_document_upload_compensation_total.labels(outcome="deleted").inc()
+
     async def _get_active_job(self, document_id: str):
         if not isinstance(self.repo, RagRepository):
             return None
         return await self.repo.get_active_ingestion_job_for_document(document_id)
 
+    def _pipeline_metadata(self) -> dict[str, object]:
+        return pipeline_version_metadata(self.config)
+
     def _embedding_metadata(self) -> dict[str, object]:
-        values = {
-            "embedding_provider": getattr(self.config, "embedding_provider", None),
-            "embedding_model": getattr(self.config, "embedding_model", None),
-            "embedding_dimensions": getattr(self.config, "embedding_dimensions", None),
-        }
-        return {
-            key: value
-            for key, value in values.items()
-            if isinstance(value, (str, int, float)) and not isinstance(value, bool)
-        }
+        # Compatibility alias for older call sites/tests.
+        return self._pipeline_metadata()

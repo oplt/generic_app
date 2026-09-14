@@ -56,7 +56,7 @@ async def create_feature_flag(
     admin: User = Depends(get_admin_user),
 ):
     service = FeatureFlagService(db)
-    flag = await service.create_feature_flag(payload.model_dump())
+    flag = await service.create_feature_flag(payload.model_dump(), commit=False)
     await log_request_audit_event(
         db,
         request,
@@ -80,7 +80,7 @@ async def update_feature_flag(
 ):
     service = FeatureFlagService(db)
     flag = await service.update_feature_flag(
-        feature_flag_id, payload.model_dump(exclude_unset=True)
+        feature_flag_id, payload.model_dump(exclude_unset=True), commit=False
     )
     await log_request_audit_event(
         db,

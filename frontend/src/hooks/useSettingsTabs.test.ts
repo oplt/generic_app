@@ -20,6 +20,10 @@ describe("settings tab visibility", () => {
         expect(adminPaths).toEqual(expect.arrayContaining([
             "/admin/settings",
             "/admin/users",
+            "/admin/rag-indexes",
+            "/admin/rag/evaluation",
+            "/admin/jobs",
+            "/admin/diagnostics",
             "/admin/platform",
         ]));
         expect(paths(false, true, true).some((path) => path.startsWith("/admin/"))).toBe(false);

@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -9,24 +9,53 @@ from backend.core.pagination import (
     paginate_cursor_rows,
     paginate_cursor_scalars,
 )
-from backend.modules.identity_access.models import User
+from backend.modules.identity_access.models import OrganizationMembership, User
 from backend.modules.projects.models import Project, ProjectTask
 
 TASK_POSITION_GAP = 1000
+
+
+def _project_access_filter(user_id: str):
+    user_membership = aliased(OrganizationMembership)
+    shares_project_organization = exists(
+        select(user_membership.id).where(
+            user_membership.user_id == user_id,
+            user_membership.organization_id == Project.organization_id,
+        )
+    )
+    return or_(
+        Project.owner_id == user_id,
+        and_(
+            ProjectTask.assignee_id == user_id,
+            shares_project_organization,
+        ),
+    )
 
 
 class ProjectsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, owner_id: str, name: str, description: str | None) -> Project:
-        project = Project(owner_id=owner_id, name=name, description=description)
+    async def create(
+        self,
+        owner_id: str,
+        name: str,
+        description: str | None,
+        *,
+        organization_id: str,
+    ) -> Project:
+        project = Project(
+            owner_id=owner_id,
+            organization_id=organization_id,
+            name=name,
+            description=description,
+        )
         self.db.add(project)
         await self.db.flush()
         return project
 
     async def summary_for_user(self, user_id: str) -> tuple[int, int]:
-        access_filter = or_(Project.owner_id == user_id, ProjectTask.assignee_id == user_id)
+        access_filter = _project_access_filter(user_id)
         project_count, open_task_count = (
             await self.db.execute(
                 select(
@@ -47,10 +76,7 @@ class ProjectsRepository:
         limit: int = DEFAULT_PAGE_LIMIT,
         offset: int = 0,
     ) -> tuple[list[Project], int]:
-        access_filter = or_(
-            Project.owner_id == user_id,
-            ProjectTask.assignee_id == user_id,
-        )
+        access_filter = _project_access_filter(user_id)
         id_stmt = (
             select(Project.id)
             .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
@@ -72,7 +98,7 @@ class ProjectsRepository:
     async def list_accessible_by_user_cursor(
         self, user_id: str, *, limit: int, cursor: str | None
     ) -> tuple[list[Project], str | None, bool]:
-        access_filter = or_(Project.owner_id == user_id, ProjectTask.assignee_id == user_id)
+        access_filter = _project_access_filter(user_id)
         stmt = (
             select(Project)
             .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
@@ -94,12 +120,18 @@ class ProjectsRepository:
             .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
             .where(
                 Project.id == project_id,
-                or_(
-                    Project.owner_id == user_id,
-                    ProjectTask.assignee_id == user_id,
-                ),
+                _project_access_filter(user_id),
             )
             .distinct()
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_id_for_owner(self, project_id: str, owner_id: str) -> Project | None:
+        result = await self.db.execute(
+            select(Project).where(
+                Project.id == project_id,
+                Project.owner_id == owner_id,
+            )
         )
         return result.scalar_one_or_none()
 
@@ -115,10 +147,7 @@ class ProjectsRepository:
             .outerjoin(ProjectTask, ProjectTask.project_id == Project.id)
             .where(
                 Project.id.in_(project_ids),
-                or_(
-                    Project.owner_id == user_id,
-                    ProjectTask.assignee_id == user_id,
-                ),
+                _project_access_filter(user_id),
             )
             .distinct()
         )
@@ -253,10 +282,7 @@ class ProjectsRepository:
                 ProjectTask.due_date.is_not(None),
                 ProjectTask.due_date >= start_date,
                 ProjectTask.due_date <= end_date,
-                or_(
-                    Project.owner_id == user_id,
-                    ProjectTask.assignee_id == user_id,
-                ),
+                _project_access_filter(user_id),
             )
             .order_by(
                 ProjectTask.due_date.asc(),

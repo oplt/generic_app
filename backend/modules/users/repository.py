@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_scalars
-from backend.modules.identity_access.models import User
+from backend.modules.identity_access.models import OrganizationMembership, User
 
 
 class UsersRepository:
@@ -34,5 +34,21 @@ class UsersRepository:
     async def get_active_user_by_id(self, user_id: str) -> User | None:
         result = await self.db.execute(
             select(User).where(User.id == user_id, User.is_active.is_(True))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_active_user_in_organization(
+        self,
+        user_id: str,
+        organization_id: str,
+    ) -> User | None:
+        result = await self.db.execute(
+            select(User)
+            .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
+            .where(
+                User.id == user_id,
+                User.is_active.is_(True),
+                OrganizationMembership.organization_id == organization_id,
+            )
         )
         return result.scalar_one_or_none()

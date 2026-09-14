@@ -27,7 +27,7 @@ class RagChunkListingTest(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-        with patch("backend.modules.rag.api.routes.RagRepository", return_value=repo):
+        with patch("backend.modules.rag.api.document_routes.RagRepository", return_value=repo):
             response = await list_document_chunks(
                 document_id="doc-1",
                 pagination=SimpleNamespace(limit=50, offset=0),
@@ -62,7 +62,7 @@ class RagChunkListingTest(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-        with patch("backend.modules.rag.api.routes.RagRepository", return_value=repo):
+        with patch("backend.modules.rag.api.document_routes.RagRepository", return_value=repo):
             response = await list_document_chunks(
                 document_id="doc-1",
                 pagination=SimpleNamespace(limit=50, offset=0),

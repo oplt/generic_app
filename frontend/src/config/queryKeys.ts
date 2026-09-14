@@ -30,6 +30,8 @@ export const queryKeys = {
     admin: {
         all: ["admin"] as const,
         users: (page: number, search: string) => ["admin", "users", page, search] as const,
+        policyRoles: ["admin", "policy-roles"] as const,
+        userRoleAssignments: (userId: string) => ["admin", "role-assignments", userId] as const,
     },
     platform: {
         all: ["platform"] as const,

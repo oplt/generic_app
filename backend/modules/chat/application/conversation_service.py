@@ -219,6 +219,13 @@ class ConversationService:
         await self.db.commit()
 
     async def delete_expired(self) -> int:
+        from backend.workers.schedule_lock import try_acquire_chat_retention_advisory_lock
+
+        # Transaction-scoped advisory lock: concurrent beat ticks cannot delete twice
+        # even when the Redis schedule lock fail-opens.
+        if not await try_acquire_chat_retention_advisory_lock(self.db):
+            await self.db.rollback()
+            return 0
         cutoff = datetime.now(UTC) - timedelta(days=settings.CHAT_RETENTION_DAYS)
         deleted = await self.repo.delete_expired_conversations(cutoff)
         deleted += await self.repo.delete_expired_messages(cutoff)

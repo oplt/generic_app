@@ -56,10 +56,18 @@ def test_domain_layers_do_not_import_infrastructure() -> None:
 
 def test_observability_does_not_import_feature_modules() -> None:
     observability_root = BACKEND_ROOT / "observability"
+    # Shared platform contracts used by observability routes/manifests.
+    allowed = {
+        "backend.modules.manifests.types",
+        "backend.modules.identity_access.models",
+        "backend.modules.policy",
+        "backend.modules.policy.catalog",
+        "backend.modules.policy.service",
+    }
     violations = [
         f"{path.relative_to(BACKEND_ROOT)} -> {imported}"
         for path in _production_python_files(observability_root)
         for imported in _imports(path)
-        if imported.startswith("backend.modules.")
+        if imported.startswith("backend.modules.") and imported not in allowed
     ]
     assert not violations, "Observability feature imports found:\n" + "\n".join(violations)

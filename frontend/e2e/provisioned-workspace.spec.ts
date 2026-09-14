@@ -5,6 +5,8 @@ const password = process.env.E2E_TEST_PASSWORD;
 const adminEmail = process.env.E2E_ADMIN_EMAIL;
 const adminPassword = process.env.E2E_ADMIN_PASSWORD;
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://localhost:8000";
+const provisionedUser = Boolean(email && password);
+const provisionedAdmin = Boolean(adminEmail && adminPassword);
 
 async function authenticatedPage(browser: Browser, userEmail: string, userPassword: string) {
     const context = await browser.newContext();
@@ -15,8 +17,11 @@ async function authenticatedPage(browser: Browser, userEmail: string, userPasswo
     return { context, page: await context.newPage() };
 }
 
-test.describe("provisioned user workspace", () => {
-    test.skip(!email || !password, "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD");
+test.describe("provisioned user workspace @provisioned", () => {
+    test.skip(
+        !provisionedUser,
+        "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD (run via npm run test:e2e:provisioned)"
+    );
 
     for (const [name, path, heading] of [
         ["platform", "/platform", /platform/i],
@@ -34,8 +39,11 @@ test.describe("provisioned user workspace", () => {
     }
 });
 
-test.describe("provisioned admin workspace", () => {
-    test.skip(!adminEmail || !adminPassword, "Set E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD");
+test.describe("provisioned admin workspace @provisioned", () => {
+    test.skip(
+        !provisionedAdmin,
+        "Set E2E_ADMIN_EMAIL and E2E_ADMIN_PASSWORD (run via npm run test:e2e:provisioned)"
+    );
 
     for (const [name, path] of [
         ["settings", "/admin/settings"],
@@ -43,7 +51,11 @@ test.describe("provisioned admin workspace", () => {
         ["users", "/admin/users"],
     ] as const) {
         test(`admin ${name} flow passes authorization`, async ({ browser }) => {
-            const { context, page } = await authenticatedPage(browser, adminEmail!, adminPassword!);
+            const { context, page } = await authenticatedPage(
+                browser,
+                adminEmail!,
+                adminPassword!
+            );
             await page.goto(path);
             await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
             await expect(page.locator("main")).toBeVisible();

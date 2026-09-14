@@ -90,9 +90,10 @@ class IngestionParserTest(unittest.IsolatedAsyncioTestCase):
 
 
 class UploadCreatesDocumentTest(unittest.IsolatedAsyncioTestCase):
+    @patch("backend.modules.rag.application.document_ingestion_service.queue_document_indexing")
     @patch("backend.modules.rag.application.document_ingestion_service.RagPolicyService")
     @patch("backend.modules.rag.application.document_ingestion_service.FileStorageAdapter")
-    async def test_upload_creates_document_row(self, storage_cls, policy_cls):
+    async def test_upload_creates_document_row(self, storage_cls, policy_cls, queue_fn):
         policy_cls.return_value.is_allowed_file_type.return_value = True
         storage_cls.return_value.store_document = AsyncMock(return_value="rag/key")
 
@@ -123,6 +124,82 @@ class UploadCreatesDocumentTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(document.id, "doc-1")
         service.repo.create_document.assert_awaited_once()
+        queue_fn.assert_called_once_with(
+            document_id="doc-1",
+            user_id="user-a",
+            job_id="job-1",
+        )
+
+    async def test_upload_compensates_storage_for_each_database_failure_stage(self):
+        from backend.lib.project_access import AuthorizedOwnershipScope
+        from backend.modules.rag.application.document_ingestion_service import (
+            DocumentIngestionService,
+        )
+
+        failure_stages = ("storage", "document", "job", "outbox", "commit")
+        for stage in failure_stages:
+            with self.subTest(stage=stage):
+                db = MagicMock()
+                db.commit = AsyncMock()
+                db.rollback = AsyncMock()
+                storage = MagicMock()
+                storage.store_document = AsyncMock(
+                    side_effect=RuntimeError("storage failure") if stage == "storage" else None,
+                    return_value="rag/upload-1",
+                )
+                storage.delete_document = AsyncMock()
+                service = DocumentIngestionService(db)
+                service.config = SimpleNamespace(
+                    enabled=True,
+                    max_file_bytes=1_000_000,
+                    allowed_file_types=("txt",),
+                )
+                service.storage = storage
+                service.policy = MagicMock()
+                service.policy.is_allowed_file_type.return_value = True
+                service.policy.detect_content_type.return_value = "text/plain"
+                service._scan_or_reject = AsyncMock()
+                service.project_access = MagicMock()
+                service.project_access.resolve_ownership_scope = AsyncMock(
+                    return_value=AuthorizedOwnershipScope(
+                        user_id="user-a", organization_id="org-a"
+                    )
+                )
+                service.repo = MagicMock()
+                service.repo.create_document = AsyncMock(
+                    side_effect=RuntimeError("document failure")
+                    if stage == "document"
+                    else None
+                )
+                document = SimpleNamespace(id="doc-1")
+                service.repo.create_document.return_value = document
+                service.repo.create_ingestion_job = AsyncMock(
+                    side_effect=RuntimeError("job failure") if stage == "job" else None
+                )
+                service.repo.create_ingestion_job.return_value = SimpleNamespace(id="job-1")
+
+                async def fail_outbox(*args, stage=stage, **kwargs):
+                    if stage == "outbox":
+                        raise RuntimeError("outbox failure")
+
+                with patch(
+                    "backend.modules.rag.application.document_ingestion_service.enqueue_job_event",
+                    new=AsyncMock(side_effect=fail_outbox),
+                ):
+                    if stage == "commit":
+                        db.commit.side_effect = RuntimeError("commit failure")
+                    with self.assertRaises(RuntimeError):
+                        await service.upload_document(
+                            user_id="user-a",
+                            filename="notes.txt",
+                            content=b"hello",
+                            content_type="text/plain",
+                        )
+
+                db.rollback.assert_awaited_once()
+                storage.delete_document.assert_awaited_once()
+                if stage != "storage":
+                    self.assertEqual(storage.delete_document.await_args.args[0], "rag/upload-1")
 
 
 class EmbeddingAdapterTest(unittest.IsolatedAsyncioTestCase):

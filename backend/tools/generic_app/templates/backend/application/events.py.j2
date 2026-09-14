@@ -1,0 +1,22 @@
+"""Outbox-friendly event helpers for {{ names.label }} (no side effects until wired)."""
+
+from __future__ import annotations
+
+import logging
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.modules.{{ names.key }}.infrastructure.models import {{ names.entity_pascal }}
+
+logger = logging.getLogger("backend.modules.{{ names.key }}.events")
+
+
+async def emit_{{ names.entity }}_created(db: AsyncSession, item: {{ names.entity_pascal }}) -> None:
+    """Hook for outbox / domain events. Replace with OutboxService when ready."""
+
+    _ = db
+    logger.info(
+        "{{ names.key }}_created id=%s user_id=%s",
+        item.id,
+        item.user_id,
+    )

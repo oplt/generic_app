@@ -15,7 +15,12 @@ class ChatConversation(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    organization_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String(128),
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     project_id: Mapped[str | None] = mapped_column(
         String(128),
         ForeignKey("projects.id", ondelete="SET NULL"),

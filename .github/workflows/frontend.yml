@@ -1,0 +1,81 @@
+name: Frontend
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    name: Lint, unit, build, budgets, Chromium smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install backend dependencies (OpenAPI export)
+        working-directory: .
+        run: uv sync --project backend --group dev
+
+      - name: OpenAPI client drift check
+        working-directory: .
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
+        run: ./frontend/scripts/api-check.sh
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Bundle and PWA budgets
+        run: |
+          npm run check:budgets:unit
+          npm run check:budgets
+
+      - name: Upload budget report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-budget-report
+          path: |
+            frontend/budget-report.json
+            frontend/budgets.json
+          if-no-files-found: warn
+
+      - name: Install Playwright Chromium
+        run: npm run test:e2e:install
+
+      - name: Chromium mocked E2E smoke
+        env:
+          CI: "1"
+          E2E_BROWSERS: chromium
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-playwright-report
+          path: frontend/playwright-report/
+          if-no-files-found: ignore

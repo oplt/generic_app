@@ -6,14 +6,57 @@ from collections import Counter
 from backend.modules.rag.domain.models import RetrievedChunk
 
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]{2,}")
+_RRF_K = 60
+
+
+def reciprocal_rank_fuse(
+    lanes: list[list[RetrievedChunk]],
+    *,
+    limit: int,
+    k: int = _RRF_K,
+) -> list[RetrievedChunk]:
+    """Merge independently generated candidate lanes with reciprocal rank fusion."""
+
+    if limit < 1:
+        return []
+    fused_scores: Counter[str] = Counter()
+    by_id: dict[str, RetrievedChunk] = {}
+    for lane in lanes:
+        for rank, chunk in enumerate(lane, start=1):
+            fused_scores[chunk.chunk_id] += 1.0 / (k + rank)
+            existing = by_id.get(chunk.chunk_id)
+            if existing is None or chunk.score > existing.score:
+                by_id[chunk.chunk_id] = chunk
+    ordered_ids = sorted(
+        fused_scores,
+        key=lambda chunk_id: (-fused_scores[chunk_id], chunk_id),
+    )
+    fused: list[RetrievedChunk] = []
+    for chunk_id in ordered_ids[:limit]:
+        chunk = by_id[chunk_id]
+        metadata = dict(chunk.metadata)
+        metadata["rrf_score"] = round(fused_scores[chunk_id], 6)
+        fused.append(
+            RetrievedChunk(
+                chunk_id=chunk.chunk_id,
+                document_id=chunk.document_id,
+                content=chunk.content,
+                score=chunk.score,
+                filename=chunk.filename,
+                chunk_index=chunk.chunk_index,
+                page_number=chunk.page_number,
+                metadata=metadata,
+            )
+        )
+    return fused
 
 
 class HybridRetrievalRanker:
-    """Fuse pgvector candidates with PostgreSQL lexical evidence.
+    """Rerank a fused candidate set with lexical evidence.
 
-    The repository supplies ``lexical_score`` from ``ts_rank_cd`` when the
-    indexed path is available. The local token overlap remains a bounded,
-    dependency-free fallback for tests and older cached candidates.
+    Prefer generating candidates from independent vector and lexical lanes, then
+    call :func:`reciprocal_rank_fuse` before this reranker. Local token overlap
+    remains a bounded fallback for tests and older cached candidates.
     """
 
     def rerank(

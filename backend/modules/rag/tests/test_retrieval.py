@@ -101,6 +101,27 @@ class RetrievalFilterTest(unittest.IsolatedAsyncioTestCase):
             )
 
 
+    async def test_adapter_passes_top_k_as_candidate_limit_without_multiplying(self):
+        self.adapter.config = SimpleNamespace(
+            score_threshold=0.1,
+            rerank_enabled=True,
+            rerank_candidate_multiplier=3,
+        )
+        self.adapter.repo.similarity_search_indexed = AsyncMock(return_value=[])
+
+        await self.adapter.similarity_search(
+            "query",
+            user_id="user-a",
+            project_id=None,
+            top_k=15,
+            query_embedding=[1.0, 0.0],
+        )
+
+        call_kwargs = self.adapter.repo.similarity_search_indexed.await_args.kwargs
+        self.assertEqual(call_kwargs["top_k"], 15)
+        self.assertEqual(call_kwargs["candidate_limit"], 15)
+
+
 class CosineSimilarityTest(unittest.TestCase):
     def test_identical_vectors_score_high(self):
         score = cosine_similarity([1.0, 0.0], [1.0, 0.0])

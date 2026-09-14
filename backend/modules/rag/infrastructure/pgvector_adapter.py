@@ -65,11 +65,9 @@ class PgVectorAdapter:
             query_embedding=query_embedding,
             top_k=top_k,
             score_threshold=self.config.score_threshold,
-            candidate_limit=(
-                min(50, top_k * max(1, getattr(self.config, "rerank_candidate_multiplier", 3)))
-                if getattr(self.config, "rerank_enabled", False)
-                else top_k
-            ),
+            # RetrievalService owns rerank candidate expansion and passes the
+            # already-expanded limit as top_k. Do not multiply again here.
+            candidate_limit=top_k,
             organization_id=organization_id,
         )
         if indexed is None:

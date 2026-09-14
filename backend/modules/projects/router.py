@@ -9,7 +9,10 @@ from backend.core.pagination import (
     paginated_response,
     pagination_params,
 )
+from backend.lib.idempotency import Idempotency, IdempotencySession
+from backend.lib.project_access import SqlAlchemyProjectAccessPort
 from backend.modules.identity_access.models import User
+from backend.modules.policy import authorize, catalog
 from backend.modules.projects.models import Project, ProjectTask
 from backend.modules.projects.schemas import (
     ProjectCreate,
@@ -41,6 +44,7 @@ async def project_summary(
 def _project_to_response(project: Project) -> ProjectResponse:
     return ProjectResponse(
         id=project.id,
+        organization_id=project.organization_id,
         name=project.name,
         description=project.description,
         created_at=project.created_at,
@@ -104,10 +108,40 @@ async def create_project(
     payload: ProjectCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    idem: IdempotencySession = Depends(
+        Idempotency(
+            "projects.create",
+            required=False,
+            organization_id_from_payload=lambda body: body.get("organization_id"),
+        )
+    ),
 ):
     service = ProjectsService(db)
-    project = await service.create_project(current_user.id, payload.name, payload.description)
-    return _project_to_response(project)
+
+    async def _create() -> ProjectResponse:
+        scope = await SqlAlchemyProjectAccessPort(db).resolve_ownership_scope(
+            current_user.id,
+            organization_id=payload.organization_id,
+        )
+        await authorize(
+            db=db,
+            actor=current_user,
+            action=catalog.PROJECT_CREATE,
+            organization_id=scope.organization_id,
+        )
+        project = await service.create_project(
+            current_user.id,
+            payload.name,
+            payload.description,
+            organization_id=payload.organization_id,
+        )
+        return _project_to_response(project)
+
+    return await idem.execute(
+        _create,
+        status_code=201,
+        dump=lambda response: response.model_dump(mode="json"),
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

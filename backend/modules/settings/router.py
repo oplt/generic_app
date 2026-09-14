@@ -58,7 +58,9 @@ async def create_database_setting(
     admin: User = Depends(get_admin_user),
 ):
     service = SettingsService(db)
-    setting = await service.create_database_setting(payload.key, payload.value, payload.description)
+    setting = await service.create_database_setting(
+        payload.key, payload.value, payload.description, commit=False
+    )
     await log_request_audit_event(
         db,
         request,
@@ -81,7 +83,7 @@ async def update_database_setting(
 ):
     service = SettingsService(db)
     setting = await service.update_database_setting(
-        setting_id, payload.model_dump(exclude_unset=True)
+        setting_id, payload.model_dump(exclude_unset=True), commit=False
     )
     await log_request_audit_event(
         db,
@@ -103,7 +105,7 @@ async def delete_database_setting(
     admin: User = Depends(get_admin_user),
 ):
     service = SettingsService(db)
-    await service.delete_database_setting(setting_id)
+    await service.delete_database_setting(setting_id, commit=False)
     await log_request_audit_event(
         db,
         request,

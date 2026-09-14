@@ -1,0 +1,39 @@
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.modules.{{ names.key }}.infrastructure.models import {{ names.entity_pascal }}
+
+
+class {{ names.pascal }}Repository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def list_for_user(self, user_id: str) -> list[{{ names.entity_pascal }}]:
+        result = await self.db.execute(
+            select({{ names.entity_pascal }})
+            .where({{ names.entity_pascal }}.user_id == user_id)
+            .order_by({{ names.entity_pascal }}.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def get_by_id(self, {{ names.entity }}_id: str) -> {{ names.entity_pascal }} | None:
+        return await self.db.get({{ names.entity_pascal }}, {{ names.entity }}_id)
+
+    async def create(
+        self,
+        *,
+        user_id: str,
+        title: str,
+        description: str | None,
+    ) -> {{ names.entity_pascal }}:
+        item = {{ names.entity_pascal }}(
+            user_id=user_id,
+            title=title,
+            description=description,
+        )
+        self.db.add(item)
+        await self.db.flush()
+        return item
+
+    async def delete(self, item: {{ names.entity_pascal }}) -> None:
+        await self.db.delete(item)

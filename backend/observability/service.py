@@ -35,9 +35,18 @@ def _get_observability_http_client() -> httpx.AsyncClient:
 
 async def close_observability_http_client() -> None:
     global _observability_http_client
-    if _observability_http_client is not None and not _observability_http_client.is_closed:
-        await _observability_http_client.aclose()
+    client = _observability_http_client
     _observability_http_client = None
+    if client is None:
+        return
+    close = getattr(client, "aclose", None)
+    if callable(close):
+        await close()
+    elif not getattr(client, "is_closed", True):
+        # Sync/test doubles may only expose close().
+        sync_close = getattr(client, "close", None)
+        if callable(sync_close):
+            sync_close()
 
 
 def build_public_url(base_url: str, path: str = "") -> str | None:

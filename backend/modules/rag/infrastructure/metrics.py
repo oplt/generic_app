@@ -3,6 +3,11 @@
 from prometheus_client import Counter, Histogram
 
 rag_document_upload_total = Counter("rag_document_upload_total", "Document uploads")
+rag_document_upload_compensation_total = Counter(
+    "rag_document_upload_compensation_total",
+    "Uploaded objects deleted after database failure",
+    ["outcome"],
+)
 rag_parse_success_total = Counter("rag_parse_success_total", "Successful document parses")
 rag_parse_failure_total = Counter("rag_parse_failure_total", "Failed document parses")
 rag_chunk_count = Histogram(

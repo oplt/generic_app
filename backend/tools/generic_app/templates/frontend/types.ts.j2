@@ -1,0 +1,17 @@
+export type {{ names.entity_pascal }} = {
+    id: string;
+    title: string;
+    description: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
+export type {{ names.entity_pascal }}Create = {
+    title: string;
+    description?: string | null;
+};
+
+export type {{ names.entity_pascal }}Update = {
+    title?: string;
+    description?: string | null;
+};

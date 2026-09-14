@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
     AppBar,
@@ -21,27 +21,24 @@ import {
     CalendarMonth as CalendarIcon,
     ChevronLeft as ChevronLeftIcon,
     ChevronRight as ChevronRightIcon,
-    Dashboard as DashboardIcon,
-    FolderOpen as ProjectsIcon,
     Logout as LogoutIcon,
     Menu as MenuIcon,
     Notifications as NotificationsIcon,
-    AutoAwesome as KnowledgeIcon,
-    Settings as SettingsIcon,
 } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
 import { colors, fonts } from "../../app/designTokens";
 import { useAuth } from "../../hooks/useAuth";
+import { useModuleNavigation, useSettingsNavItem } from "../../hooks/useModuleNavigation";
 import { usePlatformMetadata } from "../../hooks/usePlatformMetadata";
 import { useUserProfile } from "../../hooks/useUserProfile";
 import {
     getSettingsHubLabel,
-    isSettingsHubPath,
     useSettingsTabs,
 } from "../../hooks/useSettingsTabs";
 import { NotificationNavBadge } from "./NotificationNavBadge";
-import { NavBlock, ThemeToggle, type NavItem } from "./AppNavigation";
+import { NavBlock, ThemeToggle } from "./AppNavigation";
 import { getInitials } from "../../utils/formatters";
+import { DeveloperDiagnosticsPanel } from "../../features/developer-diagnostics/DeveloperDiagnosticsPanel";
 
 const DRAWER_WIDTH = 288;
 const COLLAPSED_DRAWER_WIDTH = 96;
@@ -62,26 +59,8 @@ export function AppLayout() {
     const drawerCollapsed = !isMobile && desktopNavCollapsed;
     const desktopDrawerWidth = drawerCollapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH;
 
-    const settingsNavItem = useMemo<NavItem>(
-        () => ({
-            label: "Settings",
-            icon: <SettingsIcon />,
-            path: "/profile",
-            group: "workspace",
-            isSelected: (pathname) => isSettingsHubPath(pathname, settingsTabs),
-        }),
-        [settingsTabs]
-    );
-
-    const navItems = useMemo<NavItem[]>(
-        () => [
-            { label: "Dashboard", icon: <DashboardIcon />, path: "/dashboard", group: "workspace" },
-            { label: coreDomainPlural, icon: <ProjectsIcon />, path: "/projects", group: "workspace" },
-            { label: "Knowledge chat", icon: <KnowledgeIcon />, path: "/knowledge-chat", group: "workspace" },
-        ],
-        [coreDomainPlural]
-    );
-
+    const settingsNavItem = useSettingsNavItem();
+    const navItems = useModuleNavigation(coreDomainPlural);
     const visibleNavItems = navItems;
     const settingsSelected = settingsNavItem.isSelected?.(location.pathname) ?? false;
     const currentItem =
@@ -154,7 +133,7 @@ export function AppLayout() {
                             </Typography>
                             {platformMetadata?.module_pack && (
                                 <Chip
-                                    label={`Pack: ${platformMetadata.module_pack}`}
+                                    label={`Profile: ${platformMetadata.capability_profile ?? platformMetadata.module_pack}`}
                                     size="small"
                                     variant="outlined"
                                     sx={{ mt: 1.5 }}
@@ -383,6 +362,7 @@ export function AppLayout() {
             >
                 <Outlet />
             </Box>
+            <DeveloperDiagnosticsPanel />
         </Box>
     );
 }

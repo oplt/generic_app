@@ -21,6 +21,10 @@ const SETTINGS_TAB_DEFINITIONS: SettingsTabDefinition[] = [
     { label: "Observability", path: "/observability" },
     { label: "Settings", path: "/admin/settings", adminOnly: true },
     { label: "Users", path: "/admin/users", adminOnly: true },
+    { label: "RAG Indexes", path: "/admin/rag-indexes", adminOnly: true },
+    { label: "RAG Evaluation", path: "/admin/rag/evaluation", adminOnly: true },
+    { label: "Jobs", path: "/admin/jobs", adminOnly: true },
+    { label: "Diagnostics", path: "/admin/diagnostics", adminOnly: true },
     { label: "Platform Admin", path: "/admin/platform", adminOnly: true },
 ];
 
@@ -46,9 +50,11 @@ export function useSettingsTabs(): SettingsTab[] {
     const { data: platformMetadata } = usePlatformMetadata();
     const hasUserPlatformModule =
         platformMetadata?.module_catalog.some((item) => item.user_visible && item.enabled) ?? false;
+    const activeModules = new Set(platformMetadata?.active_modules ?? []);
     const hasAiModule =
-        platformMetadata?.module_catalog.some((item) => item.key === "ai" && item.enabled) ??
-        false;
+        activeModules.has("ai") ||
+        (platformMetadata?.module_catalog.some((item) => item.key === "ai" && item.enabled) ??
+            false);
 
     return useMemo(
         () => getVisibleSettingsTabs({ isAdmin, hasUserPlatformModule, hasAiModule }),

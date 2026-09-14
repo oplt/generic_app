@@ -11,7 +11,7 @@ class BillingService(PlatformConfigService):
     async def list_plans(self) -> list[SubscriptionPlan]:
         return await self.repo.list_plans()
 
-    async def create_plan(self, payload: dict) -> SubscriptionPlan:
+    async def create_plan(self, payload: dict, *, commit: bool = True) -> SubscriptionPlan:
         if await self.repo.get_plan_by_code(payload["code"]) is not None:
             raise HTTPException(status_code=409, detail="A plan with this code already exists")
 
@@ -26,11 +26,14 @@ class BillingService(PlatformConfigService):
             features_json=payload.get("features", []),
         )
         await self._normalize_default_plan(plan)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         await self.db.refresh(plan)
         return plan
 
-    async def update_plan(self, plan_id: str, payload: dict) -> SubscriptionPlan:
+    async def update_plan(
+        self, plan_id: str, payload: dict, *, commit: bool = True
+    ) -> SubscriptionPlan:
         plan = await self.repo.get_plan_by_id(plan_id)
         if not plan:
             raise HTTPException(status_code=404, detail="Plan not found")
@@ -42,7 +45,8 @@ class BillingService(PlatformConfigService):
                 setattr(plan, field, value)
 
         await self._normalize_default_plan(plan)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         await self.db.refresh(plan)
         return plan
 

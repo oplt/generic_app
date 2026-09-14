@@ -1,0 +1,78 @@
+from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.modules.{{ names.key }}.api.schemas import (
+    {{ names.entity_pascal }}Create,
+    {{ names.entity_pascal }}Response,
+    {{ names.entity_pascal }}Update,
+)
+from backend.modules.{{ names.key }}.infrastructure.models import {{ names.entity_pascal }}
+from backend.modules.{{ names.key }}.infrastructure.repository import {{ names.pascal }}Repository
+{% if options.events %}
+from backend.modules.{{ names.key }}.application.events import emit_{{ names.entity }}_created
+{% endif %}
+
+
+class {{ names.pascal }}Service:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+        self.repo = {{ names.pascal }}Repository(db)
+
+    async def list_for_user(self, user_id: str) -> list[{{ names.entity_pascal }}Response]:
+        items = await self.repo.list_for_user(user_id)
+        return [self._to_response(item) for item in items]
+
+    async def get(self, user_id: str, {{ names.entity }}_id: str) -> {{ names.entity_pascal }}Response:
+        item = await self._get_owned(user_id, {{ names.entity }}_id)
+        return self._to_response(item)
+
+    async def create(
+        self, user_id: str, payload: {{ names.entity_pascal }}Create
+    ) -> {{ names.entity_pascal }}Response:
+        item = await self.repo.create(
+            user_id=user_id,
+            title=payload.title,
+            description=payload.description,
+        )
+        await self.db.commit()
+        await self.db.refresh(item)
+{% if options.events %}
+        await emit_{{ names.entity }}_created(self.db, item)
+{% endif %}
+        return self._to_response(item)
+
+    async def update(
+        self,
+        user_id: str,
+        {{ names.entity }}_id: str,
+        payload: {{ names.entity_pascal }}Update,
+    ) -> {{ names.entity_pascal }}Response:
+        item = await self._get_owned(user_id, {{ names.entity }}_id)
+        if payload.title is not None:
+            item.title = payload.title
+        if payload.description is not None:
+            item.description = payload.description
+        await self.db.commit()
+        await self.db.refresh(item)
+        return self._to_response(item)
+
+    async def delete(self, user_id: str, {{ names.entity }}_id: str) -> None:
+        item = await self._get_owned(user_id, {{ names.entity }}_id)
+        await self.repo.delete(item)
+        await self.db.commit()
+
+    async def _get_owned(self, user_id: str, {{ names.entity }}_id: str) -> {{ names.entity_pascal }}:
+        item = await self.repo.get_by_id({{ names.entity }}_id)
+        if item is None or item.user_id != user_id:
+            raise HTTPException(status_code=404, detail="{{ names.entity_pascal }} not found")
+        return item
+
+    @staticmethod
+    def _to_response(item: {{ names.entity_pascal }}) -> {{ names.entity_pascal }}Response:
+        return {{ names.entity_pascal }}Response(
+            id=item.id,
+            title=item.title,
+            description=item.description,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+        )

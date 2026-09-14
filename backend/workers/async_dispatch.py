@@ -31,6 +31,20 @@ def dispatch_background_sync_job(
     """Queue work on Celery, or run it in a daemon thread when eager mode is enabled."""
     global _eager_warning_logged
 
+    try:
+        from backend.observability.request_diagnostics import record_celery_task
+
+        record_celery_task(job_name)
+    except Exception:
+        pass
+
+    from backend.lib.failure_injection import consume_fault, maybe_inject
+    from backend.lib.failure_injection.kinds import FaultKind
+
+    maybe_inject(FaultKind.CELERY_WORKER_FAILURE)
+    maybe_inject(FaultKind.CELERY_RETRY_EXHAUSTION)
+    duplicate = consume_fault(FaultKind.CELERY_DUPLICATE)
+
     if settings.CELERY_TASK_ALWAYS_EAGER:
         if settings.is_production:
             raise RuntimeError(
@@ -51,9 +65,19 @@ def dispatch_background_sync_job(
             daemon=True,
         )
         thread.start()
+        if duplicate:
+            thread2 = threading.Thread(
+                target=target,
+                kwargs=kwargs,
+                name=f"eager-{job_name}-dup",
+                daemon=True,
+            )
+            thread2.start()
         return
 
     celery_task.apply_async(kwargs=celery_kwargs, queue=queue)
+    if duplicate:
+        celery_task.apply_async(kwargs=celery_kwargs, queue=queue)
 
 
 def log_eager_mode_startup_warning() -> None:

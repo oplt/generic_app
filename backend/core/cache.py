@@ -164,21 +164,49 @@ def embedding_cache_key(
 
 
 async def cache_get_json(key: str) -> Any | None:
+    from backend.lib.failure_injection import should_force_cache_miss
+
+    if should_force_cache_miss():
+        return None
+
     if _uses_local_cache(key):
         local_value = _local_cache.get(key)
         if local_value is not None:
             cache_hits_total.labels(namespace=_cache_namespace(key)).inc()
+            try:
+                from backend.observability.request_diagnostics import record_cache_hit
+
+                record_cache_hit()
+            except Exception:
+                pass
             return local_value
 
     if not _uses_redis_cache(key):
         return None
     try:
+        from backend.lib.failure_injection import maybe_inject
+        from backend.lib.failure_injection.kinds import FaultKind
+
+        maybe_inject(FaultKind.REDIS_UNAVAILABLE)
+        maybe_inject(FaultKind.REDIS_TIMEOUT)
         raw = await redis_client.get(key)
         if raw is None:
             cache_misses_total.labels(namespace=_cache_namespace(key)).inc()
+            try:
+                from backend.observability.request_diagnostics import record_cache_miss
+
+                record_cache_miss()
+            except Exception:
+                pass
             return None
         value = json.loads(raw)
         cache_hits_total.labels(namespace=_cache_namespace(key)).inc()
+        try:
+            from backend.observability.request_diagnostics import record_cache_hit
+
+            record_cache_hit()
+        except Exception:
+            pass
         if _uses_local_cache(key):
             _local_cache.set(key, value, ttl_seconds=_local_ttl_for_key(key))
         return value

@@ -10,16 +10,21 @@ logger = logging.getLogger(__name__)
 
 def run_ai_generation_sync(**kwargs) -> None:
     from backend.db.session import SessionLocal
+    from backend.db.transaction import rollback_safely
     from backend.modules.ai.run_service import AiRunService
     from backend.modules.identity_access.repository import IdentityRepository
 
     async def _run() -> None:
         async with SessionLocal() as db:
-            user = await IdentityRepository(db).get_user_by_id(kwargs["user_id"])
-            if user is None:
-                raise ValueError("AI generation user no longer exists")
-            run_kwargs = {key: value for key, value in kwargs.items() if key != "user_id"}
-            await AiRunService(db).run_prompt(user, **run_kwargs)
+            try:
+                user = await IdentityRepository(db).get_user_by_id(kwargs["user_id"])
+                if user is None:
+                    raise ValueError("AI generation user no longer exists")
+                run_kwargs = {key: value for key, value in kwargs.items() if key != "user_id"}
+                await AiRunService(db).run_prompt(user, **run_kwargs)
+            except Exception:
+                await rollback_safely(db, owner="worker.ai_generation")
+                raise
 
     run_async_in_sync_context(_run())
 

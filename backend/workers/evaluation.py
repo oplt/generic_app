@@ -16,17 +16,22 @@ def run_evaluation_sync(
     prompt_version_id: str,
 ) -> None:
     from backend.db.session import SessionLocal
+    from backend.db.transaction import rollback_safely
     from backend.modules.ai.service import AiService
 
     async def _run() -> None:
         async with SessionLocal() as db:
-            service = AiService(db)
-            await service.execute_evaluation_run(
-                evaluation_run_id=evaluation_run_id,
-                user_id=user_id,
-                dataset_id=dataset_id,
-                prompt_version_id=prompt_version_id,
-            )
+            try:
+                service = AiService(db)
+                await service.execute_evaluation_run(
+                    evaluation_run_id=evaluation_run_id,
+                    user_id=user_id,
+                    dataset_id=dataset_id,
+                    prompt_version_id=prompt_version_id,
+                )
+            except Exception:
+                await rollback_safely(db, owner="worker.evaluation")
+                raise
 
     run_async_in_sync_context(_run())
 

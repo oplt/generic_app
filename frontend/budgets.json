@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "description": "Baseline-derived frontend bundle and PWA budgets. Update after intentional size changes.",
+  "measuredAt": "2026-09-14",
+  "notes": [
+    "Sizes are uncompressed on-disk bytes under frontend/dist.",
+    "warnBytes is ~5% above baseline; maxBytes is ~15% above baseline.",
+    "Exceeding warn prints a warning; exceeding max fails CI."
+  ],
+  "budgets": [
+    {
+      "id": "chunk:mui",
+      "label": "MUI vendor chunk",
+      "kind": "asset",
+      "match": "^mui-.*\\.js$",
+      "baselineBytes": 389172,
+      "warnBytes": 408630,
+      "maxBytes": 447547
+    },
+    {
+      "id": "chunk:index",
+      "label": "Main index JS chunk",
+      "kind": "asset",
+      "match": "^index-.*\\.js$",
+      "baselineBytes": 230975,
+      "warnBytes": 242523,
+      "maxBytes": 265621
+    },
+    {
+      "id": "chunk:forms",
+      "label": "Forms vendor chunk",
+      "kind": "asset",
+      "match": "^forms-.*\\.js$",
+      "baselineBytes": 87067,
+      "warnBytes": 91420,
+      "maxBytes": 100127
+    },
+    {
+      "id": "chunk:query",
+      "label": "React Query vendor chunk",
+      "kind": "asset",
+      "match": "^query-.*\\.js$",
+      "baselineBytes": 41133,
+      "warnBytes": 43189,
+      "maxBytes": 47302
+    },
+    {
+      "id": "chunk:router",
+      "label": "Router vendor chunk",
+      "kind": "asset",
+      "match": "^router-.*\\.js$",
+      "baselineBytes": 37716,
+      "warnBytes": 39601,
+      "maxBytes": 43373
+    },
+    {
+      "id": "pwa:precache",
+      "label": "PWA precache total",
+      "kind": "precache",
+      "baselineBytes": 1094646,
+      "warnBytes": 1149378,
+      "maxBytes": 1258842
+    }
+  ]
+}

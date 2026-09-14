@@ -13,7 +13,9 @@ from backend.lib.resource_cache import (
     project_list_cache_key,
     set_cached_model_list,
 )
+from backend.lib.retrieval_cache import bump_corpus_generation
 from backend.modules.identity_access.models import User
+from backend.modules.identity_access.repository import IdentityRepository
 from backend.modules.notifications.repository import NotificationsRepository
 from backend.modules.projects.models import Project, ProjectTask
 from backend.modules.projects.repository import TASK_POSITION_GAP, ProjectsRepository
@@ -31,14 +33,53 @@ class ProjectsService:
         self.db = db
         self.repo = ProjectsRepository(db)
         self.users_repo = UsersRepository(db)
+        self.identity_repo = IdentityRepository(db)
         self.notifications_repo = NotificationsRepository(db)
 
-    async def create_project(self, owner_id: str, name: str, description: str | None) -> Project:
-        project = await self.repo.create(owner_id, name, description)
+    async def create_project(
+        self,
+        owner_id: str,
+        name: str,
+        description: str | None,
+        *,
+        organization_id: str | None = None,
+    ) -> Project:
+        resolved_organization_id = await self._resolve_project_organization_id(
+            owner_id, organization_id
+        )
+        project = await self.repo.create(
+            owner_id,
+            name,
+            description,
+            organization_id=resolved_organization_id,
+        )
         await self.db.commit()
         await self.db.refresh(project)
         await invalidate_project_list_cache(owner_id)
         return project
+
+    async def _resolve_project_organization_id(
+        self,
+        owner_id: str,
+        organization_id: str | None,
+    ) -> str:
+        if organization_id is not None:
+            belongs = await self.identity_repo.user_belongs_to_organization(
+                owner_id, organization_id
+            )
+            if not belongs:
+                raise HTTPException(status_code=403, detail="Organization access denied")
+            return organization_id
+        default_organization_id = await self.identity_repo.get_default_organization_id(
+            owner_id
+        )
+        if default_organization_id is not None:
+            return default_organization_id
+        user = await self.identity_repo.get_user_by_id(owner_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        organization = await self.identity_repo.create_personal_organization(user)
+        return organization.id
 
     async def project_summary(self, user_id: str) -> tuple[int, int]:
         return await self.repo.summary_for_user(user_id)
@@ -61,6 +102,7 @@ class ProjectsService:
         items = [
             ProjectResponse(
                 id=project.id,
+                organization_id=project.organization_id,
                 name=project.name,
                 description=project.description,
                 created_at=project.created_at,
@@ -83,6 +125,7 @@ class ProjectsService:
             [
                 ProjectResponse(
                     id=project.id,
+                    organization_id=project.organization_id,
                     name=project.name,
                     description=project.description,
                     created_at=project.created_at,
@@ -122,8 +165,8 @@ class ProjectsService:
         project_id: str,
         payload: ProjectTaskCreate,
     ) -> tuple[ProjectTask, User | None]:
-        project = await self._get_project_or_404(user_id, project_id)
-        assignee = await self._get_assignee_or_404(payload.assignee_id)
+        project = await self._get_owned_project_or_404(user_id, project_id)
+        assignee = await self._get_assignee_or_404(project, payload.assignee_id)
         position = await self.repo.get_next_task_position(project.id, payload.status)
         task = await self.repo.create_task(
             project_id=project.id,
@@ -143,6 +186,11 @@ class ProjectsService:
         task_row = await self.repo.get_task_with_assignee(project.id, task.id)
         if not task_row:
             raise HTTPException(status_code=500, detail="Failed to load created task")
+        await self._invalidate_assignment_access_caches(
+            project=project,
+            previous_assignee_id=None,
+            new_assignee_id=assignee.id if assignee else None,
+        )
         if payload.due_date is not None:
             await invalidate_calendar_cache(user_id)
             if assignee and assignee.id != user_id:
@@ -157,7 +205,7 @@ class ProjectsService:
         task_id: str,
         payload: ProjectTaskUpdate,
     ) -> tuple[ProjectTask, User | None]:
-        project = await self._get_project_or_404(user_id, project_id)
+        project = await self._get_owned_project_or_404(user_id, project_id)
         task = await self.repo.get_task_by_id(project.id, task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -178,7 +226,7 @@ class ProjectsService:
 
         assignee = None
         if "assignee_id" in fields_set:
-            assignee = await self._get_assignee_or_404(payload.assignee_id)
+            assignee = await self._get_assignee_or_404(project, payload.assignee_id)
             task.assignee_id = assignee.id if assignee else None
         elif task.assignee_id:
             assignee = await self.users_repo.get_active_user_by_id(task.assignee_id)
@@ -195,24 +243,43 @@ class ProjectsService:
         task_row = await self.repo.get_task_with_assignee(project.id, task.id)
         if not task_row:
             raise HTTPException(status_code=500, detail="Failed to load updated task")
+        if "assignee_id" in fields_set and previous_assignee_id != task.assignee_id:
+            await self._invalidate_assignment_access_caches(
+                project=project,
+                previous_assignee_id=previous_assignee_id,
+                new_assignee_id=task.assignee_id,
+            )
         if "due_date" in fields_set or task.due_date is not None or previous_due_date is not None:
             await invalidate_calendar_cache(user_id)
             if assignee and assignee.id != user_id:
                 await invalidate_calendar_cache(assignee.id)
+            if (
+                previous_assignee_id
+                and previous_assignee_id != user_id
+                and previous_assignee_id != (assignee.id if assignee else None)
+            ):
+                await invalidate_calendar_cache(previous_assignee_id)
         return task_row
 
     async def delete_task(self, user_id: str, project_id: str, task_id: str) -> None:
-        project = await self._get_project_or_404(user_id, project_id)
+        project = await self._get_owned_project_or_404(user_id, project_id)
         task = await self.repo.get_task_by_id(project.id, task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
 
         await self.repo.delete_task(task)
+        previous_assignee_id = task.assignee_id
+        previous_due_date = task.due_date
         await self.db.commit()
-        if task.due_date is not None:
+        await self._invalidate_assignment_access_caches(
+            project=project,
+            previous_assignee_id=previous_assignee_id,
+            new_assignee_id=None,
+        )
+        if previous_due_date is not None:
             await invalidate_calendar_cache(user_id)
-            if task.assignee_id and task.assignee_id != user_id:
-                await invalidate_calendar_cache(task.assignee_id)
+            if previous_assignee_id and previous_assignee_id != user_id:
+                await invalidate_calendar_cache(previous_assignee_id)
 
     async def reorder_tasks(
         self,
@@ -221,7 +288,7 @@ class ProjectsService:
         project_id: str,
         payload: ProjectTaskReorderRequest,
     ) -> list[tuple[ProjectTask, User | None]]:
-        project = await self._get_project_or_404(user_id, project_id)
+        project = await self._get_owned_project_or_404(user_id, project_id)
         task_rows, _ = await self.repo.list_tasks_with_assignees(project.id, limit=MAX_PAGE_LIMIT)
         tasks_by_id = {task.id: task for task, _ in task_rows}
         previous_status_by_id = {task.id: task.status for task, _ in task_rows}
@@ -253,16 +320,61 @@ class ProjectsService:
         rows, _ = await self.repo.list_tasks_with_assignees(project.id, limit=MAX_PAGE_LIMIT)
         return rows
 
+    async def _invalidate_assignment_access_caches(
+        self,
+        *,
+        project: Project,
+        previous_assignee_id: str | None,
+        new_assignee_id: str | None,
+    ) -> None:
+        """Drop list and retrieval caches when assignment changes project access.
+
+        Ownership already grants list visibility, so only assignee identities are
+        list-invalidated. Shared RAG retrieval is keyed by organization/project
+        corpus generation so every member loses stale entries after commit.
+        """
+        affected = {
+            user_id
+            for user_id in (previous_assignee_id, new_assignee_id)
+            if user_id
+        }
+        for user_id in sorted(affected):
+            await invalidate_project_list_cache(user_id)
+        if not affected:
+            return
+        organization_id = project.organization_id
+        if organization_id:
+            await bump_corpus_generation(
+                organization_id=organization_id,
+                project_id=project.id,
+            )
+
     async def _get_project_or_404(self, user_id: str, project_id: str) -> Project:
         project = await self.repo.get_by_id_for_user(project_id, user_id)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         return project
 
-    async def _get_assignee_or_404(self, assignee_id: str | None) -> User | None:
+    async def _get_owned_project_or_404(self, user_id: str, project_id: str) -> Project:
+        project = await self.repo.get_by_id_for_owner(project_id, user_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        return project
+
+    async def _get_assignee_or_404(
+        self,
+        project: Project,
+        assignee_id: str | None,
+    ) -> User | None:
         if not assignee_id:
             return None
-        assignee = await self.users_repo.get_active_user_by_id(assignee_id)
+        organization_id = project.organization_id
+        assignee = None
+        if organization_id:
+            assignee = await self.users_repo.get_active_user_in_organization(
+                assignee_id,
+                organization_id,
+            )
         if not assignee:
             raise HTTPException(status_code=404, detail="Assignee not found")
         return assignee

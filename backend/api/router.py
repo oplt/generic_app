@@ -1,5 +1,8 @@
 from fastapi import APIRouter
 
+from backend.modules.jobs.router import router as jobs_router
+from backend.modules.diagnostics.router import router as diagnostics_router
+from backend.modules.developer_diagnostics.router import router as developer_diagnostics_router
 from backend.modules.admin.router import router as admin_router
 from backend.modules.ai.agent_router import router as agent_router
 from backend.modules.ai.router import router as ai_router
@@ -9,6 +12,7 @@ from backend.modules.identity_access.router import router as auth_router
 from backend.modules.memory.api.routes import router as memory_router
 from backend.modules.notifications.router import router as notifications_router
 from backend.modules.platform.router import router as platform_router
+from backend.modules.policy.router import router as policy_router
 from backend.modules.profile.router import router as profile_router
 from backend.modules.projects.router import router as projects_router
 from backend.modules.rag.api.routes import router as rag_router
@@ -31,5 +35,9 @@ api_router.include_router(projects_router, prefix="/projects", tags=["projects"]
 api_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(observability_router, prefix="/observability", tags=["observability"])
 api_router.include_router(platform_router, prefix="/platform", tags=["platform"])
+api_router.include_router(policy_router, prefix="/policy", tags=["policy"])
 api_router.include_router(settings_router, prefix="/settings", tags=["settings"])
 api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
+api_router.include_router(jobs_router, prefix="/admin", tags=["jobs"])
+api_router.include_router(diagnostics_router, prefix="/admin", tags=["diagnostics"])
+api_router.include_router(developer_diagnostics_router, tags=["developer-diagnostics"])

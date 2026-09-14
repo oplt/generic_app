@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     )
     APP_NAME: str = "fullstack-app"
     APP_ENV: str = "dev"
+    APP_VERSION: str = "0.1.0"
+    GIT_COMMIT: str = ""
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
     LOG_LEVEL: str = "INFO"
@@ -33,8 +35,19 @@ class Settings(BaseSettings):
     CORE_DOMAIN_SINGULAR: str = "Project"
     CORE_DOMAIN_PLURAL: str = "Projects"
     PLATFORM_DEFAULT_MODULE_PACK: str = "full_platform"
+    DEVELOPER_DIAGNOSTICS_ENABLED: bool = False
+    FAILURE_INJECTION_ENABLED: bool = False
 
     DATABASE_URL: str
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT_SECONDS: float = 30.0
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+    DB_CONNECT_TIMEOUT_SECONDS: float = 5.0
+    DB_COMMAND_TIMEOUT_SECONDS: float = 60.0
+    DB_STATEMENT_TIMEOUT_MS: int = 30000
+    DB_LOCK_TIMEOUT_MS: int = 5000
+    DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: int = 60000
     REDIS_URL: str
     CACHE_ENABLED: bool = True
     CACHE_EMBEDDING_TTL_SECONDS: int = 600
@@ -65,6 +78,21 @@ class Settings(BaseSettings):
     CELERY_TASK_TIME_LIMIT_SECONDS: int = 1800
     CELERY_TASK_SOFT_TIME_LIMIT_SECONDS: int = 1650
     CELERY_RESULT_EXPIRES_SECONDS: int = 3600
+    OUTBOX_DISPATCH_LEASE_SECONDS: int = 600
+    # Ambiguous in-flight external effects (for example email) become reclaimable
+    # after this lease. Fresh in-flight claims skip duplicate Celery deliveries.
+    EXTERNAL_EFFECT_LEASE_SECONDS: int = 600
+    # HTTP Idempotency-Key records (Phase 3).
+    IDEMPOTENCY_TTL_SECONDS: int = 86400
+    IDEMPOTENCY_LEASE_SECONDS: int = 90
+    IDEMPOTENCY_WAIT_SECONDS: float = 25.0
+    IDEMPOTENCY_WAIT_POLL_SECONDS: float = 0.05
+    # Stale running application_jobs rows may be reclaimed after this lease.
+    WORKER_JOB_RUNNING_LEASE_SECONDS: int = 900
+    WORKER_JOB_DEFAULT_MAX_ATTEMPTS: int = 3
+    # Redis NX TTLs for overlapping Celery beat ticks (released early on success).
+    WORKER_BEAT_OUTBOX_LOCK_TTL_SECONDS: int = 55
+    WORKER_BEAT_CHAT_RETENTION_LOCK_TTL_SECONDS: int = 3500
 
     JWT_SECRET: str
     JWT_ALGORITHM: str
@@ -206,8 +234,30 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 150
     RAG_TOP_K: int = 5
     RAG_SCORE_THRESHOLD: float = 0.3
+    RAG_RETRIEVAL_STRATEGY: str = "hybrid_rrf"
+    RAG_VECTOR_CANDIDATE_COUNT: int = 0
+    RAG_LEXICAL_CANDIDATE_COUNT: int = 0
+    RAG_RRF_K: int = 60
     RAG_RERANK_ENABLED: bool = True
     RAG_RERANK_CANDIDATE_MULTIPLIER: int = 3
+    RAG_RERANKER_BACKEND: str = "lightweight"
+    RAG_DOCUMENT_AWARE_CHUNKING: bool = False
+    RAG_PARENT_CHILD_CHUNKING: bool = False
+    RAG_PARENT_CHILD_CHILD_SIZE: int = 200
+    RAG_PARENT_CHILD_CHILD_OVERLAP: int = 40
+    RAG_PARENT_CHILD_RETRIEVAL: bool = False
+    RAG_DEDUP_EXACT: bool = False
+    RAG_DEDUP_NEAR: bool = False
+    RAG_DEDUP_NEAR_THRESHOLD: float = 0.9
+    RAG_PER_DOCUMENT_LIMIT: int = 0
+    RAG_MMR_ENABLED: bool = False
+    RAG_MMR_LAMBDA: float = 0.7
+    RAG_NEIGHBOR_EXPANSION: bool = False
+    RAG_NEIGHBOR_WINDOW: int = 1
+    RAG_EMBEDDING_BATCH_SIZE: int = 64
+    RAG_EMBEDDING_CONCURRENCY: int = 1
+    RAG_EMBEDDING_MAX_RETRIES: int = 2
+    RAG_EMBEDDING_ALLOW_PARTIAL_FAILURE: bool = False
     RAG_MAX_CONTEXT_TOKENS: int = 6000
     RAG_ALLOWED_FILE_TYPES: str = "pdf,txt,md,docx,csv"
     RAG_MAX_FILE_BYTES: int = 10 * 1024 * 1024
@@ -354,6 +404,13 @@ class Settings(BaseSettings):
             raise ValueError("CORS_ALLOWED_ORIGINS/FRONTEND_URL must use https in production")
         if self.is_production and self.CELERY_TASK_ALWAYS_EAGER:
             raise ValueError("CELERY_TASK_ALWAYS_EAGER must be disabled in production")
+        if self.is_production and self.DEVELOPER_DIAGNOSTICS_ENABLED:
+            # Explicit opt-in only; keep default false. Bodies are never captured.
+            pass
+        if self.is_production and self.FAILURE_INJECTION_ENABLED:
+            raise ValueError(
+                "FAILURE_INJECTION_ENABLED must be false in production"
+            )
         if (
             self.RAG_ENABLED
             and self.RAG_VECTOR_BACKEND.lower() == "pgvector"
@@ -361,6 +418,36 @@ class Settings(BaseSettings):
         ):
             raise ValueError("RAG_EMBEDDING_DIMENSIONS must match the pgvector schema (1536)")
         bounded_positive = {
+            "DB_POOL_SIZE": (self.DB_POOL_SIZE, 1, 100),
+            "DB_MAX_OVERFLOW": (self.DB_MAX_OVERFLOW, 0, 200),
+            "DB_POOL_RECYCLE_SECONDS": (self.DB_POOL_RECYCLE_SECONDS, 30, 86400),
+            "DB_STATEMENT_TIMEOUT_MS": (self.DB_STATEMENT_TIMEOUT_MS, 100, 3_600_000),
+            "DB_LOCK_TIMEOUT_MS": (self.DB_LOCK_TIMEOUT_MS, 100, 300_000),
+            "DB_IDLE_IN_TRANSACTION_TIMEOUT_MS": (
+                self.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+                1000,
+                3_600_000,
+            ),
+            "OUTBOX_DISPATCH_LEASE_SECONDS": (self.OUTBOX_DISPATCH_LEASE_SECONDS, 30, 3600),
+            "EXTERNAL_EFFECT_LEASE_SECONDS": (self.EXTERNAL_EFFECT_LEASE_SECONDS, 30, 3600),
+            "IDEMPOTENCY_TTL_SECONDS": (self.IDEMPOTENCY_TTL_SECONDS, 60, 604_800),
+            "IDEMPOTENCY_LEASE_SECONDS": (self.IDEMPOTENCY_LEASE_SECONDS, 5, 600),
+            "WORKER_JOB_RUNNING_LEASE_SECONDS": (
+                self.WORKER_JOB_RUNNING_LEASE_SECONDS,
+                30,
+                7200,
+            ),
+            "WORKER_JOB_DEFAULT_MAX_ATTEMPTS": (self.WORKER_JOB_DEFAULT_MAX_ATTEMPTS, 1, 50),
+            "WORKER_BEAT_OUTBOX_LOCK_TTL_SECONDS": (
+                self.WORKER_BEAT_OUTBOX_LOCK_TTL_SECONDS,
+                5,
+                600,
+            ),
+            "WORKER_BEAT_CHAT_RETENTION_LOCK_TTL_SECONDS": (
+                self.WORKER_BEAT_CHAT_RETENTION_LOCK_TTL_SECONDS,
+                60,
+                86_400,
+            ),
             "CHAT_MAX_MESSAGE_BYTES": (self.CHAT_MAX_MESSAGE_BYTES, 1, 1024 * 1024),
             "CHAT_MAX_HISTORY_MESSAGES": (self.CHAT_MAX_HISTORY_MESSAGES, 1, 100),
             "CHAT_RETENTION_DAYS": (self.CHAT_RETENTION_DAYS, 1, 3650),
@@ -379,6 +466,14 @@ class Settings(BaseSettings):
         for name, (value, minimum, maximum) in bounded_positive.items():
             if not minimum <= value <= maximum:
                 raise ValueError(f"{name} must be between {minimum} and {maximum}")
+        if not 0.1 <= self.DB_POOL_TIMEOUT_SECONDS <= 300:
+            raise ValueError("DB_POOL_TIMEOUT_SECONDS must be between 0.1 and 300")
+        if not 0.1 <= self.DB_CONNECT_TIMEOUT_SECONDS <= 60:
+            raise ValueError("DB_CONNECT_TIMEOUT_SECONDS must be between 0.1 and 60")
+        if not 0.1 <= self.DB_COMMAND_TIMEOUT_SECONDS <= 3600:
+            raise ValueError("DB_COMMAND_TIMEOUT_SECONDS must be between 0.1 and 3600")
+        if self.DB_POOL_SIZE + self.DB_MAX_OVERFLOW > 250:
+            raise ValueError("DB_POOL_SIZE + DB_MAX_OVERFLOW must not exceed 250")
         if not 0.1 <= self.WEB_SEARCH_TIMEOUT_SECONDS <= 60:
             raise ValueError("WEB_SEARCH_TIMEOUT_SECONDS must be between 0.1 and 60")
         if not 1 <= self.CHAT_REQUEST_TIMEOUT_SECONDS <= 3600:
@@ -387,6 +482,45 @@ class Settings(BaseSettings):
             raise ValueError("WEB_SEARCH_DAILY_REQUESTS must be between 0 and 100000")
         if not 0.1 <= self.RAG_PARSER_TIMEOUT_SECONDS <= 600:
             raise ValueError("RAG_PARSER_TIMEOUT_SECONDS must be between 0.1 and 600")
+        strategy = self.RAG_RETRIEVAL_STRATEGY.strip().lower()
+        if strategy not in {"vector", "lexical", "hybrid_rrf"}:
+            raise ValueError(
+                "RAG_RETRIEVAL_STRATEGY must be one of: vector, lexical, hybrid_rrf"
+            )
+        if not 0 <= self.RAG_VECTOR_CANDIDATE_COUNT <= 50:
+            raise ValueError("RAG_VECTOR_CANDIDATE_COUNT must be between 0 and 50")
+        if not 0 <= self.RAG_LEXICAL_CANDIDATE_COUNT <= 50:
+            raise ValueError("RAG_LEXICAL_CANDIDATE_COUNT must be between 0 and 50")
+        if not 1 <= self.RAG_RRF_K <= 200:
+            raise ValueError("RAG_RRF_K must be between 1 and 200")
+        if not 1 <= self.RAG_RERANK_CANDIDATE_MULTIPLIER <= 10:
+            raise ValueError("RAG_RERANK_CANDIDATE_MULTIPLIER must be between 1 and 10")
+        reranker = self.RAG_RERANKER_BACKEND.strip().lower()
+        if reranker not in {"none", "lightweight", "cross_encoder", "provider", "llm"}:
+            raise ValueError(
+                "RAG_RERANKER_BACKEND must be one of: none, lightweight, "
+                "cross_encoder, provider, llm"
+            )
+        if not 0.0 <= self.RAG_DEDUP_NEAR_THRESHOLD <= 1.0:
+            raise ValueError("RAG_DEDUP_NEAR_THRESHOLD must be between 0 and 1")
+        if not 0 <= self.RAG_PER_DOCUMENT_LIMIT <= 20:
+            raise ValueError("RAG_PER_DOCUMENT_LIMIT must be between 0 and 20")
+        if not 0.0 <= self.RAG_MMR_LAMBDA <= 1.0:
+            raise ValueError("RAG_MMR_LAMBDA must be between 0 and 1")
+        if not 0 <= self.RAG_NEIGHBOR_WINDOW <= 3:
+            raise ValueError("RAG_NEIGHBOR_WINDOW must be between 0 and 3")
+        if not 1 <= self.RAG_EMBEDDING_BATCH_SIZE <= 256:
+            raise ValueError("RAG_EMBEDDING_BATCH_SIZE must be between 1 and 256")
+        if not 1 <= self.RAG_EMBEDDING_CONCURRENCY <= 16:
+            raise ValueError("RAG_EMBEDDING_CONCURRENCY must be between 1 and 16")
+        if not 0 <= self.RAG_EMBEDDING_MAX_RETRIES <= 8:
+            raise ValueError("RAG_EMBEDDING_MAX_RETRIES must be between 0 and 8")
+        if not 32 <= self.RAG_PARENT_CHILD_CHILD_SIZE <= 2000:
+            raise ValueError("RAG_PARENT_CHILD_CHILD_SIZE must be between 32 and 2000")
+        if not 0 <= self.RAG_PARENT_CHILD_CHILD_OVERLAP < self.RAG_PARENT_CHILD_CHILD_SIZE:
+            raise ValueError(
+                "RAG_PARENT_CHILD_CHILD_OVERLAP must be >= 0 and < RAG_PARENT_CHILD_CHILD_SIZE"
+            )
         if self.WEB_SEARCH_ENABLED:
             if self.WEB_SEARCH_PROVIDER.strip() != "generic_json":
                 raise ValueError("WEB_SEARCH_PROVIDER must be generic_json")

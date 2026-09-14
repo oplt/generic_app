@@ -12,10 +12,12 @@ TaskPriority = Literal["low", "medium", "high", "urgent"]
 class ProjectCreate(RequestModel):
     name: str = Field(min_length=2, max_length=255)
     description: str | None = Field(default=None, max_length=1000)
+    organization_id: str | None = None
 
 
 class ProjectResponse(BaseModel):
     id: str
+    organization_id: str
     name: str
     description: str | None
     created_at: datetime

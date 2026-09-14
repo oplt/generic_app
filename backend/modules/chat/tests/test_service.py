@@ -19,7 +19,7 @@ class FakeGeneration:
         self.calls.append(kwargs)
         return SimpleNamespace(
             id="run-1",
-            output_text="The answer is grounded. [Source 1]",
+            output_text="The rollout starts on Monday. [Source 1]",
             model_name="local",
         )
 
@@ -129,7 +129,11 @@ class DocumentChatServiceTest(unittest.IsolatedAsyncioTestCase):
         )
         service = build_service(chunks=[chunk])
         conversation = SimpleNamespace(
-            id="conversation-1", user_id="user-1", project_id=None, mode="documents"
+            id="conversation-1",
+            user_id="user-1",
+            organization_id=None,
+            project_id=None,
+            mode="documents",
         )
         user = SimpleNamespace(id="user-1")
         events = [
@@ -226,6 +230,7 @@ class DocumentChatServiceTest(unittest.IsolatedAsyncioTestCase):
         conversation = SimpleNamespace(
             id="conversation-1",
             user_id="user-1",
+            organization_id=None,
             project_id=None,
             mode="general",
             title="Chat",

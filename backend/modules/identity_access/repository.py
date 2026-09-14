@@ -39,19 +39,46 @@ class IdentityRepository:
             )
         )
         await self.db.flush()
+        try:
+            from backend.modules.policy.service import PolicyService
+
+            await PolicyService(self.db).invalidate_user(user.id)
+            await PolicyService(self.db).invalidate_organization(organization.id)
+        except Exception:
+            # Cache invalidation must not block signup org creation.
+            pass
         return organization
 
     async def get_default_organization_id(self, user_id: str) -> str | None:
         result = await self.db.execute(
             select(OrganizationMembership.organization_id)
             .where(OrganizationMembership.user_id == user_id)
-            .order_by(OrganizationMembership.created_at.asc())
+            .order_by(
+                OrganizationMembership.created_at.asc(),
+                OrganizationMembership.id.asc(),
+            )
             .limit(1)
         )
         value = result.scalar_one_or_none()
         if inspect.isawaitable(value):
             value = await value
         return value
+
+    async def user_belongs_to_organization(
+        self, user_id: str, organization_id: str
+    ) -> bool:
+        result = await self.db.execute(
+            select(OrganizationMembership.id)
+            .where(
+                OrganizationMembership.user_id == user_id,
+                OrganizationMembership.organization_id == organization_id,
+            )
+            .limit(1)
+        )
+        value = result.scalar_one_or_none()
+        if inspect.isawaitable(value):
+            value = await value
+        return value is not None
 
     async def create_user(
         self,

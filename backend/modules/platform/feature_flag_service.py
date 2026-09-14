@@ -50,25 +50,29 @@ class FeatureFlagService(PlatformConfigService):
             for flag in flags
         ]
 
-    async def create_feature_flag(self, payload: dict) -> FeatureFlag:
+    async def create_feature_flag(self, payload: dict, *, commit: bool = True) -> FeatureFlag:
         if await self.repo.get_feature_flag_by_key(payload["key"]) is not None:
             raise HTTPException(
                 status_code=409, detail="A feature flag with this key already exists"
             )
 
         flag = await self.repo.create_feature_flag(**payload)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         await self.db.refresh(flag)
         await invalidate_platform_caches()
         return flag
 
-    async def update_feature_flag(self, feature_flag_id: str, payload: dict) -> FeatureFlag:
+    async def update_feature_flag(
+        self, feature_flag_id: str, payload: dict, *, commit: bool = True
+    ) -> FeatureFlag:
         flag = await self.repo.get_feature_flag_by_id(feature_flag_id)
         if not flag:
             raise HTTPException(status_code=404, detail="Feature flag not found")
         for field, value in payload.items():
             setattr(flag, field, value)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         await self.db.refresh(flag)
         await invalidate_platform_caches()
         return flag

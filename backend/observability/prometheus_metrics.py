@@ -55,6 +55,12 @@ worker_job_retries_total = Counter(
     ["job_type"],
 )
 
+worker_job_queue_latency_seconds = Histogram(
+    "worker_job_queue_latency_seconds",
+    "Seconds from job availability to worker start",
+    ["job_type"],
+)
+
 worker_queue_depth = Gauge(
     "worker_queue_depth",
     "Current Redis queue depth",
@@ -80,4 +86,40 @@ worker_heartbeat_timestamp_seconds = Gauge(
     "worker_heartbeat_timestamp_seconds",
     "Unix timestamp of the last successful worker heartbeat check",
     ["worker"],
+)
+
+worker_beat_schedule_lock_total = Counter(
+    "worker_beat_schedule_lock_total",
+    "Celery beat schedule singleton lock attempts",
+    ["schedule", "backend", "outcome"],
+)
+
+db_pool_checked_out = Gauge(
+    "db_pool_checked_out",
+    "Checked-out PostgreSQL connections",
+    ["pool"],
+)
+
+db_pool_size = Gauge(
+    "db_pool_size",
+    "Configured PostgreSQL pool size",
+    ["pool"],
+)
+
+db_pool_overflow = Gauge(
+    "db_pool_overflow",
+    "PostgreSQL connections above the base pool size",
+    ["pool"],
+)
+
+db_pool_checkout_total = Counter(
+    "db_pool_checkout_total",
+    "Successful PostgreSQL pool checkouts",
+    ["pool"],
+)
+
+db_pool_checkout_errors_total = Counter(
+    "db_pool_checkout_errors_total",
+    "PostgreSQL pool checkout or acquisition errors",
+    ["pool"],
 )

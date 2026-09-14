@@ -9,7 +9,15 @@ class ReadinessResponseTest(unittest.TestCase):
     def test_healthy_checks_return_ok(self):
         self.assertEqual(
             _readiness_response({"db": "ok", "redis": "ok", "queue": "ok"}),
-            {"status": "ok", "checks": {"db": "ok", "redis": "ok", "queue": "ok"}},
+            {
+                "status": "ok",
+                "checks": {"db": "ok", "redis": "ok", "queue": "ok"},
+                "dependency_states": {
+                    "db": "healthy",
+                    "redis": "healthy",
+                    "queue": "healthy",
+                },
+            },
         )
 
     def test_failed_dependency_returns_service_unavailable(self):
@@ -22,6 +30,11 @@ class ReadinessResponseTest(unittest.TestCase):
             {
                 "status": "degraded",
                 "checks": {"db": "error", "redis": "ok", "queue": "ok"},
+                "dependency_states": {
+                    "db": "unavailable",
+                    "redis": "healthy",
+                    "queue": "healthy",
+                },
             },
         )
 

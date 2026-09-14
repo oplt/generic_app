@@ -22,14 +22,61 @@ class ModulePackResponse(BaseModel):
     modules: list[str]
 
 
+class CapabilityProfileSummary(BaseModel):
+    """Resolved capability matrix for the active (or listed) profile."""
+
+    key: str
+    label: str
+    description: str
+    optional_modules: list[str] = Field(default_factory=list)
+    active_modules: list[str] = Field(default_factory=list)
+    backend_router_keys: list[str] = Field(default_factory=list)
+    celery_queues: list[str] = Field(default_factory=list)
+    scheduled_tasks: list[str] = Field(default_factory=list)
+    settings_prefixes: list[str] = Field(default_factory=list)
+    health_checks: list[str] = Field(default_factory=list)
+    required_permissions: list[str] = Field(default_factory=list)
+    database_requirements: list[str] = Field(default_factory=list)
+    feature_flags: list[str] = Field(default_factory=list)
+    recommended_feature_flags: list[str] = Field(default_factory=list)
+    nav_entry_count: int = 0
+    frontend_route_count: int = 0
+
+
+class ModuleNavEntry(BaseModel):
+    module_key: str
+    label: str
+    path: str
+    group: str = "workspace"
+    icon: str | None = None
+    required_permission: str | None = None
+    feature_flag: str | None = None
+
+
+class ModuleFrontendRoute(BaseModel):
+    module_key: str
+    path: str
+    page_key: str
+    required_permission: str | None = None
+    feature_flag: str | None = None
+
+
 class PlatformMetadataResponse(BaseModel):
     app_name: str
     core_domain_singular: str
     core_domain_plural: str
     module_pack: str
+    capability_profile: str | None = None
     enabled_modules: list[str]
+    active_modules: list[str] = Field(default_factory=list)
     module_catalog: list[ModuleCatalogItem]
     available_module_packs: list[ModulePackResponse]
+    available_capability_profiles: list[CapabilityProfileSummary] = Field(
+        default_factory=list
+    )
+    active_profile: CapabilityProfileSummary | None = None
+    module_nav: list[ModuleNavEntry] = Field(default_factory=list)
+    module_routes: list[ModuleFrontendRoute] = Field(default_factory=list)
     mfa_enabled: bool = False
 
 

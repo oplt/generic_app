@@ -21,6 +21,16 @@ const VerifyEmailPage = lazy(() => import("../features/auth/views/VerifyEmailVie
 const AdminUsersPage = lazy(() => import("../features/admin-users/views/AdminUsersView"));
 const AdminPlatformPage = lazy(() => import("../features/platform-admin/views/AdminPlatformView"));
 const AdminSettingsPage = lazy(() => import("../features/settings-admin/views/AdminSettingsView"));
+const AdminRagIndexesPage = lazy(
+    () => import("../features/admin-rag/views/AdminRagIndexesView")
+);
+const AdminRagEvaluationPage = lazy(
+    () => import("../features/admin-rag/views/AdminRagEvaluationView")
+);
+const AdminJobsPage = lazy(() => import("../features/admin-jobs/views/AdminJobsView"));
+const AdminDiagnosticsPage = lazy(
+    () => import("../features/admin-diagnostics/views/AdminDiagnosticsView")
+);
 const AiStudioPage = lazy(() => import("../features/ai/views/AiStudioView"));
 const KnowledgeChatPage = lazy(() => import("../features/chat/views/KnowledgeChatView"));
 
@@ -97,6 +107,58 @@ export function AppRouter() {
                                 requireAdmin
                             >
                                 <SuspensePage><AdminPlatformPage /></SuspensePage>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/admin/rag-indexes"
+                        element={
+                            <ProtectedRoute
+                                isReady={isReady}
+                                isAuthenticated={isAuthenticated}
+                                isAdmin={isAdmin}
+                                requireAdmin
+                            >
+                                <SuspensePage><AdminRagIndexesPage /></SuspensePage>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/admin/rag/evaluation"
+                        element={
+                            <ProtectedRoute
+                                isReady={isReady}
+                                isAuthenticated={isAuthenticated}
+                                isAdmin={isAdmin}
+                                requireAdmin
+                            >
+                                <SuspensePage><AdminRagEvaluationPage /></SuspensePage>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/admin/jobs"
+                        element={
+                            <ProtectedRoute
+                                isReady={isReady}
+                                isAuthenticated={isAuthenticated}
+                                isAdmin={isAdmin}
+                                requireAdmin
+                            >
+                                <SuspensePage><AdminJobsPage /></SuspensePage>
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/admin/diagnostics"
+                        element={
+                            <ProtectedRoute
+                                isReady={isReady}
+                                isAuthenticated={isAuthenticated}
+                                isAdmin={isAdmin}
+                                requireAdmin
+                            >
+                                <SuspensePage><AdminDiagnosticsPage /></SuspensePage>
                             </ProtectedRoute>
                         }
                     />

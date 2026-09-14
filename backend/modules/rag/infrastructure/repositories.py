@@ -7,22 +7,19 @@ from datetime import UTC, datetime, timedelta
 from backend.core.config import settings
 from backend.core.pagination import DEFAULT_PAGE_LIMIT, paginate_cursor_scalars, paginate_scalars
 from backend.lib.vector_search import (
-    embedding_is_indexable,
     pgvector_readiness,
-    reset_pgvector_readiness_cache,
     store_chunk_embeddings_batch,
 )
-from backend.lib.vectors import vector_literal
 from backend.modules.rag.domain.enums import DocumentStatus, IngestionJobStatus
 from backend.modules.rag.domain.models import RetrievedChunk
+from backend.modules.rag.infrastructure import chunk_search
 from backend.modules.rag.infrastructure.models import (
     RagChunk,
     RagDocument,
     RagIngestionJob,
     RagQueryRecord,
 )
-from backend.modules.rag.infrastructure.pgvector_errors import PgVectorUnavailableError
-from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -35,6 +32,7 @@ class RagRepository:
     async def create_document(
         self,
         *,
+        document_id: str | None = None,
         user_id: str,
         filename: str,
         original_filename: str,
@@ -47,6 +45,7 @@ class RagRepository:
         metadata: dict | None,
     ) -> RagDocument:
         row = RagDocument(
+            id=document_id,
             user_id=user_id,
             filename=filename,
             original_filename=original_filename,
@@ -80,7 +79,9 @@ class RagRepository:
             stmt = stmt.where(RagDocument.project_id.is_(None))
         else:
             stmt = stmt.where(RagDocument.project_id == project_id)
-        if organization_id is not None:
+        if organization_id is None:
+            stmt = stmt.where(RagDocument.organization_id.is_(None))
+        else:
             stmt = stmt.where(RagDocument.organization_id == organization_id)
         stmt = stmt.order_by(RagDocument.updated_at.desc()).limit(1)
         result = await self.db.execute(stmt)
@@ -384,88 +385,41 @@ class RagRepository:
         candidate_limit: int | None = None,
         organization_id: str | None = None,
     ) -> list[RetrievedChunk]:
-        readiness = await pgvector_readiness(self.db)
-        if not readiness.available:
-            raise PgVectorUnavailableError(readiness.reason or "readiness_check_failed")
-        if not embedding_is_indexable(query_embedding):
-            raise PgVectorUnavailableError("query_dimension_mismatch")
+        return await chunk_search.similarity_search_indexed(
+            self.db,
+            user_id=user_id,
+            project_id=project_id,
+            document_ids=document_ids,
+            source_type=source_type,
+            query=query,
+            query_embedding=query_embedding,
+            top_k=top_k,
+            score_threshold=score_threshold,
+            candidate_limit=candidate_limit,
+            organization_id=organization_id,
+        )
 
-        filters = [
-            (
-                "(c.user_id = :user_id OR c.organization_id = :organization_id)"
-                if organization_id is not None
-                else "c.user_id = :user_id"
-            ),
-            "c.embedding IS NOT NULL",
-            "d.status = 'indexed'",
-            "d.deleted_at IS NULL",
-            "(1 - (c.embedding <=> CAST(:query_vec AS vector))) >= :score_threshold",
-        ]
-        params: dict = {
-            "user_id": user_id,
-            "query_vec": vector_literal(query_embedding),
-            "score_threshold": score_threshold,
-            "candidate_limit": max(top_k, candidate_limit or top_k),
-            "search_query": query,
-        }
-        if organization_id is not None:
-            params["organization_id"] = organization_id
-        if project_id:
-            filters.append("c.project_id = :project_id")
-            params["project_id"] = project_id
-        if organization_id is not None:
-            filters.append("c.organization_id = :organization_id")
-            params["organization_id"] = organization_id
-        if document_ids:
-            filters.append("c.document_id = ANY(:document_ids)")
-            params["document_ids"] = document_ids
-        if source_type:
-            filters.append("d.source_type = :source_type")
-            params["source_type"] = source_type
-
-        sql = f"""
-            SELECT
-                c.id AS chunk_id,
-                c.document_id,
-                c.content,
-                c.chunk_index,
-                c.metadata_json,
-                d.original_filename,
-                (1 - (c.embedding <=> CAST(:query_vec AS vector))) AS score,
-                ts_rank_cd(
-                    to_tsvector('simple', coalesce(c.content, '')),
-                    plainto_tsquery('simple', :search_query)
-                ) AS lexical_score
-            FROM rag_chunks c
-            INNER JOIN rag_documents d ON d.id = c.document_id
-            WHERE {" AND ".join(filters)}
-            ORDER BY c.embedding <=> CAST(:query_vec AS vector)
-            LIMIT :candidate_limit
-        """
-        try:
-            result = await self.db.execute(text(sql), params)
-        except Exception as exc:
-            logger.exception("Indexed pgvector search failed")
-            reset_pgvector_readiness_cache()
-            raise PgVectorUnavailableError("query_failed") from exc
-
-        rows = result.mappings().all()
-        retrieved: list[RetrievedChunk] = []
-        for row in rows:
-            meta = json.loads(row["metadata_json"] or "{}")
-            retrieved.append(
-                RetrievedChunk(
-                    chunk_id=row["chunk_id"],
-                    document_id=row["document_id"],
-                    content=row["content"],
-                    score=round(float(row["score"]), 4),
-                    filename=row["original_filename"],
-                    chunk_index=row["chunk_index"],
-                    page_number=meta.get("page_number"),
-                    metadata={**meta, "lexical_score": float(row["lexical_score"] or 0.0)},
-                )
-            )
-        return retrieved
+    async def lexical_search_indexed(
+        self,
+        *,
+        user_id: str,
+        project_id: str | None,
+        document_ids: list[str] | None,
+        source_type: str | None,
+        query: str,
+        candidate_limit: int,
+        organization_id: str | None = None,
+    ) -> list[RetrievedChunk]:
+        return await chunk_search.lexical_search_indexed(
+            self.db,
+            user_id=user_id,
+            project_id=project_id,
+            document_ids=document_ids,
+            source_type=source_type,
+            query=query,
+            candidate_limit=candidate_limit,
+            organization_id=organization_id,
+        )
 
     async def create_ingestion_job(
         self, *, document_id: str, user_id: str, project_id: str | None

@@ -1,0 +1,15 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { list{{ names.pascal }} } from "../api";
+
+export const {{ names.key }}QueryKeys = {
+    all: ["{{ names.key }}"] as const,
+    list: ["{{ names.key }}", "list"] as const,
+};
+
+export function use{{ names.pascal }}List() {
+    return useQuery({
+        queryKey: {{ names.key }}QueryKeys.list,
+        queryFn: list{{ names.pascal }},
+    });
+}

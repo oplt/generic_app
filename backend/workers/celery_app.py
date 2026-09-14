@@ -56,6 +56,10 @@ celery_app.conf.update(
             "task": "backend.workers.tasks.cleanup_chat_retention_task",
             "schedule": 3600.0,
         },
+        "cleanup-expired-idempotency-records": {
+            "task": "backend.workers.tasks.cleanup_idempotency_records_task",
+            "schedule": 900.0,
+        },
     },
 )
 

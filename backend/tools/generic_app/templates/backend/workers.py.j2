@@ -1,0 +1,17 @@
+"""Celery tasks for {{ names.label }}."""
+
+from __future__ import annotations
+
+import logging
+
+from backend.workers.celery_app import celery_app
+
+logger = logging.getLogger("backend.modules.{{ names.key }}.workers")
+
+
+@celery_app.task(name="{{ names.key }}.example_task", queue="{{ celery_queue }}")
+def example_{{ names.key }}_task(payload: dict) -> dict:
+    """Replace with a real background job; keep queue aligned with the manifest."""
+
+    logger.info("{{ names.key }}_task_received keys=%s", sorted(payload))
+    return {"ok": True, "module": "{{ names.key }}"}

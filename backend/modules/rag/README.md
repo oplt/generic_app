@@ -42,14 +42,27 @@ RAG_CHUNK_SIZE=1000
 RAG_CHUNK_OVERLAP=150
 RAG_TOP_K=5
 RAG_SCORE_THRESHOLD=0.3
+RAG_RETRIEVAL_STRATEGY=hybrid_rrf
+RAG_VECTOR_CANDIDATE_COUNT=0
+RAG_LEXICAL_CANDIDATE_COUNT=0
+RAG_RRF_K=60
 RAG_MAX_CONTEXT_TOKENS=6000
 RAG_RERANK_ENABLED=true
 RAG_RERANK_CANDIDATE_MULTIPLIER=3
+RAG_RERANKER_BACKEND=lightweight
+# Quality strategies default off — see docs/rag-quality.md
+RAG_DOCUMENT_AWARE_CHUNKING=false
+RAG_PARENT_CHILD_CHUNKING=false
+RAG_DEDUP_EXACT=false
+RAG_MMR_ENABLED=false
+RAG_NEIGHBOR_EXPANSION=false
 RAG_ALLOWED_FILE_TYPES=pdf,txt,md,docx,csv
 RAG_MAX_FILE_BYTES=10485760
 ```
 
 Embeddings use the same provider registry as `/api/v1/ai` — no hardcoded API keys.
+Quality options (parent/child, dedup, MMR, neighbors, embedding batching) are documented in
+[`docs/rag-quality.md`](../../../docs/rag-quality.md); defaults stay off until measured.
 
 ## Vector backend
 
@@ -61,7 +74,18 @@ Embeddings use the same provider registry as `/api/v1/ai` — no hardcoded API k
 The schema is fixed at 1536 dimensions. The application rejects another dimension value while
 pgvector is enabled; change the schema through a deliberate migration before changing models.
 Retrieval requires the `vector` extension, `rag_chunks.embedding`, and the cosine HNSW index.
-Missing readiness fails closed and returns degraded retrieval; it never scans `embedding_json`.
+Tune filtered ANN (`hnsw.ef_search`, iterative scan) only from the measured runbook
+[`docs/runbooks/filtered-hnsw-recall.md`](../../../docs/runbooks/filtered-hnsw-recall.md).
+When `RAG_RETRIEVAL_STRATEGY=hybrid_rrf` (default), retrieval runs independent
+pgvector ANN and PostgreSQL FTS lanes (`content_tsv` / `ix_rag_chunks_content_tsv`),
+fuses them with configurable RRF (`RAG_RRF_K`), then optionally applies the local
+hybrid reranker when `RAG_RERANK_ENABLED=true`. Candidate expansion happens in one
+place (`candidate_expansion.py`); set `RAG_VECTOR_CANDIDATE_COUNT` /
+`RAG_LEXICAL_CANDIDATE_COUNT` or derive once via `RAG_RERANK_CANDIDATE_MULTIPLIER`.
+Lexical-lane failures fall back to vector-only candidates. Missing readiness
+fails closed and returns degraded retrieval; it never scans `embedding_json`.
+See [docs/hybrid-search.md](../../../docs/hybrid-search.md) for strategies and
+EXPLAIN guidance.
 
 ## AI document route consolidation
 
@@ -101,6 +125,7 @@ before enabling production retrieval.
 | GET | `/api/v1/rag/queries` | Query history |
 | GET | `/api/v1/rag/jobs/{id}` | Ingestion job status |
 | POST | `/api/v1/rag/jobs/{id}/retry` | Repair/retry ingestion via a fresh outbox event |
+| * | `/api/v1/rag/admin/evaluation/*` | Evaluation workbench (requires `rag.manage`) — see [docs/rag-evaluation-workbench.md](../../../docs/rag-evaluation-workbench.md) |
 
 ## Upload and index
 
@@ -160,9 +185,17 @@ Generation goes through `GenerationPort` (`backend/lib/generation_port.py`, adap
 
 ## Access control
 
-- Documents scoped by `user_id`
+- Documents scoped by `user_id` and optional `organization_id` / `project_id`
+- When `project_id` is set, `organization_id` must be that project's organization
+  (see ADR 0004); `ProjectAccessPort.resolve_ownership_scope` derives the pair
 - `project_id` requires project membership (`ProjectAccessPort.ensure_project_access`)
-- Retrieval never returns another user's chunks
+- Organization-scoped chunks are visible to other members with the same `organization_id`
+- Retrieval cache keys include a user-independent corpus generation; upload/reindex/delete and
+  project assignment changes bump it so no member keeps a stale shared entry
+- Call `invalidate_retrieval_cache_for_organization` after membership/permission revokes
+- Pipeline metadata stores `parser_version`, `chunker_version`, `embedding_schema_version`,
+  embedding provider/model/dimensions, and `index_version` for stale-document detection
+- Index version lifecycle + admin status: see [docs/rag-index-versions.md](../../../docs/rag-index-versions.md)
 - Admins can delete/index only when `is_admin` checks pass
 
 ## Prompt injection safety
@@ -182,6 +215,17 @@ alembic upgrade head
 ```sh
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --project backend pytest -q backend/modules/rag/tests
 ```
+
+## Offline evaluation baseline
+
+Run the versioned local golden corpus and emit a human summary plus JSON report:
+
+```sh
+PYTHONPATH=. uv run --project backend python -m backend.modules.rag.evaluation \
+  --json-output /tmp/rag-evaluation.json
+```
+
+See [`evaluation/README.md`](evaluation/README.md) for metric definitions and limitations.
 
 ## Vector backend
 

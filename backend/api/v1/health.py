@@ -12,6 +12,16 @@ from backend.workers.readiness import worker_readiness
 health_router = APIRouter(prefix="/health", tags=["health"])
 
 
+def dependency_operational_state(check_value: str) -> str:
+    """Map readiness check values to documented operational states."""
+    return {
+        "ok": "healthy",
+        "error": "unavailable",
+        "not_required": "not_required",
+        "unknown": "unknown",
+    }.get(check_value, check_value)
+
+
 def _readiness_response(
     checks: dict[str, str],
     *,
@@ -25,12 +35,24 @@ def _readiness_response(
         else {name for name, value in checks.items() if value not in {"unknown", "not_required"}}
     )
     failed = {name: checks.get(name, "missing") for name in required if checks.get(name) != "ok"}
-    response: dict[str, object] = {"status": "ok", "checks": checks}
+    response: dict[str, object] = {
+        "status": "ok",
+        "checks": checks,
+        "dependency_states": {
+            name: dependency_operational_state(value) for name, value in checks.items()
+        },
+    }
     if details:
         response["details"] = details
     if not failed:
         return response
-    detail: dict[str, object] = {"status": "degraded", "checks": checks}
+    detail: dict[str, object] = {
+        "status": "degraded",
+        "checks": checks,
+        "dependency_states": {
+            name: dependency_operational_state(value) for name, value in checks.items()
+        },
+    }
     if not legacy_required:
         detail["failed_required_checks"] = sorted(failed)
     if details:
@@ -52,12 +74,23 @@ async def ready():
 
     try:
         async with engine.connect() as conn:
+            from backend.lib.failure_injection import maybe_inject
+            from backend.lib.failure_injection.kinds import FaultKind
+
+            maybe_inject(FaultKind.POSTGRES_CONNECTION)
+            maybe_inject(FaultKind.POSTGRES_POOL_EXHAUSTED)
+            maybe_inject(FaultKind.POSTGRES_SLOW_QUERY)
             await conn.execute(text("SELECT 1"))
         checks["db"] = "ok"
     except Exception:
         checks["db"] = "error"
 
     try:
+        from backend.lib.failure_injection import maybe_inject
+        from backend.lib.failure_injection.kinds import FaultKind
+
+        maybe_inject(FaultKind.REDIS_UNAVAILABLE)
+        maybe_inject(FaultKind.REDIS_TIMEOUT)
         await redis_client.ping()
         checks["redis"] = "ok"
     except Exception:
@@ -112,6 +145,7 @@ async def version():
     return {
         "app": settings.APP_NAME,
         "env": settings.APP_ENV,
-        "version": "0.1.0",
+        "version": settings.APP_VERSION,
+        "git_commit": settings.GIT_COMMIT or None,
         "async_jobs": "celery",
     }

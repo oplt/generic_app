@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     Box,
+    Button,
     Chip,
     CircularProgress,
     InputAdornment,
@@ -22,7 +23,7 @@ import {
 } from "@mui/material";
 import { Search as SearchIcon, PeopleAlt as PeopleAltIcon } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
-import { listAdminUsers, updateUserStatus, type AdminUserListResponse } from "../../../api/admin";
+import { listAdminUsers, updateUserStatus, type AdminUser, type AdminUserListResponse } from "../../../api/admin";
 import { AdminSettingsTabs } from "../../../components/layout/AdminSettingsTabs";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { PageShell } from "../../../components/ui/PageShell";
@@ -33,6 +34,7 @@ import { queryKeys } from "../../../config/queryKeys";
 import { useDebounce } from "../../../hooks/useDebounce";
 import { useMutationErrorToast } from "../../../hooks/useMutationErrorToast";
 import { formatDate } from "../../../utils/formatters";
+import { UserRolesDialog } from "../components/UserRolesDialog";
 
 export default function AdminUsersPage() {
     const queryClient = useQueryClient();
@@ -41,6 +43,7 @@ export default function AdminUsersPage() {
     const isMobile = useMediaQuery(theme.breakpoints.down("md"));
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(0);
+    const [rolesUser, setRolesUser] = useState<AdminUser | null>(null);
     const pageSize = 20;
     const debouncedSearch = useDebounce(search, 300);
     const usersQueryKey = queryKeys.admin.users(page, debouncedSearch);
@@ -216,6 +219,9 @@ export default function AdminUsersPage() {
                                             <Typography variant="caption" color="text.secondary">
                                                 Joined {formatDate(user.created_at)}
                                             </Typography>
+                                            <Button size="small" onClick={() => setRolesUser(user)}>
+                                                Manage roles
+                                            </Button>
                                         </Stack>
                                     </Box>
                                 );
@@ -232,6 +238,7 @@ export default function AdminUsersPage() {
                                         <TableCell>Verified</TableCell>
                                         <TableCell>Joined</TableCell>
                                         <TableCell align="center">Active</TableCell>
+                                        <TableCell align="right">Policy</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -282,6 +289,11 @@ export default function AdminUsersPage() {
                                                         </Box>
                                                     </Tooltip>
                                                 </TableCell>
+                                                <TableCell align="right">
+                                                    <Button size="small" onClick={() => setRolesUser(user)}>
+                                                        Roles
+                                                    </Button>
+                                                </TableCell>
                                             </TableRow>
                                         );
                                     })}
@@ -300,6 +312,12 @@ export default function AdminUsersPage() {
                     onPageChange={(_, nextPage) => setPage(nextPage)}
                 />
             </SectionCard>
+
+            <UserRolesDialog
+                user={rolesUser}
+                open={Boolean(rolesUser)}
+                onClose={() => setRolesUser(null)}
+            />
         </PageShell>
     );
 }

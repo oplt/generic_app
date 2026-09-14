@@ -1,0 +1,16 @@
+"""Smoke tests for the {{ names.key }} module scaffold."""
+
+from __future__ import annotations
+
+import unittest
+
+from backend.modules.{{ names.key }}.manifest import MANIFEST
+
+
+class {{ names.pascal }}ManifestTest(unittest.TestCase):
+    def test_manifest_key(self) -> None:
+        self.assertEqual(MANIFEST.key, "{{ names.key }}")
+        self.assertIn("{{ names.key }}", MANIFEST.backend_router_keys)
+{% if permissions %}
+        self.assertIn("{{ names.permission_prefix }}.read", MANIFEST.required_permissions)
+{% endif %}

@@ -98,6 +98,7 @@ class IdentityService:
                 subject=subject,
                 html_body=html_body,
                 text_body=text_body,
+                operation_id=f"email:verify:{user.id}:{_hash_token(token)}",
             )
 
         return user
@@ -242,6 +243,7 @@ class IdentityService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
+            operation_id=f"email:verify:{user.id}:{_hash_token(token)}",
         )
 
     # ------------------------------------------------------------------ password reset
@@ -282,6 +284,7 @@ class IdentityService:
             subject=subject,
             html_body=html_body,
             text_body=text_body,
+            operation_id=f"email:reset:{user.id}:{_hash_token(token)}",
         )
 
     async def reset_password(self, token: str, new_password: str) -> None:

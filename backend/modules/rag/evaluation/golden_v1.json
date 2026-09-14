@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "dataset_id": "generic-app-rag-golden-v1",
+  "description": "Small synthetic corpus covering semantic, exact-term, and multi-source retrieval.",
+  "documents": [
+    {
+      "id": "architecture",
+      "title": "Architecture decision",
+      "chunks": [
+        {
+          "id": "architecture-0",
+          "text": "The Atlas service stores relational application data in PostgreSQL. Redis is reserved for ephemeral caching and rate limits."
+        },
+        {
+          "id": "architecture-1",
+          "text": "Uploaded knowledge documents are indexed with pgvector cosine search. Retrieval results retain document and chunk provenance."
+        }
+      ]
+    },
+    {
+      "id": "operations",
+      "title": "Operations handbook",
+      "chunks": [
+        {
+          "id": "operations-0",
+          "text": "Error code ZX-204 means an invitation link has expired. Create a new invitation instead of retrying the old link."
+        },
+        {
+          "id": "operations-1",
+          "text": "When Redis is unavailable, cache reads fail open and the application continues using the primary database."
+        }
+      ]
+    },
+    {
+      "id": "security",
+      "title": "Security policy",
+      "chunks": [
+        {
+          "id": "security-0",
+          "text": "Access tokens expire after fifteen minutes. Refresh tokens rotate on every successful refresh request."
+        },
+        {
+          "id": "security-1",
+          "text": "Project mutations require owner or administrator authority. Read access alone never grants permission to update a project."
+        }
+      ]
+    },
+    {
+      "id": "retention",
+      "title": "Data retention",
+      "chunks": [
+        {
+          "id": "retention-0",
+          "text": "Chat messages are retained for thirty days by default. A scheduled cleanup removes expired messages."
+        },
+        {
+          "id": "retention-1",
+          "text": "Audit events are retained for one year and are not removed by the chat cleanup job."
+        }
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "id": "database-choice",
+      "query": "Which database stores relational application data?",
+      "judgments": {"architecture-0": 3}
+    },
+    {
+      "id": "exact-error-code",
+      "query": "What does error ZX-204 mean?",
+      "judgments": {"operations-0": 3}
+    },
+    {
+      "id": "token-lifetime",
+      "query": "How long do access tokens remain valid?",
+      "judgments": {"security-0": 3}
+    },
+    {
+      "id": "cache-outage",
+      "query": "What happens to cache reads when Redis is unavailable?",
+      "judgments": {"operations-1": 3}
+    },
+    {
+      "id": "retention-periods",
+      "query": "How long are chat messages and audit events retained?",
+      "judgments": {"retention-0": 3, "retention-1": 3}
+    }
+  ]
+}

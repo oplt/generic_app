@@ -81,6 +81,13 @@ class ObservabilityServiceTest(unittest.TestCase):
 
 
 class ObservabilityStatusTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncTearDown(self):
+        from backend.db.session import engine
+        from backend.observability.service import close_observability_http_client
+
+        await close_observability_http_client()
+        await engine.dispose()
+
     async def test_status_does_not_crash_when_tools_are_unconfigured(self):
         service = ObservabilityService(
             make_settings(
@@ -90,6 +97,15 @@ class ObservabilityStatusTest(unittest.IsolatedAsyncioTestCase):
             )
         )
         unknown = ObservabilityStatusItem(status="unknown", detail="check unavailable")
+        workers = SimpleNamespace(
+            status="unknown",
+            detail="workers unavailable",
+            queue_depth=None,
+            oldest_job_age_seconds=None,
+            retry_count=None,
+            failed_job_count=None,
+            last_successful_heartbeat_at=None,
+        )
 
         async def passthrough_get_or_load_model(key, model, *, ttl_seconds, loader):
             return await loader()
@@ -101,6 +117,10 @@ class ObservabilityStatusTest(unittest.IsolatedAsyncioTestCase):
             ),
             patch.object(service, "_database_status", AsyncMock(return_value=unknown)),
             patch.object(service, "_cache_status", AsyncMock(return_value=unknown)),
+            patch(
+                "backend.observability.service.worker_readiness",
+                AsyncMock(return_value=workers),
+            ),
         ):
             status = await service.get_status()
 
@@ -142,6 +162,9 @@ class ObservabilityStatusTest(unittest.IsolatedAsyncioTestCase):
                 response = MagicMock()
                 response.status_code = 200
                 return response
+
+            async def aclose(self):
+                self.is_closed = True
 
         with patch("backend.observability.service.httpx.AsyncClient", FakeAsyncClient):
             await service._http_status(

@@ -103,7 +103,7 @@ async def create_plan(
     admin: User = Depends(get_admin_user),
 ):
     service = BillingService(db)
-    plan = await service.create_plan(payload.model_dump())
+    plan = await service.create_plan(payload.model_dump(), commit=False)
     await log_request_audit_event(
         db,
         request,
@@ -126,7 +126,9 @@ async def update_plan(
     admin: User = Depends(get_admin_user),
 ):
     service = BillingService(db)
-    plan = await service.update_plan(plan_id, payload.model_dump(exclude_unset=True))
+    plan = await service.update_plan(
+        plan_id, payload.model_dump(exclude_unset=True), commit=False
+    )
     await log_request_audit_event(
         db,
         request,

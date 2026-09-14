@@ -20,6 +20,7 @@ def extract_turn_memories_sync(
     source_message_id: str,
 ) -> None:
     from backend.db.session import SessionLocal
+    from backend.db.transaction import rollback_safely
     from backend.modules.memory.application.memory_service import MemoryService
 
     async def _run() -> None:
@@ -41,16 +42,20 @@ def extract_turn_memories_sync(
             logger.warning("Memory extraction idempotency cache unavailable", exc_info=True)
         try:
             async with SessionLocal() as db:
-                service = MemoryService(db)
-                await service.process_turn_memories(
-                    user_id=user_id,
-                    agent_id=agent_id,
-                    run_id=run_id,
-                    project_id=project_id,
-                    user_message=user_message,
-                    assistant_message=assistant_message,
-                    source_message_id=source_message_id,
-                )
+                try:
+                    service = MemoryService(db)
+                    await service.process_turn_memories(
+                        user_id=user_id,
+                        agent_id=agent_id,
+                        run_id=run_id,
+                        project_id=project_id,
+                        user_message=user_message,
+                        assistant_message=assistant_message,
+                        source_message_id=source_message_id,
+                    )
+                except Exception:
+                    await rollback_safely(db, owner="worker.memory")
+                    raise
             await redis_client.set(completion_key, "1", ex=30 * 24 * 60 * 60)
             await redis_client.delete(claim_key)
         except Exception:

@@ -1,5 +1,8 @@
 from typing import TypedDict
 
+from backend.modules.manifests import catalog_definitions
+from backend.modules.platform.profiles import module_packs_from_profiles
+
 
 class ModuleCatalogDefinition(TypedDict):
     key: str
@@ -42,66 +45,20 @@ class EmailTemplateDefinition(TypedDict):
     is_active: bool
 
 
-MODULE_CATALOG: tuple[ModuleCatalogDefinition, ...] = (
-    {
-        "key": "ai",
-        "label": "AI",
-        "description": "Prompt ops, document retrieval, reviews, and evaluations.",
-        "user_visible": True,
-    },
-    {
-        "key": "billing",
-        "label": "Billing",
-        "description": "Plan catalog and subscription management.",
-        "user_visible": True,
-    },
-    {
-        "key": "api_keys",
-        "label": "API Keys",
-        "description": "User-managed credentials for integrations and automation.",
-        "user_visible": True,
-    },
-    {
-        "key": "webhooks",
-        "label": "Webhooks",
-        "description": "Outbound event delivery to external systems.",
-        "user_visible": True,
-    },
-    {
-        "key": "feature_flags",
-        "label": "Feature Flags",
-        "description": "Runtime rollout controls for features and experiments.",
-        "user_visible": True,
-    },
-    {
-        "key": "email_templates",
-        "label": "Email Templates",
-        "description": "Customizable transactional email content.",
-        "user_visible": False,
-    },
+# Derived from intentional module manifests (optional / pack-togglable only).
+MODULE_CATALOG: tuple[ModuleCatalogDefinition, ...] = tuple(
+    item  # type: ignore[misc]
+    for item in catalog_definitions()
 )
 
+# Capability profiles are the source of truth; MODULE_PACKS stays for API compat.
 MODULE_PACKS: dict[str, ModulePackDefinition] = {
-    "lean_saas": {
-        "label": "Lean SaaS",
-        "description": "Billing plus integration basics for a straightforward SaaS clone.",
-        "modules": ["billing", "api_keys", "feature_flags", "ai"],
-    },
-    "automation_suite": {
-        "label": "Automation Suite",
-        "description": "API keys, webhooks, flags, and templates for workflow-driven products.",
-        "modules": ["api_keys", "webhooks", "feature_flags", "email_templates", "ai"],
-    },
-    "client_portal": {
-        "label": "Client Portal",
-        "description": "Subscription-led portal with flags and email customization.",
-        "modules": ["billing", "feature_flags", "email_templates", "ai"],
-    },
-    "full_platform": {
-        "label": "Full Platform",
-        "description": "Enable every optional platform module.",
-        "modules": [item["key"] for item in MODULE_CATALOG],
-    },
+    key: {  # type: ignore[misc]
+        "label": str(payload["label"]),
+        "description": str(payload["description"]),
+        "modules": list(payload["modules"]),  # type: ignore[arg-type]
+    }
+    for key, payload in module_packs_from_profiles().items()
 }
 
 DEFAULT_PLANS: tuple[PlanDefinition, ...] = (
@@ -211,6 +168,7 @@ DEFAULT_EMAIL_TEMPLATES: tuple[EmailTemplateDefinition, ...] = (
 SETTING_APP_NAME = "platform.app_name"
 SETTING_CORE_DOMAIN_SINGULAR = "platform.core_domain_singular"
 SETTING_CORE_DOMAIN_PLURAL = "platform.core_domain_plural"
+# Stored key remains module_pack; value is a capability profile key.
 SETTING_MODULE_PACK = "platform.module_pack"
 SETTING_MODULE_OVERRIDE_PREFIX = "platform.module_override."
 SETTING_MFA_ENABLED = "platform.mfa_enabled"

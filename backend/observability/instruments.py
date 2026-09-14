@@ -30,6 +30,28 @@ def set_current_span_attributes(**attributes: Any) -> None:
             for key, value in _attrs(attributes).items():
                 span.set_attribute(key, value)
     except Exception:
+        pass
+    try:
+        from backend.observability.request_diagnostics import (
+            record_external_call,
+            record_rag_stage,
+        )
+
+        module = attributes.get("module")
+        if module == "rag":
+            if attributes.get("cache_hit") is True:
+                record_rag_stage("cache_hit")
+            strategy = attributes.get("retrieval_strategy")
+            if strategy:
+                record_rag_stage(f"strategy:{strategy}")
+            if attributes.get("fallback_reason"):
+                record_rag_stage(f"degraded:{attributes['fallback_reason']}")
+        elif module == "ai" or attributes.get("provider"):
+            record_external_call(
+                provider=str(attributes.get("provider") or module or "external"),
+                operation=str(attributes.get("operation") or "call"),
+            )
+    except Exception:
         return
 
 
@@ -54,7 +76,18 @@ def observed_span(name: str, **attributes: Any) -> Iterator[Any]:
             span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
             raise
         finally:
-            span.set_attribute("latency_ms", (time.monotonic() - started) * 1000.0)
+            latency_ms = (time.monotonic() - started) * 1000.0
+            span.set_attribute("latency_ms", latency_ms)
+            try:
+                from backend.observability.request_diagnostics import record_external_call
+
+                record_external_call(
+                    provider=str(attributes.get("provider") or attributes.get("module") or "span"),
+                    operation=name,
+                    latency_ms=latency_ms,
+                )
+            except Exception:
+                pass
 
 
 def structured_error(

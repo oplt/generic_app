@@ -1,9 +1,9 @@
-import asyncio
 import unittest
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from backend.lib.concurrency import bounded_gather
 from backend.modules.memory.application.memory_consolidator import MemoryConsolidator
 from backend.modules.memory.application.memory_context_builder import MemoryContextBuilder
 from backend.modules.memory.application.memory_extractor import MemoryExtractor
@@ -302,7 +302,10 @@ class MemoryServiceIsolationTest(unittest.IsolatedAsyncioTestCase):
                 MemoryLevel.AGENT: [_item("a1", "Use bullet lists.")],
             }
         )
-        with patch("asyncio.gather", wraps=asyncio.gather) as gather_fn:
+        with patch(
+            "backend.modules.memory.application.memory_service.bounded_gather",
+            wraps=bounded_gather,
+        ) as gather_fn:
             items = await service.recall(
                 user_id="user-a",
                 agent_id="default",

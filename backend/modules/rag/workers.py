@@ -18,17 +18,22 @@ def index_document_sync(
     job_id: str | None = None,
 ) -> None:
     from backend.db.session import SessionLocal
+    from backend.db.transaction import rollback_safely
     from backend.modules.rag.application.document_ingestion_service import DocumentIngestionService
 
     async def _run() -> None:
         async with SessionLocal() as db:
-            service = DocumentIngestionService(db)
-            await service.index_document(
-                document_id=document_id,
-                user_id=user_id,
-                file_content=None,
-                job_id=job_id,
-            )
+            try:
+                service = DocumentIngestionService(db)
+                await service.index_document(
+                    document_id=document_id,
+                    user_id=user_id,
+                    file_content=None,
+                    job_id=job_id,
+                )
+            except Exception:
+                await rollback_safely(db, owner="worker.rag.index")
+                raise
 
     try:
         logger.info(
@@ -88,15 +93,20 @@ def cleanup_document_sync(
     storage_path: str | None,
 ) -> None:
     from backend.db.session import SessionLocal
+    from backend.db.transaction import rollback_safely
     from backend.modules.rag.application.document_ingestion_service import DocumentIngestionService
 
     async def _run() -> None:
         async with SessionLocal() as db:
-            await DocumentIngestionService(db).cleanup_deleted_document(
-                document_id=document_id,
-                user_id=user_id,
-                storage_path=storage_path,
-            )
+            try:
+                await DocumentIngestionService(db).cleanup_deleted_document(
+                    document_id=document_id,
+                    user_id=user_id,
+                    storage_path=storage_path,
+                )
+            except Exception:
+                await rollback_safely(db, owner="worker.rag.cleanup")
+                raise
 
     run_async_in_sync_context(_run())
 

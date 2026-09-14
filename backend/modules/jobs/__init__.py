@@ -1,0 +1,1 @@
+"""Jobs console package."""

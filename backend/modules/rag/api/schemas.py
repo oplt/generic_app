@@ -65,6 +65,7 @@ class RagRetrieveRequest(RequestModel):
     document_ids: list[str] = Field(default_factory=list)
     top_k: int | None = Field(default=None, ge=1, le=20)
     source_type: str | None = Field(default=None, max_length=32)
+    strategy: Literal["vector", "lexical", "hybrid_rrf"] | None = None
 
 
 class RagRetrievedChunkResponse(BaseModel):
@@ -143,3 +144,149 @@ class RagQueryResponse(BaseModel):
     model_name: str
     latency_ms: int
     created_at: datetime
+
+
+class RagIndexVersionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    key: str
+    status: str
+    parser_version: str
+    chunker_version: str
+    embedding_schema_version: str
+    embedding_provider: str
+    embedding_model: str
+    embedding_dimensions: int
+    notes: str | None = None
+    created_at: datetime
+    activated_at: datetime | None = None
+    retired_at: datetime | None = None
+    validated_at: datetime | None = None
+
+
+class RagIndexVersionCreateRequest(RequestModel):
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class RagIndexStatusResponse(BaseModel):
+    active_version: RagIndexVersionResponse
+    pipeline: dict[str, object]
+    schema_embedding_dimensions: int
+    documents_total: int
+    documents_indexed: int
+    documents_current: int
+    documents_stale: int
+    jobs_active: int
+    jobs_failed: int
+    dimension_migration_required: bool = False
+    versions: list[RagIndexVersionResponse] = Field(default_factory=list)
+
+
+class RagIndexReindexStaleRequest(RequestModel):
+    limit: int = Field(default=50, ge=1, le=500)
+
+
+class RagIndexReindexStaleResponse(BaseModel):
+    requested: int
+    enqueued: int
+    skipped: int
+    job_ids: list[str]
+    active_index_version: str
+
+
+class RagEvalDatasetCreateRequest(RequestModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    organization_id: str | None = None
+
+
+class RagEvalDatasetResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_id: str
+    organization_id: str | None
+    name: str
+    description: str | None
+    tags: list[str] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class RagEvalCaseCreateRequest(RequestModel):
+    question: str = Field(min_length=1, max_length=8000)
+    expected_document_ids: list[str] = Field(default_factory=list)
+    expected_chunk_ids: list[str] = Field(default_factory=list)
+    expected_sources: list[str] = Field(default_factory=list)
+    expected_facts: list[str] = Field(default_factory=list)
+    judgments: dict[str, int] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    notes: str | None = None
+
+
+class RagEvalCaseResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    dataset_id: str
+    question: str
+    expected_document_ids: list[str] = Field(default_factory=list)
+    expected_chunk_ids: list[str] = Field(default_factory=list)
+    expected_sources: list[str] = Field(default_factory=list)
+    expected_facts: list[str] = Field(default_factory=list)
+    judgments: dict[str, int] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    created_at: datetime
+
+
+class RagEvalProbeRequest(RequestModel):
+    query: str = Field(min_length=1, max_length=4000)
+    project_id: str | None = None
+    organization_id: str | None = None
+    document_ids: list[str] = Field(default_factory=list)
+    strategy: Literal["vector", "lexical", "hybrid_rrf"] | None = None
+    top_k: int | None = Field(default=None, ge=1, le=20)
+    include_generation_judges: bool = False
+
+
+class RagEvalRunRequest(RequestModel):
+    name: str = Field(default="run", max_length=255)
+    project_id: str | None = None
+    organization_id: str | None = None
+    strategy: Literal["vector", "lexical", "hybrid_rrf"] | None = None
+    top_k: int | None = Field(default=None, ge=1, le=20)
+    baseline_run_id: str | None = None
+    include_generation_judges: bool = False
+
+
+class RagEvalRunItemResponse(BaseModel):
+    id: str
+    case_id: str
+    ranked_chunk_ids: list[str] = Field(default_factory=list)
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    latency: dict[str, Any] = Field(default_factory=dict)
+    included_in_context: bool = True
+    score: float = 0.0
+    notes: str | None = None
+
+
+class RagEvalRunResponse(BaseModel):
+    id: str
+    dataset_id: str
+    user_id: str
+    organization_id: str | None
+    name: str
+    status: str
+    configuration: dict[str, Any] = Field(default_factory=dict)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    latency: dict[str, Any] = Field(default_factory=dict)
+    baseline_run_id: str | None = None
+    comparison: dict[str, Any] | None = None
+    error_message: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+    items: list[RagEvalRunItemResponse] = Field(default_factory=list)

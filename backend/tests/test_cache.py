@@ -88,6 +88,7 @@ class CacheHelpersTest(unittest.IsolatedAsyncioTestCase):
             patch("backend.core.cache.redis_client", client),
         ):
             mock_settings.CACHE_ENABLED = True
+            mock_settings.CACHE_MAX_PAYLOAD_BYTES = 1024 * 1024
             await cache_set_json("ga:test", {"count": 2}, ttl_seconds=30)
             client.setex.assert_awaited_once()
 
@@ -106,6 +107,7 @@ class CacheHelpersTest(unittest.IsolatedAsyncioTestCase):
             patch("backend.core.cache.redis_client", client),
         ):
             mock_settings.CACHE_ENABLED = True
+            mock_settings.CACHE_MAX_PAYLOAD_BYTES = 1024 * 1024
             values = await cache_get_many_json(["ga:one", "ga:two"])
             await cache_set_many_json([("ga:one", {"count": 2}, 30), ("ga:two", {"count": 3}, 30)])
 
@@ -193,7 +195,7 @@ class EmbeddingCacheTest(unittest.IsolatedAsyncioTestCase):
         with (
             patch("backend.lib.embedding_cache.settings") as mock_settings,
             patch(
-                "backend.lib.embedding_cache.cache_get_many_json",
+                "backend.lib.embedding_cache.app_cache.get_many",
                 AsyncMock(
                     side_effect=[
                         {},
@@ -202,7 +204,7 @@ class EmbeddingCacheTest(unittest.IsolatedAsyncioTestCase):
                 ),
             ) as cache_get,
             patch(
-                "backend.lib.embedding_cache.cache_set_many_json",
+                "backend.lib.embedding_cache.app_cache.set_many",
                 AsyncMock(),
             ) as cache_set,
         ):
@@ -226,8 +228,8 @@ class EmbeddingCacheTest(unittest.IsolatedAsyncioTestCase):
         embed_fn = AsyncMock(return_value=[[0.3, 0.4]])
         with (
             patch("backend.lib.embedding_cache.settings") as mock_settings,
-            patch("backend.lib.embedding_cache.cache_get_many_json", AsyncMock()) as cache_get,
-            patch("backend.lib.embedding_cache.cache_set_many_json", AsyncMock()) as cache_set,
+            patch("backend.lib.embedding_cache.app_cache.get_many", AsyncMock()) as cache_get,
+            patch("backend.lib.embedding_cache.app_cache.set_many", AsyncMock()) as cache_set,
         ):
             mock_settings.CACHE_EMBEDDING_MAX_TEXT_CHARS = 5
             mock_settings.RAG_EMBEDDING_DIMENSIONS = 1536
@@ -252,9 +254,9 @@ class EmbeddingCacheTest(unittest.IsolatedAsyncioTestCase):
         with (
             patch("backend.lib.embedding_cache.settings") as mock_settings,
             patch(
-                "backend.lib.embedding_cache.cache_get_many_json", AsyncMock(return_value={})
+                "backend.lib.embedding_cache.app_cache.get_many", AsyncMock(return_value={})
             ),
-            patch("backend.lib.embedding_cache.cache_set_many_json", AsyncMock()),
+            patch("backend.lib.embedding_cache.app_cache.set_many", AsyncMock()),
         ):
             mock_settings.CACHE_EMBEDDING_MAX_TEXT_CHARS = 4000
             mock_settings.CACHE_EMBEDDING_BATCH_SIZE = 2
@@ -284,7 +286,7 @@ class EmbeddingCacheTest(unittest.IsolatedAsyncioTestCase):
         with (
             patch("backend.lib.embedding_cache.settings") as mock_settings,
             patch(
-                "backend.lib.embedding_cache.cache_get_many_json",
+                "backend.lib.embedding_cache.app_cache.get_many",
                 AsyncMock(
                     side_effect=[
                         {},
@@ -292,7 +294,7 @@ class EmbeddingCacheTest(unittest.IsolatedAsyncioTestCase):
                     ]
                 ),
             ),
-            patch("backend.lib.embedding_cache.cache_set_many_json", AsyncMock()) as cache_set,
+            patch("backend.lib.embedding_cache.app_cache.set_many", AsyncMock()) as cache_set,
         ):
             mock_settings.CACHE_EMBEDDING_TTL_SECONDS = 600
             mock_settings.CACHE_EMBEDDING_MAX_TEXT_CHARS = 4000

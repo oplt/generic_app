@@ -1,7 +1,17 @@
+import {
+    parseDeveloperDiagnosticsHeader,
+    publishDeveloperDiagnostics,
+} from "./developerDiagnosticsEvents";
+
 export const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000/api/v1";
 export const API_REQUEST_TIMEOUT_MS = 30_000;
 
 let refreshPromise: Promise<boolean> | null = null;
+let refreshPromiseGeneration: number | null = null;
+let authSessionGeneration = 0;
+let authSessionActive = true;
+
+export const AUTH_SESSION_EXPIRED_EVENT = "generic-app:auth-session-expired";
 
 export type ApiErrorOptions = {
     status?: number;
@@ -36,6 +46,29 @@ export class ApiError extends Error {
         this.cancelled = options.cancelled ?? false;
         this.retryable = options.retryable ?? false;
     }
+}
+
+function cancelledRequestError() {
+    return new ApiError("The request was cancelled.", { cancelled: true });
+}
+
+function expireAuthSession(generation: number) {
+    if (!authSessionActive || generation !== authSessionGeneration) return;
+    authSessionActive = false;
+    authSessionGeneration += 1;
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+    }
+}
+
+export function beginAuthLogout() {
+    authSessionActive = false;
+    authSessionGeneration += 1;
+}
+
+export function markAuthSessionActive() {
+    authSessionActive = true;
+    authSessionGeneration += 1;
 }
 
 function getFieldErrors(error: unknown): Record<string, string[]> {
@@ -117,6 +150,53 @@ async function refreshAccessToken(): Promise<boolean> {
     }
 }
 
+function waitForRefresh(promise: Promise<boolean>, signal?: AbortSignal | null) {
+    if (!signal) return promise;
+    if (signal.aborted) return Promise.reject(cancelledRequestError());
+
+    return new Promise<boolean>((resolve, reject) => {
+        const abort = () => {
+            signal.removeEventListener("abort", abort);
+            reject(cancelledRequestError());
+        };
+        signal.addEventListener("abort", abort, { once: true });
+        promise.then(
+            (result) => {
+                signal.removeEventListener("abort", abort);
+                resolve(result);
+            },
+            (error) => {
+                signal.removeEventListener("abort", abort);
+                reject(error);
+            },
+        );
+    });
+}
+
+async function refreshForRetry(signal?: AbortSignal | null): Promise<boolean> {
+    if (signal?.aborted) throw cancelledRequestError();
+    if (!authSessionActive) return false;
+
+    if (!refreshPromise || refreshPromiseGeneration !== authSessionGeneration) {
+        const generation = authSessionGeneration;
+        const request = refreshAccessToken().then((refreshed) => {
+            if (!refreshed) expireAuthSession(generation);
+            return refreshed
+                && authSessionActive
+                && generation === authSessionGeneration;
+        });
+        refreshPromise = request;
+        refreshPromiseGeneration = generation;
+        void request.finally(() => {
+            if (refreshPromise === request) {
+                refreshPromise = null;
+                refreshPromiseGeneration = null;
+            }
+        });
+    }
+    return waitForRefresh(refreshPromise, signal);
+}
+
 export function buildCsrfHeaders(): HeadersInit {
     const csrfToken = readCookie("csrf_token");
     return csrfToken ? { "X-CSRF-Token": csrfToken } : {};
@@ -149,7 +229,7 @@ export async function apiFetchStream(
     }
 
     if (response.status === 401 && retry && !options.signal?.aborted) {
-        const refreshed = await refreshAccessToken();
+        const refreshed = await refreshForRetry(options.signal);
         if (!refreshed) throw new ApiError("Session expired. Please sign in again.", { status: 401 });
         return apiFetchStream(path, options, false);
     }
@@ -186,17 +266,20 @@ export async function apiUpload<T>(
     return new Promise<T>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         let settled = false;
+        const abort = () => xhr.abort();
+        const cleanup = () => options.signal?.removeEventListener("abort", abort);
         const fail = (error: ApiError) => {
             if (settled) return;
             settled = true;
+            cleanup();
             reject(error);
         };
         const finish = (value: T) => {
             if (settled) return;
             settled = true;
+            cleanup();
             resolve(value);
         };
-        const abort = () => xhr.abort();
 
         xhr.open("POST", `${API_BASE}${path}`);
         xhr.withCredentials = true;
@@ -220,13 +303,17 @@ export async function apiUpload<T>(
                 payload = {};
             }
             if (xhr.status === 401 && retry && !options.signal?.aborted) {
-                void refreshAccessToken().then((refreshed) => {
-                    if (!refreshed) {
-                        fail(new ApiError("Session expired. Please sign in again.", { status: 401 }));
-                        return;
-                    }
-                    void apiUpload<T>(path, body, options, false).then(finish, fail);
-                });
+                void refreshForRetry(options.signal)
+                    .then((refreshed) => {
+                        if (!refreshed) {
+                            fail(new ApiError("Session expired. Please sign in again.", { status: 401 }));
+                            return;
+                        }
+                        void apiUpload<T>(path, body, options, false).then(finish, fail);
+                    })
+                    .catch((error) => {
+                        fail(error instanceof ApiError ? error : new ApiError("Session refresh failed."));
+                    });
                 return;
             }
             if (xhr.status < 200 || xhr.status >= 300) {
@@ -306,14 +393,14 @@ export async function apiFetch<T>(
     }
     requestSignal.cleanup();
 
+    const diagnosticsHeader = response.headers.get("X-Developer-Diagnostics");
+    if (diagnosticsHeader) {
+        const summary = parseDeveloperDiagnosticsHeader(diagnosticsHeader);
+        if (summary) publishDeveloperDiagnostics(summary);
+    }
+
     if (response.status === 401 && retry && !options.signal?.aborted) {
-        // Deduplicate concurrent refresh attempts
-        if (!refreshPromise) {
-            refreshPromise = refreshAccessToken().finally(() => {
-                refreshPromise = null;
-            });
-        }
-        const refreshed = await refreshPromise;
+        const refreshed = await refreshForRetry(options.signal);
         if (!refreshed) {
             throw new ApiError("Session expired. Please sign in again.", { status: 401 });
         }

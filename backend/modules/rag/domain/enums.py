@@ -18,6 +18,7 @@ class IngestionJobStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class SourceType(StrEnum):

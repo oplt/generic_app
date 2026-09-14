@@ -16,6 +16,7 @@ from backend.core.cache import (
     invalidate_settings_config_cache,
 )
 from backend.core.config import Settings
+from backend.modules.settings.config_settings_service import ConfigSettingsService
 from backend.modules.settings.schemas import ConfigEntryUpdate, ConfigSettingsResponse
 from backend.modules.settings.service import CONFIG_FIELD_METADATA, SettingsService
 
@@ -63,12 +64,12 @@ class SettingsCacheTest(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(
-                SettingsService,
+                ConfigSettingsService,
                 "_build_config_entries",
                 return_value=expected,
             ) as build,
             patch(
-                "backend.modules.settings.service.asyncio.to_thread",
+                "backend.modules.settings.config_settings_service.asyncio.to_thread",
                 side_effect=run_inline,
             ) as to_thread,
         ):
@@ -154,7 +155,7 @@ class SettingsCacheTest(unittest.IsolatedAsyncioTestCase):
 class DeprecatedAiDocumentConfigTest(unittest.TestCase):
     def test_admin_config_hides_legacy_keys_and_describes_rag_replacements(self):
         with patch.object(
-            SettingsService,
+            ConfigSettingsService,
             "_read_env_entries",
             return_value={
                 "AI_DOCUMENT_MAX_BYTES": "1234",

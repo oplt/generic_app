@@ -8,7 +8,7 @@ export function CloneConfigSection({ source, model }: { source: PlatformConfig; 
     const draft = model.configDraft;
     const set = model.setConfigDraft;
     const activePack = source.available_module_packs.find((pack) => pack.key === draft.module_pack);
-    return <SectionCard title="Clone configuration" description="Set the product name, core domain terminology, module pack, and module visibility defaults."
+    return <SectionCard title="Clone configuration" description="Set the product name, core domain terminology, capability profile, and optional module visibility."
         action={<Button variant="contained" disabled={model.saveConfigMutation.isPending}
             onClick={() => model.saveConfigMutation.mutate({ app_name: draft.app_name, core_domain_singular: draft.core_domain_singular,
                 core_domain_plural: draft.core_domain_plural, module_pack: draft.module_pack, module_overrides: draft.module_states, mfa_enabled: draft.mfa_enabled })}>
@@ -20,7 +20,7 @@ export function CloneConfigSection({ source, model }: { source: PlatformConfig; 
                 <TextField label="Core domain singular" value={draft.core_domain_singular} onChange={(e) => set((v) => ({ ...v, core_domain_singular: e.target.value }))} fullWidth />
                 <TextField label="Core domain plural" value={draft.core_domain_plural} onChange={(e) => set((v) => ({ ...v, core_domain_plural: e.target.value }))} fullWidth />
             </Box>
-            <TextField label="Module pack" select value={draft.module_pack} onChange={(e) => {
+            <TextField label="Capability profile" select value={draft.module_pack} onChange={(e) => {
                 const module_pack = e.target.value;
                 const defaults = source.available_module_packs.find((pack) => pack.key === module_pack)?.modules ?? [];
                 set((v) => ({ ...v, module_pack, module_states: Object.fromEntries(source.module_catalog.map((item) => [item.key, defaults.includes(item.key)])) }));

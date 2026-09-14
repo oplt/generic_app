@@ -38,7 +38,7 @@ async def update_platform_config(
     admin: User = Depends(get_admin_user),
 ):
     service = PlatformConfigService(db)
-    response = await service.update_platform_config(**payload.model_dump())
+    response = await service.update_platform_config(**payload.model_dump(), commit=False)
     await log_request_audit_event(
         db,
         request,

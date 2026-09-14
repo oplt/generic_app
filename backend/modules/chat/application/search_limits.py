@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
-import weakref
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from backend.core.config import settings
 from backend.core.rate_limit import check_rate_limit
+from backend.lib.concurrency import LoopLocalLimiter
 from backend.modules.chat.application.search import SearchProviderError
 
-_semaphores: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, tuple[int, asyncio.Semaphore]] = (
-    weakref.WeakKeyDictionary()
-)
+_web_search_limiter = LoopLocalLimiter("web_search")
 
 
 async def enforce_web_search_limits(user_id: str) -> None:
@@ -33,24 +30,14 @@ async def enforce_web_search_limits(user_id: str) -> None:
         )
 
 
-def _get_semaphore() -> asyncio.Semaphore:
-    loop = asyncio.get_running_loop()
-    current = _semaphores.get(loop)
-    if current is None or current[0] != settings.WEB_SEARCH_CONCURRENCY:
-        semaphore = asyncio.Semaphore(settings.WEB_SEARCH_CONCURRENCY)
-        _semaphores[loop] = (settings.WEB_SEARCH_CONCURRENCY, semaphore)
-        return semaphore
-    return current[1]
-
-
 @asynccontextmanager
 async def web_search_slot() -> AsyncIterator[None]:
-    semaphore = _get_semaphore()
     try:
-        await asyncio.wait_for(semaphore.acquire(), timeout=settings.WEB_SEARCH_TIMEOUT_SECONDS)
+        async with _web_search_limiter.slot(
+            max(1, settings.WEB_SEARCH_CONCURRENCY),
+            timeout_seconds=settings.WEB_SEARCH_TIMEOUT_SECONDS,
+            kind="web_search",
+        ):
+            yield
     except TimeoutError as exc:
         raise SearchProviderError("search_concurrency_timeout") from exc
-    try:
-        yield
-    finally:
-        semaphore.release()

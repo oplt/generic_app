@@ -45,7 +45,7 @@ async def create_email_template(
     admin: User = Depends(get_admin_user),
 ):
     service = EmailTemplateService(db)
-    template = await service.create_email_template(payload.model_dump())
+    template = await service.create_email_template(payload.model_dump(), commit=False)
     await log_request_audit_event(
         db,
         request,
@@ -69,7 +69,7 @@ async def update_email_template(
 ):
     service = EmailTemplateService(db)
     template = await service.update_email_template(
-        template_id, payload.model_dump(exclude_unset=True)
+        template_id, payload.model_dump(exclude_unset=True), commit=False
     )
     await log_request_audit_event(
         db,

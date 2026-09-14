@@ -48,25 +48,81 @@ class Phase0OwnershipTest(unittest.IsolatedAsyncioTestCase):
     async def test_scope_is_server_derived_for_an_authorized_project(self):
         port = SqlAlchemyProjectAccessPort(AsyncMock())
         port._repo.get_by_id_for_user = AsyncMock(
-            return_value=SimpleNamespace(id="project-1", owner_id="user-1")
+            return_value=SimpleNamespace(
+                id="project-1",
+                owner_id="user-1",
+                organization_id="org-project",
+            )
         )
-        port._identity_repo.get_default_organization_id = AsyncMock(return_value="org-1")
 
         scope = await port.resolve_ownership_scope("user-1", "project-1")
 
         self.assertEqual(scope.user_id, "user-1")
         self.assertEqual(scope.project_id, "project-1")
-        self.assertEqual(scope.organization_id, "org-1")
+        self.assertEqual(scope.organization_id, "org-project")
 
     async def test_scope_rejects_a_project_not_authorized_for_user(self):
         port = SqlAlchemyProjectAccessPort(AsyncMock())
         port._repo.get_by_id_for_user = AsyncMock(return_value=None)
-        port._identity_repo.get_default_organization_id = AsyncMock(return_value="org-1")
 
         with self.assertRaises(HTTPException) as raised:
             await port.resolve_ownership_scope("user-1", "project-2")
 
         self.assertEqual(raised.exception.status_code, 403)
+
+    async def test_project_scope_ignores_unrelated_default_membership(self):
+        port = SqlAlchemyProjectAccessPort(AsyncMock())
+        port._repo.get_by_id_for_user = AsyncMock(
+            return_value=SimpleNamespace(
+                id="project-1",
+                owner_id="user-1",
+                organization_id="org-b",
+            )
+        )
+        port._identity_repo.get_default_organization_id = AsyncMock(return_value="org-a")
+
+        scope = await port.resolve_ownership_scope("user-1", "project-1")
+
+        self.assertEqual(scope.organization_id, "org-b")
+        port._identity_repo.get_default_organization_id.assert_not_awaited()
+
+    async def test_explicit_organization_requires_membership_without_project(self):
+        port = SqlAlchemyProjectAccessPort(AsyncMock())
+        port._identity_repo.user_belongs_to_organization = AsyncMock(return_value=True)
+
+        scope = await port.resolve_ownership_scope(
+            "user-1",
+            organization_id="org-selected",
+        )
+
+        self.assertEqual(scope.organization_id, "org-selected")
+        self.assertIsNone(scope.project_id)
+
+        port._identity_repo.user_belongs_to_organization = AsyncMock(return_value=False)
+        with self.assertRaises(HTTPException) as raised:
+            await port.resolve_ownership_scope(
+                "user-1",
+                organization_id="org-other",
+            )
+        self.assertEqual(raised.exception.status_code, 403)
+
+    async def test_project_rejects_mismatched_organization_selector(self):
+        port = SqlAlchemyProjectAccessPort(AsyncMock())
+        port._repo.get_by_id_for_user = AsyncMock(
+            return_value=SimpleNamespace(
+                id="project-1",
+                owner_id="user-1",
+                organization_id="org-b",
+            )
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            await port.resolve_ownership_scope(
+                "user-1",
+                "project-1",
+                organization_id="org-a",
+            )
+        self.assertEqual(raised.exception.status_code, 400)
 
 
 class Phase0ChatContractTest(unittest.TestCase):

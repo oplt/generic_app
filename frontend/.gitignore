@@ -329,6 +329,10 @@ build/
 .out/
 .next/
 .vite/
+budget-report.json
+playwright-report/
+test-results/
+playwright/.cache/
 
 # Caches
 .cache/

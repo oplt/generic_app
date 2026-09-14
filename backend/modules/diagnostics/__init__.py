@@ -1,0 +1,1 @@
+"""Production-safe infrastructure diagnostics."""

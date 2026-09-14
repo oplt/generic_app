@@ -2,6 +2,7 @@ import { apiFetch, apiFetchItems } from "./client";
 
 export type Project = {
     id: string;
+    organization_id: string;
     name: string;
     description: string | null;
     created_at: string;
@@ -47,6 +48,7 @@ export async function getProject(projectId: string): Promise<Project> {
 export async function createProject(payload: {
     name: string;
     description?: string;
+    organization_id?: string;
 }): Promise<Project> {
     return apiFetch("/projects", {
         method: "POST",

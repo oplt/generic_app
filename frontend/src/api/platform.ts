@@ -15,14 +15,57 @@ export type ModulePack = {
     modules: string[];
 };
 
+export type CapabilityProfileSummary = {
+    key: string;
+    label: string;
+    description: string;
+    optional_modules: string[];
+    active_modules: string[];
+    backend_router_keys: string[];
+    celery_queues: string[];
+    scheduled_tasks: string[];
+    settings_prefixes: string[];
+    health_checks: string[];
+    required_permissions: string[];
+    database_requirements: string[];
+    feature_flags: string[];
+    recommended_feature_flags: string[];
+    nav_entry_count: number;
+    frontend_route_count: number;
+};
+
+export type ModuleNavEntry = {
+    module_key: string;
+    label: string;
+    path: string;
+    group: string;
+    icon: string | null;
+    required_permission: string | null;
+    feature_flag: string | null;
+};
+
+export type ModuleFrontendRoute = {
+    module_key: string;
+    path: string;
+    page_key: string;
+    required_permission: string | null;
+    feature_flag: string | null;
+};
+
 export type PlatformMetadata = {
     app_name: string;
     core_domain_singular: string;
     core_domain_plural: string;
     module_pack: string;
+    capability_profile?: string | null;
     enabled_modules: string[];
+    active_modules?: string[];
     module_catalog: ModuleCatalogItem[];
     available_module_packs: ModulePack[];
+    available_capability_profiles?: CapabilityProfileSummary[];
+    active_profile?: CapabilityProfileSummary | null;
+    module_nav?: ModuleNavEntry[];
+    module_routes?: ModuleFrontendRoute[];
     mfa_enabled: boolean;
 };
 

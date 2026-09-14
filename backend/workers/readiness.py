@@ -68,7 +68,7 @@ async def worker_readiness() -> WorkerReadiness:
                                 0,
                             ),
                             func.count(ApplicationJob.id).filter(
-                                ApplicationJob.status == "failed"
+                                ApplicationJob.status.in_(("failed", "dead_letter"))
                             ),
                         )
                     )

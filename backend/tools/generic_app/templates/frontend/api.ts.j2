@@ -1,0 +1,33 @@
+import { apiFetch } from "../../../api/client";
+import type { {{ names.entity_pascal }}, {{ names.entity_pascal }}Create, {{ names.entity_pascal }}Update } from "./types";
+
+export async function list{{ names.pascal }}(): Promise<{{ names.entity_pascal }}[]> {
+    return apiFetch("/{{ names.key }}");
+}
+
+export async function get{{ names.entity_pascal }}(id: string): Promise<{{ names.entity_pascal }}> {
+    return apiFetch(`/{{ names.key }}/${id}`);
+}
+
+export async function create{{ names.entity_pascal }}(
+    payload: {{ names.entity_pascal }}Create
+): Promise<{{ names.entity_pascal }}> {
+    return apiFetch("/{{ names.key }}", {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function update{{ names.entity_pascal }}(
+    id: string,
+    payload: {{ names.entity_pascal }}Update
+): Promise<{{ names.entity_pascal }}> {
+    return apiFetch(`/{{ names.key }}/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function delete{{ names.entity_pascal }}(id: string): Promise<void> {
+    await apiFetch(`/{{ names.key }}/${id}`, { method: "DELETE" });
+}

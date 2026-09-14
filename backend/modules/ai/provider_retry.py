@@ -1,39 +1,20 @@
 from __future__ import annotations
 
 import asyncio
-import random
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from email.utils import parsedate_to_datetime
 from time import monotonic
 
 import httpx
 from fastapi import HTTPException
 
 from backend.core.config import settings
+from backend.lib.concurrency import LoopLocalLimiter, backoff_delay
 from backend.modules.ai import metrics
 from backend.observability.instruments import set_current_span_attributes
 
 _RETRYABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
 _MAX_HTTP_RETRIES = 3
-_provider_semaphore: asyncio.Semaphore | None = None
-_provider_semaphore_loop = None
-_provider_semaphore_limit: int | None = None
-
-
-def _get_provider_semaphore() -> asyncio.Semaphore:
-    global _provider_semaphore, _provider_semaphore_limit, _provider_semaphore_loop
-    loop = asyncio.get_running_loop()
-    limit = max(1, settings.AI_MAX_CONCURRENT_PROVIDER_CALLS)
-    if (
-        _provider_semaphore is None
-        or _provider_semaphore_loop is not loop
-        or _provider_semaphore_limit != limit
-    ):
-        _provider_semaphore = asyncio.Semaphore(limit)
-        _provider_semaphore_loop = loop
-        _provider_semaphore_limit = limit
-    return _provider_semaphore
+_provider_limiter = LoopLocalLimiter("ai_provider")
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +45,10 @@ class ProviderHTTPError(HTTPException):
             detail=detail or f"{provider} request failed: {response.text[:300]}",
         )
         self.metadata = metadata
+
+
+def _get_provider_semaphore() -> asyncio.Semaphore:
+    return _provider_limiter.semaphore(max(1, settings.AI_MAX_CONCURRENT_PROVIDER_CALLS))
 
 
 async def post_with_retry(
@@ -97,9 +82,22 @@ async def post_with_retry(
         attempts = attempt + 1
         metadata = ProviderRetryMetadata(attempts=attempts, retries=attempt)
         try:
+            from backend.lib.failure_injection import maybe_inject
+            from backend.lib.failure_injection.kinds import FaultKind
+            from backend.lib.failure_injection.runtime import build_injected_http_response
+
+            maybe_inject(FaultKind.AI_TIMEOUT)
+            injected = (
+                build_injected_http_response(FaultKind.AI_RATE_LIMIT)
+                or build_injected_http_response(FaultKind.AI_TRANSIENT_500)
+                or build_injected_http_response(FaultKind.AI_MALFORMED_RESPONSE)
+            )
             request_kwargs = {**kwargs, "timeout": provider_timeout(remaining)}
-            async with _get_provider_semaphore():
-                response = await client.post(url, **request_kwargs)
+            async with _provider_limiter.slot(
+                max(1, settings.AI_MAX_CONCURRENT_PROVIDER_CALLS),
+                kind="ai_provider",
+            ):
+                response = injected or await client.post(url, **request_kwargs)
         except httpx.TimeoutException as exc:
             metrics.ai_provider_request_total.labels(provider_key, operation, "timeout").inc()
             if not idempotent or attempt == max_retries:
@@ -180,31 +178,13 @@ def provider_timeout(remaining_seconds: float) -> httpx.Timeout:
 
 
 def retry_delay(attempt: int, *, retry_after: str | None) -> float:
-    if retry_after:
-        try:
-            return min(
-                max(0.0, float(retry_after)),
-                settings.AI_PROVIDER_BACKOFF_MAX_SECONDS,
-            )
-        except (TypeError, ValueError):
-            try:
-                retry_at = parsedate_to_datetime(retry_after)
-                if retry_at.tzinfo is None:
-                    retry_at = retry_at.replace(tzinfo=UTC)
-                return min(
-                    max(0.0, (retry_at - datetime.now(UTC)).total_seconds()),
-                    settings.AI_PROVIDER_BACKOFF_MAX_SECONDS,
-                )
-            except (TypeError, ValueError, OverflowError):
-                pass
-    base = min(2**attempt, settings.AI_PROVIDER_BACKOFF_MAX_SECONDS)
-    jitter = 0.0
-    if attempt > 0:
-        jitter = random.uniform(
-            0.0,
-            min(settings.AI_PROVIDER_BACKOFF_JITTER_SECONDS, base * 0.25),
-        )
-    return min(base + jitter, settings.AI_PROVIDER_BACKOFF_MAX_SECONDS)
+    return backoff_delay(
+        attempt,
+        base_delay_seconds=1.0,
+        max_delay_seconds=settings.AI_PROVIDER_BACKOFF_MAX_SECONDS,
+        jitter_seconds=settings.AI_PROVIDER_BACKOFF_JITTER_SECONDS,
+        retry_after=retry_after,
+    )
 
 
 def set_response_retry_metadata(

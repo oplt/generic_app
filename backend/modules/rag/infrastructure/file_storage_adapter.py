@@ -12,10 +12,15 @@ from backend.core.storage import (
 logger = logging.getLogger(__name__)
 
 
-def build_document_object_key(user_id: str, filename: str | None = None) -> str:
-    """Build opaque object key; display filename never enters storage path."""
+def build_document_object_key(
+    user_id: str,
+    filename: str | None = None,
+    *,
+    object_id: str | None = None,
+) -> str:
+    """Build an opaque key; the display filename never enters storage paths."""
     del filename
-    return f"rag/{user_id}/{uuid4().hex}"
+    return f"rag/{user_id}/{object_id or uuid4().hex}"
 
 
 class FileStorageAdapter:
@@ -26,11 +31,12 @@ class FileStorageAdapter:
         filename: str,
         content: bytes,
         content_type: str,
+        object_key: str | None = None,
     ) -> str | None:
         if not object_storage.is_configured:
             logger.info("Object storage not configured; document kept in DB metadata only")
             return None
-        object_key = build_document_object_key(user_id, filename)
+        object_key = object_key or build_document_object_key(user_id, filename)
         try:
             await object_storage.upload_bytes(
                 object_key=object_key,

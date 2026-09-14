@@ -1,0 +1,24 @@
+from backend.modules.manifests.types import ModuleManifest
+
+MANIFEST = ModuleManifest(
+    key="{{ names.key }}",
+    version="1.0.0",
+    label="{{ names.label }}",
+    description="{{ names.label }} module scaffolded by generic-app create-module.",
+    always_enabled=True,
+    optional=False,
+    dependencies={{ dependencies }},
+    backend_router_keys=("{{ names.key }}",),
+{% if options.celery %}
+    celery_queues=("{{ celery_queue }}",),
+{% endif %}
+{% if permissions %}
+    required_permissions={{ permissions }},
+{% endif %}
+{% if options.storage %}
+    health_checks=("storage",),
+{% endif %}
+{% if options.crud %}
+    database_requirements=("{{ names.table }}",),
+{% endif %}
+)

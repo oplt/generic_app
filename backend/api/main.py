@@ -23,11 +23,16 @@ from backend.observability.service import close_observability_http_client
 from backend.workers.async_dispatch import log_eager_mode_startup_warning
 from backend.workers.readiness import worker_readiness
 
-from .middleware.correlation_id import CorrelationIdMiddleware
-from .middleware.csrf import CSRFMiddleware
-from .middleware.public_rate_limit import PublicRateLimitMiddleware
-from .middleware.request_logging import RequestLoggingMiddleware
-from .middleware.security_headers import SecurityHeadersMiddleware
+from backend.api.middleware.correlation_id import CorrelationIdMiddleware
+from backend.api.middleware.csrf import CSRFMiddleware
+from backend.api.middleware.public_rate_limit import PublicRateLimitMiddleware
+from backend.api.middleware.request_logging import RequestLoggingMiddleware
+from backend.api.middleware.security_headers import SecurityHeadersMiddleware
+from backend.observability.request_diagnostics import (
+    DIAGNOSTICS_HEADER,
+    TRACE_ID_HEADER,
+)
+from backend.modules.developer_diagnostics.middleware import DeveloperDiagnosticsMiddleware
 from .router import api_router
 from .v1.health import health_router
 
@@ -72,6 +77,18 @@ async def lifespan(app: FastAPI):
         settings.LOG_LEVEL.upper(),
     )
     log_eager_mode_startup_warning()
+    from backend.modules.manifests import ModuleManifestError, validate_registry
+    from backend.modules.platform.profiles import (
+        CapabilityProfileError,
+        validate_capability_profiles,
+    )
+
+    try:
+        validate_registry()
+        validate_capability_profiles()
+    except (ModuleManifestError, CapabilityProfileError):
+        logger.exception("Module manifest / capability profile validation failed")
+        raise
     validate_rag_config()
     validate_memory_config()
     dependency_started = perf_counter()
@@ -105,6 +122,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(DeveloperDiagnosticsMiddleware)
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -115,7 +133,13 @@ app.add_middleware(
     allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-CSRF-Token"],
+    allow_headers=["Content-Type", "X-CSRF-Token", "X-Correlation-ID", "X-Request-ID"],
+    expose_headers=[
+        "X-Correlation-ID",
+        "X-Request-ID",
+        DIAGNOSTICS_HEADER,
+        TRACE_ID_HEADER,
+    ],
 )
 
 register_exception_handlers(app)

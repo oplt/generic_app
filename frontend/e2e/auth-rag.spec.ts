@@ -1,8 +1,11 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+
+import { expectSignInPage } from "./helpers/auth";
 
 const email = process.env.E2E_TEST_EMAIL;
 const password = process.env.E2E_TEST_PASSWORD;
 const apiBaseUrl = process.env.E2E_API_URL ?? "http://localhost:8000";
+const provisioned = Boolean(email && password);
 
 async function createAuthenticatedContext(browser: import("@playwright/test").Browser) {
     const context = await browser.newContext();
@@ -17,16 +20,20 @@ test.describe("workspace smoke", () => {
     test("redirects signed-out users away from dashboard", async ({ page }) => {
         await page.goto("/dashboard");
         await expect(page).toHaveURL(/\/$/);
+        await expectSignInPage(page);
     });
 
     test("login page renders sign-in controls", async ({ page }) => {
         await page.goto("/");
-        await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
+        await expectSignInPage(page);
     });
 });
 
-test.describe("authenticated AI flow", () => {
-    test.skip(!email || !password, "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD");
+test.describe("authenticated AI flow @provisioned", () => {
+    test.skip(
+        !provisioned,
+        "Set E2E_TEST_EMAIL and E2E_TEST_PASSWORD (run via npm run test:e2e:provisioned)"
+    );
 
     test("ingest a text document in AI Studio", async ({ browser }) => {
         const context = await createAuthenticatedContext(browser);
@@ -35,11 +42,11 @@ test.describe("authenticated AI flow", () => {
         await page.goto("/ai");
         await expect(page.getByRole("heading", { name: /AI Studio/i })).toBeVisible();
 
-        await page.getByLabel("Document title").fill("E2E Notes");
-        await page.getByLabel("Document content").fill(
-            "Playwright uploaded this document for retrieval tests."
-        );
-        await page.getByRole("button", { name: "Create text document" }).click();
+        await page.getByLabel("Document title", { exact: true }).fill("E2E Notes");
+        await page
+            .getByLabel("Document content", { exact: true })
+            .fill("Playwright uploaded this document for retrieval tests.");
+        await page.getByRole("button", { name: "Create text document", exact: true }).click();
 
         await expect(page.getByText("Document ingested.")).toBeVisible({ timeout: 15_000 });
 
@@ -48,7 +55,9 @@ test.describe("authenticated AI flow", () => {
 
     test("ask via agent run API after document ingest", async ({ browser }) => {
         const context = await createAuthenticatedContext(browser);
-        const csrfToken = (await context.cookies()).find((cookie) => cookie.name === "csrf_token")?.value;
+        const csrfToken = (await context.cookies()).find(
+            (cookie) => cookie.name === "csrf_token"
+        )?.value;
 
         const templateKey = `e2e_${Date.now()}`;
         const template = await context.request.post(`${apiBaseUrl}/api/v1/ai/prompts`, {

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 from time import perf_counter
@@ -11,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.pagination import MAX_PAGE_LIMIT
+from backend.lib.concurrency import bounded_gather, run_with_timeout
 from backend.lib.memory_search_cache import (
     get_cached_memory_search,
     invalidate_memory_search_cache,
@@ -21,7 +21,6 @@ from backend.modules.memory.application.memory_authorization import MemoryAuthor
 from backend.modules.memory.application.memory_consolidator import MemoryConsolidator
 from backend.modules.memory.application.memory_context_builder import MemoryContextBuilder
 from backend.modules.memory.application.memory_extractor import (
-    EXTRACTION_POLICY_VERSION,
     MemoryExtractor,
 )
 from backend.modules.memory.application.memory_policy_service import MemoryPolicyService
@@ -49,9 +48,6 @@ from backend.modules.memory.infrastructure.memory_audit_repository import (
 from backend.modules.memory.infrastructure.memory_config import MemoryConfig
 
 logger = logging.getLogger(__name__)
-
-
-_MEMORY_WRITE_CONCURRENCY = 3
 
 
 class MemoryService:
@@ -277,12 +273,17 @@ class MemoryService:
             return items
 
         try:
-            level_results = await asyncio.wait_for(
-                asyncio.gather(*[_search_level(level) for level in search_levels]),
-                timeout=getattr(self.config, "recall_timeout_seconds", 2.0),
+            level_results = await run_with_timeout(
+                bounded_gather(
+                    [_search_level(level) for level in search_levels],
+                    limit=max(1, len(search_levels)),
+                    kind="memory_search",
+                ),
+                timeout_seconds=getattr(self.config, "recall_timeout_seconds", 2.0),
+                kind="memory_search",
             )
             for level_items in level_results:
-                collected.extend(level_items)
+                collected.extend(level_items)  # type: ignore[arg-type]
             collected = await self.authorization.filter_authorized_read_items(
                 user_id, collected
             )
@@ -418,10 +419,14 @@ class MemoryService:
             )
             return await self.authorization.filter_authorized_read_items(user_id, rows)
 
-        level_results = await asyncio.gather(*[_fetch_level(level) for level in levels])
+        level_results = await bounded_gather(
+            [_fetch_level(level) for level in levels],
+            limit=max(1, len(levels)),
+            kind="memory_list",
+        )
         items: list[MemoryItem] = []
         for rows in level_results:
-            items.extend(rows)
+            items.extend(rows)  # type: ignore[arg-type]
         consolidated = self.consolidator.consolidate(items)
         total = len(consolidated)
         page = consolidated[offset : offset + resolved_limit]
@@ -479,47 +484,19 @@ class MemoryService:
         assistant_message: str,
         source_message_id: str | None = None,
     ) -> list[MemoryWriteResult]:
-        if not self.config.enabled or not self.config.write_enabled:
-            return []
+        from backend.modules.memory.application.memory_turn_processor import (
+            process_turn_memories as process_turn,
+        )
 
-        candidates = self.extractor.extract_from_turn(
+        return await process_turn(
+            self,
+            user_id=user_id,
+            agent_id=agent_id,
+            run_id=run_id,
+            project_id=project_id,
             user_message=user_message,
             assistant_message=assistant_message,
             source_message_id=source_message_id,
-        )
-        if not candidates:
-            return []
-        candidates = [
-            candidate
-            for candidate in candidates
-            if not candidate.requires_confirmation and candidate.routed.confidence >= 0.8
-        ]
-        if not candidates:
-            logger.info("Memory candidates require explicit user confirmation")
-            return []
-
-        semaphore = asyncio.Semaphore(_MEMORY_WRITE_CONCURRENCY)
-
-        async def _remember_candidate(candidate) -> MemoryWriteResult:
-            async with semaphore:
-                return await self.remember(
-                    user_id=user_id,
-                    agent_id=agent_id,
-                    content=candidate.content,
-                    memory_level=candidate.routed.memory_level.value,
-                    memory_type=candidate.routed.memory_type.value,
-                    run_id=run_id if candidate.routed.memory_level == MemoryLevel.SESSION else None,
-                    project_id=project_id
-                    if candidate.routed.memory_level == MemoryLevel.PROJECT
-                    else None,
-                    confidence=candidate.routed.confidence,
-                    source=candidate.routed.source.value,
-                    source_ref=source_message_id,
-                    metadata={"extraction_policy_version": EXTRACTION_POLICY_VERSION},
-                )
-
-        return list(
-            await asyncio.gather(*[_remember_candidate(candidate) for candidate in candidates])
         )
 
     @staticmethod

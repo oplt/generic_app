@@ -96,6 +96,12 @@ class ObjectStorage:
             )
 
     async def readiness(self) -> tuple[bool, str]:
+        from backend.lib.failure_injection import maybe_inject
+        from backend.lib.failure_injection.kinds import FaultKind
+
+        maybe_inject(FaultKind.STORAGE_TIMEOUT)
+        maybe_inject(FaultKind.STORAGE_READ_FAILURE)
+
         if not self.is_configured:
             return False, "object storage is not configured"
 
@@ -120,6 +126,12 @@ class ObjectStorage:
             raise StorageNotConfiguredError(
                 "Object storage is not configured. Set STORAGE_BUCKET and storage credentials."
             )
+
+        from backend.lib.failure_injection import maybe_inject
+        from backend.lib.failure_injection.kinds import FaultKind
+
+        maybe_inject(FaultKind.STORAGE_UPLOAD_FAILURE)
+        maybe_inject(FaultKind.STORAGE_TIMEOUT)
 
         def _upload() -> None:
             put_kwargs: dict[str, str] = {

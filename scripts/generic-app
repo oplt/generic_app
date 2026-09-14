@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Thin wrapper so `./scripts/generic-app` / `uv run` docs match prompt examples.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="${ROOT}${PYTHONPATH:+:$PYTHONPATH}"
+exec uv run --project "${ROOT}/backend" python -m backend.tools.generic_app "$@"

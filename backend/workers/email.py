@@ -4,16 +4,64 @@ import asyncio
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from uuid import uuid4
 
 from backend.core.config import settings
+from backend.lib.idempotency import run_with_effect_idempotency
 from backend.observability.workflow import observe_async_workflow
+from backend.workers.async_dispatch import run_async_in_sync_context
+from backend.workers.effect_ledger import EFFECT_EMAIL
 
 logger = logging.getLogger(__name__)
 
 
 @observe_async_workflow("email", "send")
 async def send_email(
-    *, to: str, subject: str, html_body: str, text_body: str | None = None
+    *,
+    to: str,
+    subject: str,
+    html_body: str,
+    text_body: str | None = None,
+    operation_id: str | None = None,
+) -> None:
+    operation = operation_id or f"email:{uuid4().hex}"
+
+    async def _execute(message_id: str) -> None:
+        await _deliver_email(
+            to=to,
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            message_id=message_id,
+        )
+
+    async def _on_duplicate() -> None:
+        logger.info(
+            "email_delivery_deduplicated",
+            extra={
+                "event_name": "email_delivery_deduplicated",
+                "operation_id": operation,
+                "effect_status": "succeeded",
+            },
+        )
+        return None
+
+    await run_with_effect_idempotency(
+        operation_id=operation,
+        effect_type=EFFECT_EMAIL,
+        payload_parts=(to, subject, html_body, text_body),
+        execute=_execute,
+        on_duplicate_succeeded=_on_duplicate,
+    )
+
+
+async def _deliver_email(
+    *,
+    to: str,
+    subject: str,
+    html_body: str,
+    text_body: str | None,
+    message_id: str,
 ) -> None:
     if not settings.SMTP_HOST:
         logger.info(
@@ -22,6 +70,12 @@ async def send_email(
         )
         return
 
+    from backend.lib.failure_injection import maybe_inject
+    from backend.lib.failure_injection.kinds import FaultKind
+
+    maybe_inject(FaultKind.EMAIL_SMTP_UNAVAILABLE)
+    maybe_inject(FaultKind.EMAIL_TIMEOUT)
+
     try:
         import aiosmtplib  # optional dep
 
@@ -29,6 +83,7 @@ async def send_email(
         msg["Subject"] = subject
         msg["From"] = settings.SMTP_FROM
         msg["To"] = to
+        msg["Message-ID"] = message_id
         if text_body:
             msg.attach(MIMEText(text_body, "plain"))
         msg.attach(MIMEText(html_body, "html"))
@@ -59,25 +114,39 @@ async def send_email(
         raise
 
 
-def send_email_sync(*, to: str, subject: str, html_body: str, text_body: str | None = None) -> None:
-    from backend.workers.async_dispatch import run_async_in_sync_context
-
+def send_email_sync(
+    *,
+    to: str,
+    subject: str,
+    html_body: str,
+    text_body: str | None = None,
+    operation_id: str | None = None,
+) -> None:
     run_async_in_sync_context(
         send_email(
             to=to,
             subject=subject,
             html_body=html_body,
             text_body=text_body,
+            operation_id=operation_id,
         )
     )
 
 
-def queue_email(*, to: str, subject: str, html_body: str, text_body: str | None = None) -> None:
+def queue_email(
+    *,
+    to: str,
+    subject: str,
+    html_body: str,
+    text_body: str | None = None,
+    operation_id: str | None = None,
+) -> None:
     payload = {
         "to": to,
         "subject": subject,
         "html_body": html_body,
         "text_body": text_body,
+        "operation_id": operation_id,
     }
 
     if settings.is_production and settings.CELERY_TASK_ALWAYS_EAGER:

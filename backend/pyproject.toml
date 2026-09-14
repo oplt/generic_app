@@ -33,6 +33,7 @@ dependencies = [
     "pypdf",
     "python-docx",
     "pgvector",
+    "jinja2>=3.1.6",
 ]
 
 [tool.ruff]
@@ -45,10 +46,12 @@ ignore = ["B008"]  # FastAPI Depends() in defaults
 [tool.ruff.lint.per-file-ignores]
 "alembic/versions/*.py" = ["E501"]
 "alembic/env.py" = ["E402"]
+"tools/generic_app/tests/goldens/**" = ["E", "F", "I", "UP", "B", "SIM"]
 
 [dependency-groups]
 dev = [
     "honcho>=2.0.0",
+    "pytest>=8.0.0",
 ]
 
 [tool.pytest.ini_options]

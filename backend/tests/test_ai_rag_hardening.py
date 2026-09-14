@@ -39,6 +39,17 @@ def test_hybrid_ranker_can_promote_lexically_relevant_candidate() -> None:
     assert ranked[0].chunk_id == "hybrid"
 
 
+def test_reciprocal_rank_fuse_keeps_lexical_only_candidates() -> None:
+    from backend.modules.rag.application.retrieval_ranker import reciprocal_rank_fuse
+
+    vector_lane = [_chunk("semantic", "unrelated prose about cats", 0.95)]
+    lexical_lane = [_chunk("exact", "Error code ZX-204 means expired invitation", 0.8)]
+
+    fused = reciprocal_rank_fuse([vector_lane, lexical_lane], limit=2)
+
+    assert {chunk.chunk_id for chunk in fused} == {"semantic", "exact"}
+
+
 def test_prompt_context_surfaces_both_dependency_failures() -> None:
     service = PromptContextService.__new__(PromptContextService)
     service.rag_config = SimpleNamespace(enabled=True, max_context_tokens=1000)
