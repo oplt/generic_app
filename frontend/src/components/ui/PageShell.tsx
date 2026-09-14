@@ -3,7 +3,7 @@ import { Box, Container, Stack, Typography, type Breakpoint, type SxProps, type 
 type PageShellProps = {
     children: React.ReactNode;
     maxWidth?: Breakpoint | false;
-    title?: string;
+    title?: React.ReactNode;
     sx?: SxProps<Theme>;
 };
 

@@ -259,8 +259,6 @@ class MarkerWiringTest(unittest.TestCase):
         fe.parent.mkdir(parents=True)
         fe.write_text(
             (
-                "// <generic-app:lazy-imports>\n"
-                "// </generic-app:lazy-imports>\n"
                 "export function AppRouter() {\n"
                 "  return (\n"
                 "    <>\n"
@@ -269,6 +267,16 @@ class MarkerWiringTest(unittest.TestCase):
                 "    </>\n"
                 "  );\n"
                 "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (root / "frontend/src/app/pageKeys.json").write_text("[]\n", encoding="utf-8")
+        (root / "frontend/src/app/pageRegistry.ts").write_text(
+            (
+                "export const PAGE_REGISTRY = Object.fromEntries([\n"
+                "        // <generic-app:page-registry>\n"
+                "        // </generic-app:page-registry>\n"
+                "].map((entry) => [entry.pageKey, entry]));\n"
             ),
             encoding="utf-8",
         )
@@ -321,9 +329,11 @@ class MarkerWiringTest(unittest.TestCase):
             celery = (root / "backend/modules/manifests/celery_contrib.py").read_text()
             self.assertIn("orders.example_task", celery)
             self.assertIn("backend.modules.orders.workers", celery)
-            fe = (root / "frontend/src/app/router.tsx").read_text()
-            self.assertIn("OrdersListPage", fe)
-            self.assertIn('pageKey="orders.list"', fe)
+            fe = (root / "frontend/src/app/pageRegistry.ts").read_text()
+            self.assertIn("orders.list", fe)
+            self.assertIn("OrdersListView", fe)
+            page_keys = (root / "frontend/src/app/pageKeys.json").read_text()
+            self.assertIn("orders.list", page_keys)
             profiles = (root / "backend/modules/platform/profiles.py").read_text()
             self.assertIn('"rag": ("orders",)', profiles)
 
@@ -372,6 +382,104 @@ class AtomicGenerationTest(unittest.TestCase):
         )
         self.assertTrue(any("Dry run" in note for note in result.notes))
         self.assertFalse((REPO_ROOT / "backend/modules/widgets").exists())
+
+
+class ArchitectureGuaranteesTest(unittest.TestCase):
+    """Scaffold must follow final architecture — no deleted legacy patterns."""
+
+    def test_full_scaffold_avoids_legacy_surfaces(self) -> None:
+        names = ModuleNames.from_key("orders")
+        options = GeneratorOptions(
+            crud=True,
+            frontend=True,
+            celery=True,
+            permissions=True,
+            events=True,
+            storage=True,
+            wire=False,
+            enablement="optional",
+        )
+        files = {
+            item.relative_path: item.content
+            for item in render_module(names, options, down_revision="l2b9d4e5f150")
+        }
+
+        # Ownership paths
+        self.assertIn("backend/modules/orders/api/router.py", files)
+        self.assertIn("backend/modules/orders/manifest.py", files)
+        self.assertIn("frontend/src/features/orders/views/OrdersListView.tsx", files)
+        self.assertNotIn(
+            "frontend/src/pages/OrdersPage.tsx",
+            files,
+            "must not recreate parallel pages/ re-export layer",
+        )
+        for relative in files:
+            self.assertFalse(
+                relative.startswith("backend/api/v1/"),
+                f"HTTP surface must not land under api/v1: {relative}",
+            )
+            self.assertFalse(
+                "/pages/" in relative,
+                f"must not write under frontend pages/: {relative}",
+            )
+
+        manifest = files["backend/modules/orders/manifest.py"]
+        self.assertIn("ModuleSurface.USER_FACING", manifest)
+        self.assertIn('page_key="orders.list"', manifest)
+        self.assertNotIn("backend.api.v1", manifest)
+
+        router = files["backend/modules/orders/api/router.py"]
+        self.assertNotIn("backend.api.v1", router)
+        self.assertIn("require_permission", router)
+
+        view = files["frontend/src/features/orders/views/OrdersListView.tsx"]
+        self.assertIn("export default OrdersListView", view)
+        self.assertIn("EmptyState", view)
+        self.assertNotIn("src/pages/", view)
+
+    def test_api_only_scaffold_sets_api_only_surface(self) -> None:
+        names = ModuleNames.from_key("inventory")
+        files = {
+            item.relative_path: item.content
+            for item in render_module(names, GeneratorOptions(wire=False))
+        }
+        manifest = files["backend/modules/inventory/manifest.py"]
+        self.assertIn("ModuleSurface.API_ONLY", manifest)
+        self.assertIn("user_visible=False", manifest)
+        self.assertNotIn("frontend_routes", manifest)
+        self.assertFalse(
+            any(path.startswith("frontend/") for path in files),
+            "api-only scaffold must not emit frontend files",
+        )
+
+    def test_wiring_registers_page_allow_list_not_router_hand_routes(self) -> None:
+        names = ModuleNames.from_key("orders")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            MarkerWiringTest()._stub_repo(root)
+            apply_all_wiring(
+                root,
+                names,
+                crud=True,
+                permissions=True,
+                celery=False,
+                frontend=True,
+                profile=None,
+            )
+            page_keys = (root / "frontend/src/app/pageKeys.json").read_text(
+                encoding="utf-8"
+            )
+            registry = (root / "frontend/src/app/pageRegistry.ts").read_text(
+                encoding="utf-8"
+            )
+            router = (root / "frontend/src/app/router.tsx").read_text(encoding="utf-8")
+            self.assertIn("orders.list", page_keys)
+            self.assertIn("orders.list", registry)
+            self.assertIn("OrdersListView", registry)
+            self.assertIn('moduleKey: "orders"', registry)
+            # Router markers stay empty — pages mount from the registry allow-list.
+            self.assertNotIn("OrdersListView", router)
+            self.assertNotIn("features/orders", router)
 
 
 class LiveImportSmokeTest(unittest.TestCase):

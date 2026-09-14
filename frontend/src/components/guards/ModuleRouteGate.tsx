@@ -2,6 +2,7 @@ import { Navigate } from "react-router-dom";
 import { Box, Skeleton, Stack } from "@mui/material";
 
 import type { ModuleFrontendRoute } from "../../api/platform";
+import NotFoundView from "../../features/shell/views/NotFoundView";
 import { usePlatformMetadata } from "../../hooks/usePlatformMetadata";
 
 type ModuleRouteGateProps = {
@@ -25,7 +26,7 @@ function GateLoader() {
 
 /**
  * Gate a lazy route behind backend-provided module_routes / active_modules.
- * Inactive modules redirect to the dashboard instead of mounting feature data hooks.
+ * Inactive modules render NotFound instead of silently looking like a logout.
  */
 export function ModuleRouteGate({ pageKey, moduleKey, children }: ModuleRouteGateProps) {
     const { data, isLoading, isError } = usePlatformMetadata();
@@ -39,7 +40,7 @@ export function ModuleRouteGate({ pageKey, moduleKey, children }: ModuleRouteGat
         moduleKey != null && (data.active_modules ?? []).includes(moduleKey);
 
     if (!byPageKey && !byModule) {
-        return <Navigate to="/dashboard" replace />;
+        return <NotFoundView detail="This area is not enabled for the current capability profile." />;
     }
 
     return <>{children}</>;

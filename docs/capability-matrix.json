@@ -1,0 +1,724 @@
+{
+  "version": 1,
+  "phase": 3,
+  "purpose": "Distinguish intentionally headless backend capabilities from accidental FE omissions.",
+  "generated_from": "frontend/openapi/openapi.json + Phase 3 FE wiring audit",
+  "naming_reconciliation": [
+    {
+      "backend_module": "users",
+      "surface": "embedded",
+      "embedding_host": "admin.users",
+      "frontend_feature": "admin-users (+ profile for self-service)",
+      "page_keys": [
+        "admin.users",
+        "profile.settings"
+      ],
+      "notes": "Not a forgotten FE module; directory lives under Admin Users."
+    },
+    {
+      "backend_module": "policy",
+      "surface": "embedded",
+      "embedding_host": "admin.users",
+      "frontend_feature": "admin-users",
+      "page_keys": [
+        "admin.users"
+      ],
+      "notes": "Access tab + role dialogs; no standalone /admin/access."
+    },
+    {
+      "backend_module": "memory",
+      "surface": "embedded",
+      "embedding_host": "profile.settings",
+      "frontend_feature": "profile",
+      "page_keys": [
+        "profile.settings"
+      ],
+      "notes": "Privacy controls on Profile; agent APIs stay headless."
+    },
+    {
+      "backend_module": "settings",
+      "surface": "admin_facing",
+      "frontend_feature": "settings-admin",
+      "page_keys": [
+        "settings.admin"
+      ],
+      "notes": "Folder name settings-admin maps to module settings."
+    },
+    {
+      "backend_module": "platform",
+      "surface": "user_facing",
+      "frontend_feature": "platform + platform-admin",
+      "page_keys": [
+        "platform.workspace",
+        "platform.admin"
+      ],
+      "notes": "Split FE folders by audience; storage health chips on platform-admin."
+    },
+    {
+      "backend_module": "storage",
+      "surface": "internal",
+      "frontend_feature": "platform-admin (StorageHealthCard only)",
+      "page_keys": [
+        "platform.admin"
+      ],
+      "notes": "No user page; health via diagnostics metrics subset \u2014 no credentials."
+    },
+    {
+      "backend_module": "developer_diagnostics",
+      "surface": "embedded",
+      "embedding_host": "app.shell",
+      "frontend_feature": "developer-diagnostics",
+      "page_keys": [],
+      "notes": "Intentionally not in router.tsx; AppLayout floating panel + flag."
+    }
+  ],
+  "focus_capabilities": [
+    {
+      "tag": "admin",
+      "module_key": "admin",
+      "path": "/api/v1/admin/audit-logs",
+      "method": "GET",
+      "operation_id": "list_audit_logs_api_v1_admin_audit_logs_get",
+      "summary": "List Audit Logs",
+      "permission_hint": null
+    },
+    {
+      "tag": "diagnostics",
+      "module_key": "diagnostics",
+      "path": "/api/v1/admin/diagnostics",
+      "method": "GET",
+      "operation_id": "get_diagnostics_api_v1_admin_diagnostics_get",
+      "summary": "Get Diagnostics",
+      "permission_hint": null
+    },
+    {
+      "tag": "admin",
+      "module_key": "admin",
+      "path": "/api/v1/admin/metrics",
+      "method": "GET",
+      "operation_id": "get_metrics_api_v1_admin_metrics_get",
+      "summary": "Get Metrics",
+      "permission_hint": null
+    },
+    {
+      "tag": "admin",
+      "module_key": "admin",
+      "path": "/api/v1/admin/users",
+      "method": "GET",
+      "operation_id": "list_users_api_v1_admin_users_get",
+      "summary": "List Users",
+      "permission_hint": null
+    },
+    {
+      "tag": "admin",
+      "module_key": "admin",
+      "path": "/api/v1/admin/users/{user_id}",
+      "method": "GET",
+      "operation_id": "get_user_api_v1_admin_users__user_id__get",
+      "summary": "Get User",
+      "permission_hint": null
+    },
+    {
+      "tag": "admin",
+      "module_key": "admin",
+      "path": "/api/v1/admin/users/{user_id}/status",
+      "method": "PATCH",
+      "operation_id": "update_user_status_api_v1_admin_users__user_id__status_patch",
+      "summary": "Update User Status",
+      "permission_hint": null
+    },
+    {
+      "tag": "developer-diagnostics",
+      "module_key": "developer_diagnostics",
+      "path": "/api/v1/developer/diagnostics/recent",
+      "method": "GET",
+      "operation_id": "developer_diagnostics_recent_api_v1_developer_diagnostics_recent_get",
+      "summary": "Developer Diagnostics Recent",
+      "permission_hint": null,
+      "fe_client": "frontend/src/api/developerDiagnostics.ts",
+      "query_key": null,
+      "ui": "DeveloperDiagnosticsPanel (when open)",
+      "classification": "shell_embedded",
+      "intent": "wired"
+    },
+    {
+      "tag": "developer-diagnostics",
+      "module_key": "developer_diagnostics",
+      "path": "/api/v1/developer/diagnostics/status",
+      "method": "GET",
+      "operation_id": "developer_diagnostics_status_api_v1_developer_diagnostics_status_get",
+      "summary": "Developer Diagnostics Status",
+      "permission_hint": null,
+      "fe_client": "frontend/src/api/developerDiagnostics.ts",
+      "query_key": "[\"developer-diagnostics\",\"status\"]",
+      "ui": "AppLayout \u2192 DeveloperDiagnosticsPanel (floating)",
+      "classification": "shell_embedded",
+      "intent": "wired"
+    },
+    {
+      "tag": "memory",
+      "module_key": "memory",
+      "path": "/api/v1/memory",
+      "method": "GET",
+      "operation_id": "list_memories_api_v1_memory_get",
+      "summary": "List Memories",
+      "permission_hint": null,
+      "fe_client": "frontend/src/api/memory.ts#listMyMemories",
+      "query_key": "queryKeys.memory.list",
+      "ui": "Profile \u2192 ProfileMemorySection",
+      "classification": "user_embedded",
+      "intent": "wired"
+    },
+    {
+      "tag": "memory",
+      "module_key": "memory",
+      "path": "/api/v1/memory",
+      "method": "POST",
+      "operation_id": "create_memory_api_v1_memory_post",
+      "summary": "Create Memory",
+      "permission_hint": null,
+      "fe_client": null,
+      "ui": null,
+      "classification": "api_agent",
+      "intent": "intentionally_headless",
+      "notes": "Agent/write pipeline; not end-user create UI."
+    },
+    {
+      "tag": "memory",
+      "module_key": "memory",
+      "path": "/api/v1/memory/audit",
+      "method": "GET",
+      "operation_id": "list_audit_logs_api_v1_memory_audit_get",
+      "summary": "List Audit Logs",
+      "permission_hint": null,
+      "fe_client": null,
+      "ui": null,
+      "classification": "admin_or_diagnostic",
+      "intent": "intentionally_headless",
+      "notes": "Audit trail; no starter admin page."
+    },
+    {
+      "tag": "memory",
+      "module_key": "memory",
+      "path": "/api/v1/memory/forget/{memory_id}",
+      "method": "POST",
+      "operation_id": "forget_memory_api_v1_memory_forget__memory_id__post",
+      "summary": "Forget Memory",
+      "permission_hint": null,
+      "fe_client": null,
+      "ui": null,
+      "classification": "api_agent",
+      "intent": "intentionally_headless",
+      "notes": "Soft-forget path; UI uses DELETE."
+    },
+    {
+      "tag": "memory",
+      "module_key": "memory",
+      "path": "/api/v1/memory/search",
+      "method": "POST",
+      "operation_id": "search_memories_api_v1_memory_search_post",
+      "summary": "Search Memories",
+      "permission_hint": null,
+      "fe_client": null,
+      "ui": null,
+      "classification": "api_agent",
+      "intent": "intentionally_headless",
+      "notes": "Recall for agents; hide vector internals from users."
+    },
+    {
+      "tag": "memory",
+      "module_key": "memory",
+      "path": "/api/v1/memory/{memory_id}",
+      "method": "DELETE",
+      "operation_id": "delete_memory_api_v1_memory__memory_id__delete",
+      "summary": "Delete Memory",
+      "permission_hint": null,
+      "fe_client": "frontend/src/api/memory.ts#deleteMyMemory",
+      "query_key": null,
+      "ui": "Profile \u2192 ProfileMemorySection",
+      "classification": "user_embedded",
+      "intent": "wired"
+    },
+    {
+      "tag": "memory",
+      "module_key": "memory",
+      "path": "/api/v1/memory/{memory_id}",
+      "method": "GET",
+      "operation_id": "get_memory_api_v1_memory__memory_id__get",
+      "summary": "Get Memory",
+      "permission_hint": null,
+      "fe_client": null,
+      "ui": null,
+      "classification": "api_agent",
+      "intent": "intentionally_headless",
+      "notes": "Detail fetch unused; list covers privacy control."
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/config",
+      "method": "GET",
+      "operation_id": "get_platform_config_api_v1_platform_admin_config_get",
+      "summary": "Get Platform Config",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/config",
+      "method": "PUT",
+      "operation_id": "update_platform_config_api_v1_platform_admin_config_put",
+      "summary": "Update Platform Config",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/email-templates",
+      "method": "GET",
+      "operation_id": "list_email_templates_api_v1_platform_admin_email_templates_get",
+      "summary": "List Email Templates",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/email-templates",
+      "method": "POST",
+      "operation_id": "create_email_template_api_v1_platform_admin_email_templates_post",
+      "summary": "Create Email Template",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/email-templates/{template_id}",
+      "method": "PATCH",
+      "operation_id": "update_email_template_api_v1_platform_admin_email_templates__template_id__patch",
+      "summary": "Update Email Template",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/feature-flags",
+      "method": "GET",
+      "operation_id": "list_feature_flags_api_v1_platform_admin_feature_flags_get",
+      "summary": "List Feature Flags",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/feature-flags",
+      "method": "POST",
+      "operation_id": "create_feature_flag_api_v1_platform_admin_feature_flags_post",
+      "summary": "Create Feature Flag",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/feature-flags/{feature_flag_id}",
+      "method": "PATCH",
+      "operation_id": "update_feature_flag_api_v1_platform_admin_feature_flags__feature_flag_id__patch",
+      "summary": "Update Feature Flag",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/plans",
+      "method": "GET",
+      "operation_id": "list_admin_plans_api_v1_platform_admin_plans_get",
+      "summary": "List Admin Plans",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/plans",
+      "method": "POST",
+      "operation_id": "create_plan_api_v1_platform_admin_plans_post",
+      "summary": "Create Plan",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/admin/plans/{plan_id}",
+      "method": "PATCH",
+      "operation_id": "update_plan_api_v1_platform_admin_plans__plan_id__patch",
+      "summary": "Update Plan",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/api-keys",
+      "method": "GET",
+      "operation_id": "list_api_keys_api_v1_platform_api_keys_get",
+      "summary": "List Api Keys",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/api-keys",
+      "method": "POST",
+      "operation_id": "create_api_key_api_v1_platform_api_keys_post",
+      "summary": "Create Api Key",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/api-keys/{api_key_id}",
+      "method": "DELETE",
+      "operation_id": "revoke_api_key_api_v1_platform_api_keys__api_key_id__delete",
+      "summary": "Revoke Api Key",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/billing/plans",
+      "method": "GET",
+      "operation_id": "list_subscription_plans_api_v1_platform_billing_plans_get",
+      "summary": "List Subscription Plans",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/billing/subscription",
+      "method": "GET",
+      "operation_id": "get_subscription_api_v1_platform_billing_subscription_get",
+      "summary": "Get Subscription",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/billing/subscription",
+      "method": "PUT",
+      "operation_id": "select_subscription_plan_api_v1_platform_billing_subscription_put",
+      "summary": "Select Subscription Plan",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/feature-flags",
+      "method": "GET",
+      "operation_id": "list_effective_feature_flags_api_v1_platform_feature_flags_get",
+      "summary": "List Effective Feature Flags",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/metadata",
+      "method": "GET",
+      "operation_id": "get_platform_metadata_api_v1_platform_metadata_get",
+      "summary": "Get Platform Metadata",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/webhooks",
+      "method": "GET",
+      "operation_id": "list_webhooks_api_v1_platform_webhooks_get",
+      "summary": "List Webhooks",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/webhooks",
+      "method": "POST",
+      "operation_id": "create_webhook_api_v1_platform_webhooks_post",
+      "summary": "Create Webhook",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/webhooks/{webhook_id}",
+      "method": "DELETE",
+      "operation_id": "delete_webhook_api_v1_platform_webhooks__webhook_id__delete",
+      "summary": "Delete Webhook",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/webhooks/{webhook_id}",
+      "method": "PATCH",
+      "operation_id": "update_webhook_api_v1_platform_webhooks__webhook_id__patch",
+      "summary": "Update Webhook",
+      "permission_hint": null
+    },
+    {
+      "tag": "platform",
+      "module_key": "platform",
+      "path": "/api/v1/platform/webhooks/{webhook_id}/test",
+      "method": "POST",
+      "operation_id": "test_webhook_api_v1_platform_webhooks__webhook_id__test_post",
+      "summary": "Test Webhook",
+      "permission_hint": null
+    },
+    {
+      "tag": "policy",
+      "module_key": "policy",
+      "path": "/api/v1/policy/me/permissions",
+      "method": "GET",
+      "operation_id": "my_permissions_api_v1_policy_me_permissions_get",
+      "summary": "My Permissions",
+      "permission_hint": null,
+      "fe_client": "generated/endpoints/policy (no dedicated wrapper)",
+      "query_key": null,
+      "ui": null,
+      "classification": "api_self_service",
+      "intent": "intentionally_headless",
+      "notes": "Effective grants for clients; not an admin catalog table."
+    },
+    {
+      "tag": "policy",
+      "module_key": "policy",
+      "path": "/api/v1/policy/permissions",
+      "method": "GET",
+      "operation_id": "list_permissions_api_v1_policy_permissions_get",
+      "summary": "List Permissions",
+      "permission_hint": null,
+      "fe_client": "frontend/src/api/policy.ts#listPolicyPermissions",
+      "query_key": "queryKeys.admin.policyPermissions",
+      "ui": "Admin Users \u2192 Access tab (AccessControlPanels)",
+      "classification": "admin_embedded",
+      "intent": "wired"
+    },
+    {
+      "tag": "policy",
+      "module_key": "policy",
+      "path": "/api/v1/policy/role-assignments",
+      "method": "DELETE",
+      "operation_id": "revoke_role_api_v1_policy_role_assignments_delete",
+      "summary": "Revoke Role",
+      "permission_hint": null,
+      "fe_client": "frontend/src/api/policy.ts#revokePolicyRole",
+      "query_key": null,
+      "ui": "UserRolesDialog (system scope)",
+      "classification": "admin_embedded",
+      "intent": "wired"
+    },
+    {
+      "tag": "policy",
+      "module_key": "policy",
+      "path": "/api/v1/policy/role-assignments",
+      "method": "POST",
+      "operation_id": "assign_role_api_v1_policy_role_assignments_post",
+      "summary": "Assign Role",
+      "permission_hint": null,
+      "fe_client": "frontend/src/api/policy.ts#assignPolicyRole",
+      "query_key": null,
+      "ui": "UserRolesDialog (system scope)",
+      "classification": "admin_embedded",
+      "intent": "wired"
+    },
+    {
+      "tag": "policy",
+      "module_key": "policy",
+      "path": "/api/v1/policy/roles",
+      "method": "GET",
+      "operation_id": "list_roles_api_v1_policy_roles_get",
+      "summary": "List Roles",
+      "permission_hint": null,
+      "fe_client": "frontend/src/api/policy.ts#listPolicyRoles",
+      "query_key": "queryKeys.admin.policyRoles",
+      "ui": "Admin Users \u2192 Access tab + UserRolesDialog",
+      "classification": "admin_embedded",
+      "intent": "wired"
+    },
+    {
+      "tag": "policy",
+      "module_key": "policy",
+      "path": "/api/v1/policy/users/{user_id}/role-assignments",
+      "method": "GET",
+      "operation_id": "list_user_role_assignments_api_v1_policy_users__user_id__role_assignments_get",
+      "summary": "List User Role Assignments",
+      "permission_hint": null,
+      "fe_client": "frontend/src/api/policy.ts#listUserRoleAssignments",
+      "query_key": "queryKeys.admin.userRoleAssignments",
+      "ui": "UserRolesDialog",
+      "classification": "admin_embedded",
+      "intent": "wired"
+    },
+    {
+      "tag": "profile",
+      "module_key": "profile",
+      "path": "/api/v1/profile",
+      "method": "GET",
+      "operation_id": "get_profile_api_v1_profile_get",
+      "summary": "Get Profile",
+      "permission_hint": null
+    },
+    {
+      "tag": "profile",
+      "module_key": "profile",
+      "path": "/api/v1/profile",
+      "method": "PUT",
+      "operation_id": "update_profile_api_v1_profile_put",
+      "summary": "Update Profile",
+      "permission_hint": null
+    },
+    {
+      "tag": "profile",
+      "module_key": "profile",
+      "path": "/api/v1/profile/avatar",
+      "method": "DELETE",
+      "operation_id": "delete_avatar_api_v1_profile_avatar_delete",
+      "summary": "Delete Avatar",
+      "permission_hint": null
+    },
+    {
+      "tag": "profile",
+      "module_key": "profile",
+      "path": "/api/v1/profile/avatar",
+      "method": "POST",
+      "operation_id": "upload_avatar_api_v1_profile_avatar_post",
+      "summary": "Upload Avatar",
+      "permission_hint": null
+    },
+    {
+      "tag": "settings",
+      "module_key": "settings",
+      "path": "/api/v1/settings/config",
+      "method": "GET",
+      "operation_id": "get_config_settings_api_v1_settings_config_get",
+      "summary": "Get Config Settings",
+      "permission_hint": null
+    },
+    {
+      "tag": "settings",
+      "module_key": "settings",
+      "path": "/api/v1/settings/config",
+      "method": "PUT",
+      "operation_id": "update_config_settings_api_v1_settings_config_put",
+      "summary": "Update Config Settings",
+      "permission_hint": null
+    },
+    {
+      "tag": "settings",
+      "module_key": "settings",
+      "path": "/api/v1/settings/database",
+      "method": "GET",
+      "operation_id": "list_database_settings_api_v1_settings_database_get",
+      "summary": "List Database Settings",
+      "permission_hint": null
+    },
+    {
+      "tag": "settings",
+      "module_key": "settings",
+      "path": "/api/v1/settings/database",
+      "method": "POST",
+      "operation_id": "create_database_setting_api_v1_settings_database_post",
+      "summary": "Create Database Setting",
+      "permission_hint": null
+    },
+    {
+      "tag": "settings",
+      "module_key": "settings",
+      "path": "/api/v1/settings/database/{setting_id}",
+      "method": "DELETE",
+      "operation_id": "delete_database_setting_api_v1_settings_database__setting_id__delete",
+      "summary": "Delete Database Setting",
+      "permission_hint": null
+    },
+    {
+      "tag": "settings",
+      "module_key": "settings",
+      "path": "/api/v1/settings/database/{setting_id}",
+      "method": "PATCH",
+      "operation_id": "update_database_setting_api_v1_settings_database__setting_id__patch",
+      "summary": "Update Database Setting",
+      "permission_hint": null
+    },
+    {
+      "tag": "users",
+      "module_key": "users",
+      "path": "/api/v1/users/directory",
+      "method": "GET",
+      "operation_id": "list_directory_api_v1_users_directory_get",
+      "summary": "List Directory",
+      "permission_hint": null
+    },
+    {
+      "tag": "users",
+      "module_key": "users",
+      "path": "/api/v1/users/me",
+      "method": "GET",
+      "operation_id": "get_me_api_v1_users_me_get",
+      "summary": "Get Me",
+      "permission_hint": null
+    },
+    {
+      "tag": "users",
+      "module_key": "users",
+      "path": "/api/v1/users/me",
+      "method": "PATCH",
+      "operation_id": "update_me_api_v1_users_me_patch",
+      "summary": "Update Me",
+      "permission_hint": null
+    },
+    {
+      "tag": "users",
+      "module_key": "users",
+      "path": "/api/v1/users/me/password",
+      "method": "PATCH",
+      "operation_id": "change_password_api_v1_users_me_password_patch",
+      "summary": "Change Password",
+      "permission_hint": null
+    },
+    {
+      "tag": "users",
+      "module_key": "users",
+      "path": "/api/v1/users/me/sessions",
+      "method": "GET",
+      "operation_id": "list_sessions_api_v1_users_me_sessions_get",
+      "summary": "List Sessions",
+      "permission_hint": null
+    },
+    {
+      "tag": "users",
+      "module_key": "users",
+      "path": "/api/v1/users/me/sessions/{session_id}",
+      "method": "DELETE",
+      "operation_id": "revoke_session_api_v1_users_me_sessions__session_id__delete",
+      "summary": "Revoke Session",
+      "permission_hint": null
+    }
+  ],
+  "route_counts_by_tag": {
+    "admin": 5,
+    "agent": 1,
+    "ai": 27,
+    "auth": 12,
+    "calendar": 2,
+    "chat": 8,
+    "developer-diagnostics": 2,
+    "diagnostics": 1,
+    "health": 3,
+    "jobs": 4,
+    "memory": 7,
+    "notifications": 6,
+    "observability": 2,
+    "platform": 24,
+    "policy": 6,
+    "profile": 4,
+    "projects": 9,
+    "rag": 30,
+    "settings": 6,
+    "users": 6
+  }
+}

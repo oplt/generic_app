@@ -1,0 +1,20 @@
+{
+  "operations": [
+    "GET /api/v1/policy/me/permissions",
+    "POST /api/v1/memory",
+    "POST /api/v1/memory/search",
+    "POST /api/v1/memory/forget/{memory_id}",
+    "GET /api/v1/memory/audit",
+    "GET /api/v1/memory/{memory_id}",
+    "POST /api/v1/agent/runs"
+  ],
+  "notes": {
+    "GET /api/v1/policy/me/permissions": "Effective grants for clients; not an admin catalog table.",
+    "POST /api/v1/memory": "Agent/write pipeline.",
+    "POST /api/v1/memory/search": "Recall for agents; hide vector internals.",
+    "POST /api/v1/memory/forget/{memory_id}": "Soft-forget; UI uses DELETE.",
+    "GET /api/v1/memory/audit": "Audit trail; no starter admin page.",
+    "GET /api/v1/memory/{memory_id}": "Detail unused; list covers privacy control.",
+    "POST /api/v1/agent/runs": "Programmatic agent invoke."
+  }
+}

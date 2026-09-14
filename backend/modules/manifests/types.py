@@ -7,6 +7,20 @@ Import them through the intentional registry only — never exec untrusted code.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
+
+
+class ModuleSurface(StrEnum):
+    """How a module is meant to appear in the product.
+
+    Explicit categories replace guessing from empty ``frontend_routes`` tuples.
+    """
+
+    USER_FACING = "user_facing"
+    ADMIN_FACING = "admin_facing"
+    EMBEDDED = "embedded"
+    API_ONLY = "api_only"
+    INTERNAL = "internal"
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +58,9 @@ class ModuleManifest:
     always_enabled: bool = False
     optional: bool = True
     user_visible: bool = True
+    surface: ModuleSurface = ModuleSurface.USER_FACING
+    # Host page_key or stable host id when surface=EMBEDDED (e.g. app.shell, admin.platform).
+    embedding_host: str | None = None
     backend_router_keys: tuple[str, ...] = ()
     celery_queues: tuple[str, ...] = ()
     scheduled_tasks: tuple[str, ...] = ()
@@ -61,3 +78,5 @@ class ModuleManifest:
         if self.always_enabled and self.optional:
             # Always-on modules are part of the core graph, not pack toggles.
             object.__setattr__(self, "optional", False)
+        if isinstance(self.surface, str) and not isinstance(self.surface, ModuleSurface):
+            object.__setattr__(self, "surface", ModuleSurface(self.surface))

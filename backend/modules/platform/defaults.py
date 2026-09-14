@@ -9,6 +9,7 @@ class ModuleCatalogDefinition(TypedDict):
     label: str
     description: str
     user_visible: bool
+    surface: str
 
 
 class ModulePackDefinition(TypedDict):

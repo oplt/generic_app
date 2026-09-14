@@ -1,4 +1,4 @@
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest, NavEntry
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface, NavEntry
 
 MANIFEST = ModuleManifest(
     key="orders",
@@ -7,6 +7,7 @@ MANIFEST = ModuleManifest(
     description="Orders module scaffolded by generic-app create-module.",
     always_enabled=False,
     optional=True,
+    surface=ModuleSurface.USER_FACING,
     dependencies=('identity_access', 'storage'),
     backend_router_keys=("orders",),
     celery_queues=("orders",),

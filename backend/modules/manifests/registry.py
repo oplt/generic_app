@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from backend.modules.admin.manifest import MANIFEST as ADMIN
 from backend.modules.ai.manifest import MANIFEST as AI
+from backend.modules.audit.manifest import MANIFEST as AUDIT
 from backend.modules.calendar.manifest import MANIFEST as CALENDAR
 from backend.modules.chat.manifest import MANIFEST as CHAT
 from backend.modules.developer_diagnostics.manifest import MANIFEST as DEVELOPER_DIAGNOSTICS
@@ -42,6 +43,7 @@ from backend.observability.manifest import MANIFEST as OBSERVABILITY
 REGISTERED_MANIFESTS: tuple[ModuleManifest, ...] = (
     STORAGE,
     IDENTITY_ACCESS,
+    AUDIT,
     USERS,
     PROFILE,
     PROJECTS,
@@ -76,7 +78,14 @@ def get_manifest_map() -> dict[str, ModuleManifest]:
 def validate_registry() -> None:
     """Fail startup when the intentional registry is inconsistent."""
 
-    validate_manifest_graph(REGISTERED_MANIFESTS)
+    from backend.api.router_registry import ROUTER_CONTRIBUTIONS
+    from backend.modules.manifests.frontend_contract import load_registered_page_keys
+
+    validate_manifest_graph(
+        REGISTERED_MANIFESTS,
+        router_keys=set(ROUTER_CONTRIBUTIONS),
+        known_page_keys=load_registered_page_keys(),
+    )
 
 
 def effective_modules(

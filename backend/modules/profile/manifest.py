@@ -1,4 +1,4 @@
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest, NavEntry
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface, NavEntry
 
 MANIFEST = ModuleManifest(
     key="profile",
@@ -6,6 +6,7 @@ MANIFEST = ModuleManifest(
     label="Profiles",
     description="User profile and preference management.",
     always_enabled=True,
+    surface=ModuleSurface.USER_FACING,
     dependencies=("identity_access", "users"),
     backend_router_keys=("profile",),
     nav_entries=(

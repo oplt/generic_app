@@ -31,7 +31,33 @@ export const queryKeys = {
         all: ["admin"] as const,
         users: (page: number, search: string) => ["admin", "users", page, search] as const,
         policyRoles: ["admin", "policy-roles"] as const,
+        policyPermissions: ["admin", "policy-permissions"] as const,
         userRoleAssignments: (userId: string) => ["admin", "role-assignments", userId] as const,
+        diagnostics: ["admin", "diagnostics"] as const,
+        jobs: (filters: {
+            status: string;
+            jobType: string;
+            queue: string;
+            projectId: string;
+            failedOnly: boolean;
+        }) =>
+            [
+                "admin",
+                "jobs",
+                filters.status,
+                filters.jobType,
+                filters.queue,
+                filters.projectId,
+                filters.failedOnly,
+            ] as const,
+        ragIndexStatus: ["admin", "rag-index-status"] as const,
+        ragEvalDatasets: ["admin", "rag-eval-datasets"] as const,
+        ragEvalCases: (datasetId: string) => ["admin", "rag-eval-cases", datasetId] as const,
+        ragEvalRuns: (datasetId: string) => ["admin", "rag-eval-runs", datasetId] as const,
+    },
+    memory: {
+        all: ["memory"] as const,
+        list: (limit: number, offset: number) => ["memory", "list", limit, offset] as const,
     },
     platform: {
         all: ["platform"] as const,

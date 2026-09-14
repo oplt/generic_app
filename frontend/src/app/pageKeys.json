@@ -1,0 +1,23 @@
+[
+  "auth.home",
+  "auth.reset_password",
+  "auth.verify_email",
+  "dashboard.main",
+  "projects.list",
+  "projects.detail",
+  "calendar.main",
+  "platform.workspace",
+  "platform.admin",
+  "ai.studio",
+  "chat.knowledge",
+  "observability.main",
+  "profile.settings",
+  "notifications.inbox",
+  "admin.users",
+  "settings.admin",
+  "rag.admin.indexes",
+  "rag.admin.evaluation",
+  "jobs.admin.console",
+  "diagnostics.admin",
+  "not_found"
+]

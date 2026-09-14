@@ -47,7 +47,7 @@ describe("ModuleRouteGate", () => {
         expect(screen.getByText("feature-content")).toBeTruthy();
     });
 
-    it("redirects when the page is not in the active profile allow-list", () => {
+    it("shows not-found when the page is not in the active profile allow-list", () => {
         mockedMeta.mockReturnValue({
             data: {
                 module_routes: [{ page_key: "projects.list", path: "/projects" }],
@@ -57,7 +57,7 @@ describe("ModuleRouteGate", () => {
             isError: false,
         } as never);
         renderGate("orders.list", "orders");
-        expect(screen.getByText("dashboard")).toBeTruthy();
+        expect(screen.getByText("Page not found")).toBeTruthy();
         expect(screen.queryByText("feature-content")).toBeNull();
     });
 });

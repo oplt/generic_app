@@ -1,8 +1,7 @@
 # Cross-feature integration
 
-This page maps cross-feature wiring in this repo. Use it with the living roadmap
-in `tasks.txt` (gap-closure phases). The audit brief lives in `prompt.txt`.
-Acceptance baselines: [acceptance-baselines.md](acceptance-baselines.md).
+This page maps cross-feature wiring in this repo. The audit brief lives in
+`prompt.txt`. Acceptance baselines: [acceptance-baselines.md](acceptance-baselines.md).
 
 | Integration | Status | Where |
 | --- | --- | --- |
@@ -21,7 +20,9 @@ Acceptance baselines: [acceptance-baselines.md](acceptance-baselines.md).
 
 ## Acceptance checklist (developer path)
 
-1. `uv run --project backend python -m backend.tools.generic_app create-module …`
+Full walkthrough: [adding-a-feature.md](adding-a-feature.md).
+
+1. `./scripts/generic-app create-module …` (or follow the manual checklist)
 2. Enable via platform module pack / capability profile
 3. `npm run api:generate` for typed frontend client
 4. Protect routes with `require_permission(...)` / UI admin gates / `ModuleRouteGate`

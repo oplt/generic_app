@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.modules.manifests.types import ModuleManifest
+from backend.modules.manifests.types import ModuleManifest, ModuleSurface
 
 
 class ModuleManifestError(RuntimeError):
@@ -18,8 +18,17 @@ def index_manifests(manifests: tuple[ModuleManifest, ...]) -> dict[str, ModuleMa
     return by_key
 
 
-def validate_manifest_graph(manifests: tuple[ModuleManifest, ...]) -> None:
-    """Ensure every declared dependency refers to a registered module."""
+def validate_manifest_graph(
+    manifests: tuple[ModuleManifest, ...],
+    *,
+    router_keys: set[str] | frozenset[str] | None = None,
+    known_page_keys: set[str] | frozenset[str] | None = None,
+) -> None:
+    """Ensure manifests form a consistent capability graph.
+
+    Optional ``router_keys`` / ``known_page_keys`` enable contract checks against
+    ``ROUTER_CONTRIBUTIONS`` and the frontend page-key allow-list.
+    """
 
     by_key = index_manifests(manifests)
     for manifest in manifests:
@@ -33,6 +42,12 @@ def validate_manifest_graph(manifests: tuple[ModuleManifest, ...]) -> None:
                     f"Module {manifest.key!r} cannot depend on itself"
                 )
     _assert_no_cycles(by_key)
+    _assert_surface_rules(manifests)
+    _assert_nav_routes_resolve(manifests)
+    if router_keys is not None:
+        _assert_router_keys(manifests, set(router_keys))
+    if known_page_keys is not None:
+        _assert_page_keys(manifests, set(known_page_keys))
 
 
 def _assert_no_cycles(by_key: dict[str, ModuleManifest]) -> None:
@@ -52,6 +67,95 @@ def _assert_no_cycles(by_key: dict[str, ModuleManifest]) -> None:
 
     for key in by_key:
         visit(key)
+
+
+def _assert_surface_rules(manifests: tuple[ModuleManifest, ...]) -> None:
+    for manifest in manifests:
+        surface = manifest.surface
+        has_routes = bool(manifest.frontend_routes)
+        has_nav = bool(manifest.nav_entries)
+        has_host = bool(manifest.embedding_host)
+
+        if surface in {ModuleSurface.INTERNAL, ModuleSurface.API_ONLY}:
+            if has_nav:
+                raise ModuleManifestError(
+                    f"Module {manifest.key!r} surface={surface.value} "
+                    "must not declare nav_entries"
+                )
+            if has_routes:
+                raise ModuleManifestError(
+                    f"Module {manifest.key!r} surface={surface.value} "
+                    "must not declare frontend_routes"
+                )
+            if has_host:
+                raise ModuleManifestError(
+                    f"Module {manifest.key!r} surface={surface.value} "
+                    "must not declare embedding_host"
+                )
+            if manifest.user_visible and surface == ModuleSurface.INTERNAL:
+                raise ModuleManifestError(
+                    f"Module {manifest.key!r} INTERNAL surface requires user_visible=False"
+                )
+
+        if surface == ModuleSurface.EMBEDDED:
+            if not has_host:
+                raise ModuleManifestError(
+                    f"Module {manifest.key!r} EMBEDDED surface requires embedding_host"
+                )
+            if has_nav:
+                raise ModuleManifestError(
+                    f"Module {manifest.key!r} EMBEDDED surface must not declare primary nav_entries"
+                )
+
+        if (
+            surface in {ModuleSurface.USER_FACING, ModuleSurface.ADMIN_FACING}
+            and not has_routes
+            and not has_host
+        ):
+            raise ModuleManifestError(
+                f"Module {manifest.key!r} surface={surface.value} requires "
+                "frontend_routes or embedding_host"
+            )
+
+
+def _assert_nav_routes_resolve(manifests: tuple[ModuleManifest, ...]) -> None:
+    known_paths = {
+        route.path
+        for manifest in manifests
+        for route in manifest.frontend_routes
+    }
+    for manifest in manifests:
+        for entry in manifest.nav_entries:
+            if entry.path not in known_paths:
+                raise ModuleManifestError(
+                    f"Module {manifest.key!r} nav path {entry.path!r} "
+                    "does not match any declared frontend_route.path"
+                )
+
+
+def _assert_router_keys(
+    manifests: tuple[ModuleManifest, ...],
+    router_keys: set[str],
+) -> None:
+    for manifest in manifests:
+        unknown = set(manifest.backend_router_keys) - router_keys
+        if unknown:
+            raise ModuleManifestError(
+                f"Module {manifest.key!r} declares unknown backend_router_keys: "
+                + ", ".join(sorted(unknown))
+            )
+
+
+def _assert_page_keys(
+    manifests: tuple[ModuleManifest, ...],
+    known_page_keys: set[str],
+) -> None:
+    for manifest in manifests:
+        for route in manifest.frontend_routes:
+            if route.page_key not in known_page_keys:
+                raise ModuleManifestError(
+                    f"Module {manifest.key!r} declares unknown page_key {route.page_key!r}"
+                )
 
 
 def resolve_effective_modules(
@@ -155,6 +259,7 @@ def optional_catalog(
                 "label": manifest.label,
                 "description": manifest.description,
                 "user_visible": manifest.user_visible,
+                "surface": manifest.surface.value,
             }
         )
     return tuple(items)

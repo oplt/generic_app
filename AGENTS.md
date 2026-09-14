@@ -7,7 +7,19 @@ Guidelines for AI tools contributing to this fullstack monorepo (FastAPI + React
 - **Backend:** modular monolith under `backend/modules/` (`identity_access`, `users`, `projects`, `ai`, `rag`, `memory`, …)
 - **Shared libs:** `backend/lib/` (vectors, caches, pagination), `backend/core/` (config, cache, storage)
 - **Frontend:** React + Vite in `frontend/src/`; prefer `features/*` colocation for new UI
+  (canonical views under `features/<feature>/views/` — no parallel `src/pages/` layer)
+- **API modules:** routers live under `backend/modules/<key>/` and mount via
+  `backend/api/router_registry.py` + manifests. `backend/api/v1/` is health-only.
+  Each manifest declares an explicit `ModuleSurface` (`user_facing` / `admin_facing` /
+  `embedded` / `api_only` / `internal`). Frontend pages register in
+  `frontend/src/app/pageRegistry.ts` + `pageKeys.json` (trusted allow-list).
 - **Observability:** `backend/observability/` + `observability/` (Grafana/Prometheus/Tempo configs)
+
+## Adding a feature
+
+Follow [docs/adding-a-feature.md](../docs/adding-a-feature.md). Prefer
+`./scripts/generic-app create-module …` so registry / router / page-key seams are
+patched via markers instead of ad-hoc edits.
 
 ## Conventions
 
@@ -30,3 +42,4 @@ Guidelines for AI tools contributing to this fullstack monorepo (FastAPI + React
 - Fabricate test results or API behavior
 - Add duplicate helpers when `backend/lib/` already provides them
 - Bypass module boundaries (e.g. import another module's `router.py` from feature code)
+- Add feature routes under `backend/api/v1/` or recreate `frontend/src/pages/` re-exports

@@ -1,0 +1,2648 @@
+{
+  "version": 1,
+  "generated_at": "2026-09-14T21:10:32.844Z",
+  "openapi_path": "frontend/openapi/openapi.json",
+  "intentional_api_only": "frontend/openapi/intentional-api-only.json",
+  "counts": {
+    "openapi_operations": 165,
+    "generated_operations": 165,
+    "generated_async_functions": 165,
+    "ui_used": 117,
+    "programmatic_api_only": 7,
+    "health_observability": 7,
+    "internal": 5,
+    "currently_orphaned": 29
+  },
+  "summary": {
+    "ui_used": 117,
+    "programmatic_api_only": 7,
+    "health_observability": 7,
+    "internal": 5,
+    "currently_orphaned": 29
+  },
+  "violations": {
+    "openapi_missing_from_generated": [],
+    "generated_missing_from_openapi": [],
+    "stale_generated_imports": []
+  },
+  "wrappers": [
+    {
+      "file": "api/admin.ts",
+      "class": "B_generated_wrapper"
+    },
+    {
+      "file": "api/ai.ts",
+      "class": "C_duplicate_handwritten"
+    },
+    {
+      "file": "api/auth.ts",
+      "class": "C_duplicate_handwritten"
+    },
+    {
+      "file": "api/axiosClient.ts",
+      "class": "A_transport"
+    },
+    {
+      "file": "api/calendar.ts",
+      "class": "C_duplicate_handwritten"
+    },
+    {
+      "file": "api/client.ts",
+      "class": "A_transport"
+    },
+    {
+      "file": "api/developerDiagnostics.ts",
+      "class": "C_duplicate_handwritten"
+    },
+    {
+      "file": "api/developerDiagnosticsEvents.ts",
+      "class": "A_transport"
+    },
+    {
+      "file": "api/diagnostics.ts",
+      "class": "B_generated_wrapper"
+    },
+    {
+      "file": "api/jobs.ts",
+      "class": "B_generated_wrapper"
+    },
+    {
+      "file": "api/memory.ts",
+      "class": "B_generated_wrapper"
+    },
+    {
+      "file": "api/notifications.ts",
+      "class": "C_duplicate_handwritten"
+    },
+    {
+      "file": "api/orvalMutator.ts",
+      "class": "A_transport"
+    },
+    {
+      "file": "api/platform.ts",
+      "class": "C_duplicate_handwritten"
+    },
+    {
+      "file": "api/policy.ts",
+      "class": "B_generated_wrapper"
+    },
+    {
+      "file": "api/profile.ts",
+      "class": "B_generated_wrapper"
+    },
+    {
+      "file": "api/projects.ts",
+      "class": "C_duplicate_handwritten"
+    },
+    {
+      "file": "api/ragEvaluation.ts",
+      "class": "B_generated_wrapper"
+    },
+    {
+      "file": "api/ragIndexes.ts",
+      "class": "B_generated_wrapper"
+    },
+    {
+      "file": "api/settings.ts",
+      "class": "C_duplicate_handwritten"
+    },
+    {
+      "file": "api/users.ts",
+      "class": "C_duplicate_handwritten"
+    }
+  ],
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/audit-logs",
+      "tags": [
+        "admin"
+      ],
+      "operation_id": "list_audit_logs_api_v1_admin_audit_logs_get",
+      "generated_function": "listAuditLogsApiV1AdminAuditLogsGet",
+      "generated_file": "src/generated/endpoints/admin/admin.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/diagnostics",
+      "tags": [
+        "diagnostics",
+        "diagnostics"
+      ],
+      "operation_id": "get_diagnostics_api_v1_admin_diagnostics_get",
+      "generated_function": "getDiagnosticsApiV1AdminDiagnosticsGet",
+      "generated_file": "src/generated/endpoints/diagnostics/diagnostics.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/jobs",
+      "tags": [
+        "jobs",
+        "jobs"
+      ],
+      "operation_id": "list_console_jobs_api_v1_admin_jobs_get",
+      "generated_function": "listConsoleJobsApiV1AdminJobsGet",
+      "generated_file": "src/generated/endpoints/jobs/jobs.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/jobs/{job_id}",
+      "tags": [
+        "jobs",
+        "jobs"
+      ],
+      "operation_id": "get_console_job_api_v1_admin_jobs__job_id__get",
+      "generated_function": "getConsoleJobApiV1AdminJobsJobIdGet",
+      "generated_file": "src/generated/endpoints/jobs/jobs.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/jobs/{job_id}/cancel",
+      "tags": [
+        "jobs",
+        "jobs"
+      ],
+      "operation_id": "cancel_console_job_api_v1_admin_jobs__job_id__cancel_post",
+      "generated_function": "cancelConsoleJobApiV1AdminJobsJobIdCancelPost",
+      "generated_file": "src/generated/endpoints/jobs/jobs.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/jobs/{job_id}/retry",
+      "tags": [
+        "jobs",
+        "jobs"
+      ],
+      "operation_id": "retry_console_job_api_v1_admin_jobs__job_id__retry_post",
+      "generated_function": "retryConsoleJobApiV1AdminJobsJobIdRetryPost",
+      "generated_file": "src/generated/endpoints/jobs/jobs.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/metrics",
+      "tags": [
+        "admin"
+      ],
+      "operation_id": "get_metrics_api_v1_admin_metrics_get",
+      "generated_function": "getMetricsApiV1AdminMetricsGet",
+      "generated_file": "src/generated/endpoints/admin/admin.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users",
+      "tags": [
+        "admin"
+      ],
+      "operation_id": "list_users_api_v1_admin_users_get",
+      "generated_function": "listUsersApiV1AdminUsersGet",
+      "generated_file": "src/generated/endpoints/admin/admin.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users/{user_id}",
+      "tags": [
+        "admin"
+      ],
+      "operation_id": "get_user_api_v1_admin_users__user_id__get",
+      "generated_function": "getUserApiV1AdminUsersUserIdGet",
+      "generated_file": "src/generated/endpoints/admin/admin.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/users/{user_id}/status",
+      "tags": [
+        "admin"
+      ],
+      "operation_id": "update_user_status_api_v1_admin_users__user_id__status_patch",
+      "generated_function": "updateUserStatusApiV1AdminUsersUserIdStatusPatch",
+      "generated_file": "src/generated/endpoints/admin/admin.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agent/runs",
+      "tags": [
+        "agent"
+      ],
+      "operation_id": "create_agent_run_api_v1_agent_runs_post",
+      "generated_function": "createAgentRunApiV1AgentRunsPost",
+      "generated_file": "src/generated/endpoints/agent/agent.ts",
+      "classification": "programmatic_api_only",
+      "usage": null,
+      "intentional_note": "Programmatic agent invoke."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/documents",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_documents_api_v1_ai_documents_get",
+      "generated_function": "listDocumentsApiV1AiDocumentsGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/documents",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "create_document_api_v1_ai_documents_post",
+      "generated_function": "createDocumentApiV1AiDocumentsPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/documents/upload",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "upload_document_api_v1_ai_documents_upload_post",
+      "generated_function": "uploadDocumentApiV1AiDocumentsUploadPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/evaluation-datasets",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_datasets_api_v1_ai_evaluation_datasets_get",
+      "generated_function": "listDatasetsApiV1AiEvaluationDatasetsGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/evaluation-datasets",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "create_dataset_api_v1_ai_evaluation_datasets_post",
+      "generated_function": "createDatasetApiV1AiEvaluationDatasetsPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/ai/evaluation-datasets/{dataset_id}",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "update_dataset_api_v1_ai_evaluation_datasets__dataset_id__patch",
+      "generated_function": "updateDatasetApiV1AiEvaluationDatasetsDatasetIdPatch",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/evaluation-datasets/{dataset_id}/cases",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_dataset_cases_api_v1_ai_evaluation_datasets__dataset_id__cases_get",
+      "generated_function": "listDatasetCasesApiV1AiEvaluationDatasetsDatasetIdCasesGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/evaluation-datasets/{dataset_id}/cases",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "create_dataset_case_api_v1_ai_evaluation_datasets__dataset_id__cases_post",
+      "generated_function": "createDatasetCaseApiV1AiEvaluationDatasetsDatasetIdCasesPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/evaluation-datasets/{dataset_id}/run",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "run_evaluation_api_v1_ai_evaluation_datasets__dataset_id__run_post",
+      "generated_function": "runEvaluationApiV1AiEvaluationDatasetsDatasetIdRunPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/evaluation-runs",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_evaluation_runs_api_v1_ai_evaluation_runs_get",
+      "generated_function": "listEvaluationRunsApiV1AiEvaluationRunsGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/overview",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "get_overview_api_v1_ai_overview_get",
+      "generated_function": "getOverviewApiV1AiOverviewGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/prompts",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_prompt_templates_api_v1_ai_prompts_get",
+      "generated_function": "listPromptTemplatesApiV1AiPromptsGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/prompts",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "create_prompt_template_api_v1_ai_prompts_post",
+      "generated_function": "createPromptTemplateApiV1AiPromptsPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/ai/prompts/{template_id}",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "update_prompt_template_api_v1_ai_prompts__template_id__patch",
+      "generated_function": "updatePromptTemplateApiV1AiPromptsTemplateIdPatch",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/prompts/{template_id}/versions",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_prompt_versions_api_v1_ai_prompts__template_id__versions_get",
+      "generated_function": "listPromptVersionsApiV1AiPromptsTemplateIdVersionsGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/prompts/{template_id}/versions",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "create_prompt_version_api_v1_ai_prompts__template_id__versions_post",
+      "generated_function": "createPromptVersionApiV1AiPromptsTemplateIdVersionsPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/ai/prompts/{template_id}/versions/{version_id}",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "update_prompt_version_api_v1_ai_prompts__template_id__versions__version_id__patch",
+      "generated_function": "updatePromptVersionApiV1AiPromptsTemplateIdVersionsVersionIdPatch",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/providers",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_providers_api_v1_ai_providers_get",
+      "generated_function": "listProvidersApiV1AiProvidersGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/retrieve",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "retrieve_chunks_api_v1_ai_retrieve_post",
+      "generated_function": "retrieveChunksApiV1AiRetrievePost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/reviews",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_reviews_api_v1_ai_reviews_get",
+      "generated_function": "listReviewsApiV1AiReviewsGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/reviews/{review_id}/decision",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "decide_review_api_v1_ai_reviews__review_id__decision_post",
+      "generated_function": "decideReviewApiV1AiReviewsReviewIdDecisionPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/runs",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_runs_api_v1_ai_runs_get",
+      "generated_function": "listRunsApiV1AiRunsGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/runs",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "create_run_api_v1_ai_runs_post",
+      "generated_function": "createRunApiV1AiRunsPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/runs/async",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "queue_run_api_v1_ai_runs_async_post",
+      "generated_function": "queueRunApiV1AiRunsAsyncPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/runs/{run_id}/feedback",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_feedback_api_v1_ai_runs__run_id__feedback_get",
+      "generated_function": "listFeedbackApiV1AiRunsRunIdFeedbackGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/runs/{run_id}/feedback",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "create_feedback_api_v1_ai_runs__run_id__feedback_post",
+      "generated_function": "createFeedbackApiV1AiRunsRunIdFeedbackPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/runs/{run_id}/reviews",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "create_review_api_v1_ai_runs__run_id__reviews_post",
+      "generated_function": "createReviewApiV1AiRunsRunIdReviewsPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/forgot-password",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "forgot_password_api_v1_auth_forgot_password_post",
+      "generated_function": "forgotPasswordApiV1AuthForgotPasswordPost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "logout_api_v1_auth_logout_post",
+      "generated_function": "logoutApiV1AuthLogoutPost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "me_api_v1_auth_me_get",
+      "generated_function": "meApiV1AuthMeGet",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mfa/disable",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "mfa_disable_api_v1_auth_mfa_disable_post",
+      "generated_function": "mfaDisableApiV1AuthMfaDisablePost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mfa/enable",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "mfa_enable_api_v1_auth_mfa_enable_post",
+      "generated_function": "mfaEnableApiV1AuthMfaEnablePost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mfa/verify",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "mfa_verify_api_v1_auth_mfa_verify_post",
+      "generated_function": "mfaVerifyApiV1AuthMfaVerifyPost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/refresh",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "refresh_api_v1_auth_refresh_post",
+      "generated_function": "refreshApiV1AuthRefreshPost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/resend-verification",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "resend_verification_api_v1_auth_resend_verification_post",
+      "generated_function": "resendVerificationApiV1AuthResendVerificationPost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/reset-password",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "reset_password_api_v1_auth_reset_password_post",
+      "generated_function": "resetPasswordApiV1AuthResetPasswordPost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/sign-in",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "sign_in_api_v1_auth_sign_in_post",
+      "generated_function": "signInApiV1AuthSignInPost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/sign-up",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "sign_up_api_v1_auth_sign_up_post",
+      "generated_function": "signUpApiV1AuthSignUpPost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/verify-email",
+      "tags": [
+        "auth"
+      ],
+      "operation_id": "verify_email_api_v1_auth_verify_email_post",
+      "generated_function": "verifyEmailApiV1AuthVerifyEmailPost",
+      "generated_file": "src/generated/endpoints/auth/auth.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/calendar/items",
+      "tags": [
+        "calendar"
+      ],
+      "operation_id": "list_calendar_items_api_v1_calendar_items_get",
+      "generated_function": "listCalendarItemsApiV1CalendarItemsGet",
+      "generated_file": "src/generated/endpoints/calendar/calendar.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/calendar/items",
+      "tags": [
+        "calendar"
+      ],
+      "operation_id": "create_calendar_item_api_v1_calendar_items_post",
+      "generated_function": "createCalendarItemApiV1CalendarItemsPost",
+      "generated_file": "src/generated/endpoints/calendar/calendar.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/chat/conversations",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "list_conversations_api_v1_chat_conversations_get",
+      "generated_function": "listConversationsApiV1ChatConversationsGet",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/chat/conversations",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "create_conversation_api_v1_chat_conversations_post",
+      "generated_function": "createConversationApiV1ChatConversationsPost",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/chat/conversations/{conversation_id}",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "delete_conversation_api_v1_chat_conversations__conversation_id__delete",
+      "generated_function": "deleteConversationApiV1ChatConversationsConversationIdDelete",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/chat/conversations/{conversation_id}",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "get_conversation_api_v1_chat_conversations__conversation_id__get",
+      "generated_function": "getConversationApiV1ChatConversationsConversationIdGet",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/chat/conversations/{conversation_id}",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "update_conversation_api_v1_chat_conversations__conversation_id__patch",
+      "generated_function": "updateConversationApiV1ChatConversationsConversationIdPatch",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/chat/conversations/{conversation_id}/clear",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "clear_conversation_api_v1_chat_conversations__conversation_id__clear_post",
+      "generated_function": "clearConversationApiV1ChatConversationsConversationIdClearPost",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/chat/conversations/{conversation_id}/messages",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "send_message_api_v1_chat_conversations__conversation_id__messages_post",
+      "generated_function": "sendMessageApiV1ChatConversationsConversationIdMessagesPost",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/chat/conversations/{conversation_id}/messages/stream",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "stream_message_api_v1_chat_conversations__conversation_id__messages_stream_post",
+      "generated_function": "streamMessageApiV1ChatConversationsConversationIdMessagesStreamPost",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/developer/diagnostics/recent",
+      "tags": [
+        "developer-diagnostics",
+        "developer-diagnostics"
+      ],
+      "operation_id": "developer_diagnostics_recent_api_v1_developer_diagnostics_recent_get",
+      "generated_function": "developerDiagnosticsRecentApiV1DeveloperDiagnosticsRecentGet",
+      "generated_file": "src/generated/endpoints/developer-diagnostics/developer-diagnostics.ts",
+      "classification": "health_observability",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/developer/diagnostics/status",
+      "tags": [
+        "developer-diagnostics",
+        "developer-diagnostics"
+      ],
+      "operation_id": "developer_diagnostics_status_api_v1_developer_diagnostics_status_get",
+      "generated_function": "developerDiagnosticsStatusApiV1DeveloperDiagnosticsStatusGet",
+      "generated_file": "src/generated/endpoints/developer-diagnostics/developer-diagnostics.ts",
+      "classification": "health_observability",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory",
+      "tags": [
+        "memory"
+      ],
+      "operation_id": "list_memories_api_v1_memory_get",
+      "generated_function": "listMemoriesApiV1MemoryGet",
+      "generated_file": "src/generated/endpoints/memory/memory.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/memory",
+      "tags": [
+        "memory"
+      ],
+      "operation_id": "create_memory_api_v1_memory_post",
+      "generated_function": "createMemoryApiV1MemoryPost",
+      "generated_file": "src/generated/endpoints/memory/memory.ts",
+      "classification": "programmatic_api_only",
+      "usage": null,
+      "intentional_note": "Agent/write pipeline."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory/audit",
+      "tags": [
+        "memory"
+      ],
+      "operation_id": "list_audit_logs_api_v1_memory_audit_get",
+      "generated_function": "listAuditLogsApiV1MemoryAuditGet",
+      "generated_file": "src/generated/endpoints/memory/memory.ts",
+      "classification": "programmatic_api_only",
+      "usage": null,
+      "intentional_note": "Audit trail; no starter admin page."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/memory/forget/{memory_id}",
+      "tags": [
+        "memory"
+      ],
+      "operation_id": "forget_memory_api_v1_memory_forget__memory_id__post",
+      "generated_function": "forgetMemoryApiV1MemoryForgetMemoryIdPost",
+      "generated_file": "src/generated/endpoints/memory/memory.ts",
+      "classification": "programmatic_api_only",
+      "usage": null,
+      "intentional_note": "Soft-forget; UI uses DELETE."
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/memory/search",
+      "tags": [
+        "memory"
+      ],
+      "operation_id": "search_memories_api_v1_memory_search_post",
+      "generated_function": "searchMemoriesApiV1MemorySearchPost",
+      "generated_file": "src/generated/endpoints/memory/memory.ts",
+      "classification": "programmatic_api_only",
+      "usage": null,
+      "intentional_note": "Recall for agents; hide vector internals."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/memory/{memory_id}",
+      "tags": [
+        "memory"
+      ],
+      "operation_id": "delete_memory_api_v1_memory__memory_id__delete",
+      "generated_function": "deleteMemoryApiV1MemoryMemoryIdDelete",
+      "generated_file": "src/generated/endpoints/memory/memory.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory/{memory_id}",
+      "tags": [
+        "memory"
+      ],
+      "operation_id": "get_memory_api_v1_memory__memory_id__get",
+      "generated_function": "getMemoryApiV1MemoryMemoryIdGet",
+      "generated_file": "src/generated/endpoints/memory/memory.ts",
+      "classification": "programmatic_api_only",
+      "usage": null,
+      "intentional_note": "Detail unused; list covers privacy control."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications",
+      "tags": [
+        "notifications"
+      ],
+      "operation_id": "list_notifications_api_v1_notifications_get",
+      "generated_function": "listNotificationsApiV1NotificationsGet",
+      "generated_file": "src/generated/endpoints/notifications/notifications.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/preferences",
+      "tags": [
+        "notifications"
+      ],
+      "operation_id": "get_preferences_api_v1_notifications_preferences_get",
+      "generated_function": "getPreferencesApiV1NotificationsPreferencesGet",
+      "generated_file": "src/generated/endpoints/notifications/notifications.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/notifications/preferences",
+      "tags": [
+        "notifications"
+      ],
+      "operation_id": "update_preferences_api_v1_notifications_preferences_put",
+      "generated_function": "updatePreferencesApiV1NotificationsPreferencesPut",
+      "generated_file": "src/generated/endpoints/notifications/notifications.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/notifications/read-all",
+      "tags": [
+        "notifications"
+      ],
+      "operation_id": "mark_all_read_api_v1_notifications_read_all_patch",
+      "generated_function": "markAllReadApiV1NotificationsReadAllPatch",
+      "generated_file": "src/generated/endpoints/notifications/notifications.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notifications/unread-count",
+      "tags": [
+        "notifications"
+      ],
+      "operation_id": "unread_count_api_v1_notifications_unread_count_get",
+      "generated_function": "unreadCountApiV1NotificationsUnreadCountGet",
+      "generated_file": "src/generated/endpoints/notifications/notifications.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/notifications/{notification_id}/read",
+      "tags": [
+        "notifications"
+      ],
+      "operation_id": "mark_read_api_v1_notifications__notification_id__read_patch",
+      "generated_function": "markReadApiV1NotificationsNotificationIdReadPatch",
+      "generated_file": "src/generated/endpoints/notifications/notifications.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/links",
+      "tags": [
+        "observability"
+      ],
+      "operation_id": "get_observability_links_api_v1_observability_links_get",
+      "generated_function": "getObservabilityLinksApiV1ObservabilityLinksGet",
+      "generated_file": "src/generated/endpoints/observability/observability.ts",
+      "classification": "health_observability",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/observability/status",
+      "tags": [
+        "observability"
+      ],
+      "operation_id": "get_observability_status_api_v1_observability_status_get",
+      "generated_function": "getObservabilityStatusApiV1ObservabilityStatusGet",
+      "generated_file": "src/generated/endpoints/observability/observability.ts",
+      "classification": "health_observability",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/admin/config",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "get_platform_config_api_v1_platform_admin_config_get",
+      "generated_function": "getPlatformConfigApiV1PlatformAdminConfigGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/platform/admin/config",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "update_platform_config_api_v1_platform_admin_config_put",
+      "generated_function": "updatePlatformConfigApiV1PlatformAdminConfigPut",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/admin/email-templates",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "list_email_templates_api_v1_platform_admin_email_templates_get",
+      "generated_function": "listEmailTemplatesApiV1PlatformAdminEmailTemplatesGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/admin/email-templates",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "create_email_template_api_v1_platform_admin_email_templates_post",
+      "generated_function": "createEmailTemplateApiV1PlatformAdminEmailTemplatesPost",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/platform/admin/email-templates/{template_id}",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "update_email_template_api_v1_platform_admin_email_templates__template_id__patch",
+      "generated_function": "updateEmailTemplateApiV1PlatformAdminEmailTemplatesTemplateIdPatch",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/admin/feature-flags",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "list_feature_flags_api_v1_platform_admin_feature_flags_get",
+      "generated_function": "listFeatureFlagsApiV1PlatformAdminFeatureFlagsGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/admin/feature-flags",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "create_feature_flag_api_v1_platform_admin_feature_flags_post",
+      "generated_function": "createFeatureFlagApiV1PlatformAdminFeatureFlagsPost",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/platform/admin/feature-flags/{feature_flag_id}",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "update_feature_flag_api_v1_platform_admin_feature_flags__feature_flag_id__patch",
+      "generated_function": "updateFeatureFlagApiV1PlatformAdminFeatureFlagsFeatureFlagIdPatch",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/admin/plans",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "list_admin_plans_api_v1_platform_admin_plans_get",
+      "generated_function": "listAdminPlansApiV1PlatformAdminPlansGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/admin/plans",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "create_plan_api_v1_platform_admin_plans_post",
+      "generated_function": "createPlanApiV1PlatformAdminPlansPost",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/platform/admin/plans/{plan_id}",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "update_plan_api_v1_platform_admin_plans__plan_id__patch",
+      "generated_function": "updatePlanApiV1PlatformAdminPlansPlanIdPatch",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/api-keys",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "list_api_keys_api_v1_platform_api_keys_get",
+      "generated_function": "listApiKeysApiV1PlatformApiKeysGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/api-keys",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "create_api_key_api_v1_platform_api_keys_post",
+      "generated_function": "createApiKeyApiV1PlatformApiKeysPost",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/platform/api-keys/{api_key_id}",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "revoke_api_key_api_v1_platform_api_keys__api_key_id__delete",
+      "generated_function": "revokeApiKeyApiV1PlatformApiKeysApiKeyIdDelete",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/billing/plans",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "list_subscription_plans_api_v1_platform_billing_plans_get",
+      "generated_function": "listSubscriptionPlansApiV1PlatformBillingPlansGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/billing/subscription",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "get_subscription_api_v1_platform_billing_subscription_get",
+      "generated_function": "getSubscriptionApiV1PlatformBillingSubscriptionGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/platform/billing/subscription",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "select_subscription_plan_api_v1_platform_billing_subscription_put",
+      "generated_function": "selectSubscriptionPlanApiV1PlatformBillingSubscriptionPut",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/feature-flags",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "list_effective_feature_flags_api_v1_platform_feature_flags_get",
+      "generated_function": "listEffectiveFeatureFlagsApiV1PlatformFeatureFlagsGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/metadata",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "get_platform_metadata_api_v1_platform_metadata_get",
+      "generated_function": "getPlatformMetadataApiV1PlatformMetadataGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/platform/webhooks",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "list_webhooks_api_v1_platform_webhooks_get",
+      "generated_function": "listWebhooksApiV1PlatformWebhooksGet",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "internal",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/webhooks",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "create_webhook_api_v1_platform_webhooks_post",
+      "generated_function": "createWebhookApiV1PlatformWebhooksPost",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "internal",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/platform/webhooks/{webhook_id}",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "delete_webhook_api_v1_platform_webhooks__webhook_id__delete",
+      "generated_function": "deleteWebhookApiV1PlatformWebhooksWebhookIdDelete",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "internal",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/platform/webhooks/{webhook_id}",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "update_webhook_api_v1_platform_webhooks__webhook_id__patch",
+      "generated_function": "updateWebhookApiV1PlatformWebhooksWebhookIdPatch",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "internal",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/platform/webhooks/{webhook_id}/test",
+      "tags": [
+        "platform"
+      ],
+      "operation_id": "test_webhook_api_v1_platform_webhooks__webhook_id__test_post",
+      "generated_function": "testWebhookApiV1PlatformWebhooksWebhookIdTestPost",
+      "generated_file": "src/generated/endpoints/platform/platform.ts",
+      "classification": "internal",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/policy/me/permissions",
+      "tags": [
+        "policy"
+      ],
+      "operation_id": "my_permissions_api_v1_policy_me_permissions_get",
+      "generated_function": "myPermissionsApiV1PolicyMePermissionsGet",
+      "generated_file": "src/generated/endpoints/policy/policy.ts",
+      "classification": "programmatic_api_only",
+      "usage": null,
+      "intentional_note": "Effective grants for clients; not an admin catalog table."
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/policy/permissions",
+      "tags": [
+        "policy"
+      ],
+      "operation_id": "list_permissions_api_v1_policy_permissions_get",
+      "generated_function": "listPermissionsApiV1PolicyPermissionsGet",
+      "generated_file": "src/generated/endpoints/policy/policy.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/policy/role-assignments",
+      "tags": [
+        "policy"
+      ],
+      "operation_id": "revoke_role_api_v1_policy_role_assignments_delete",
+      "generated_function": "revokeRoleApiV1PolicyRoleAssignmentsDelete",
+      "generated_file": "src/generated/endpoints/policy/policy.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/policy/role-assignments",
+      "tags": [
+        "policy"
+      ],
+      "operation_id": "assign_role_api_v1_policy_role_assignments_post",
+      "generated_function": "assignRoleApiV1PolicyRoleAssignmentsPost",
+      "generated_file": "src/generated/endpoints/policy/policy.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/policy/roles",
+      "tags": [
+        "policy"
+      ],
+      "operation_id": "list_roles_api_v1_policy_roles_get",
+      "generated_function": "listRolesApiV1PolicyRolesGet",
+      "generated_file": "src/generated/endpoints/policy/policy.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/policy/users/{user_id}/role-assignments",
+      "tags": [
+        "policy"
+      ],
+      "operation_id": "list_user_role_assignments_api_v1_policy_users__user_id__role_assignments_get",
+      "generated_function": "listUserRoleAssignmentsApiV1PolicyUsersUserIdRoleAssignmentsGet",
+      "generated_file": "src/generated/endpoints/policy/policy.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/profile",
+      "tags": [
+        "profile"
+      ],
+      "operation_id": "get_profile_api_v1_profile_get",
+      "generated_function": "getProfileApiV1ProfileGet",
+      "generated_file": "src/generated/endpoints/profile/profile.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/profile",
+      "tags": [
+        "profile"
+      ],
+      "operation_id": "update_profile_api_v1_profile_put",
+      "generated_function": "updateProfileApiV1ProfilePut",
+      "generated_file": "src/generated/endpoints/profile/profile.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/profile/avatar",
+      "tags": [
+        "profile"
+      ],
+      "operation_id": "delete_avatar_api_v1_profile_avatar_delete",
+      "generated_function": "deleteAvatarApiV1ProfileAvatarDelete",
+      "generated_file": "src/generated/endpoints/profile/profile.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/profile/avatar",
+      "tags": [
+        "profile"
+      ],
+      "operation_id": "upload_avatar_api_v1_profile_avatar_post",
+      "generated_function": "uploadAvatarApiV1ProfileAvatarPost",
+      "generated_file": "src/generated/endpoints/profile/profile.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects",
+      "tags": [
+        "projects"
+      ],
+      "operation_id": "list_projects_api_v1_projects_get",
+      "generated_function": "listProjectsApiV1ProjectsGet",
+      "generated_file": "src/generated/endpoints/projects/projects.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects",
+      "tags": [
+        "projects"
+      ],
+      "operation_id": "create_project_api_v1_projects_post",
+      "generated_function": "createProjectApiV1ProjectsPost",
+      "generated_file": "src/generated/endpoints/projects/projects.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/summary",
+      "tags": [
+        "projects"
+      ],
+      "operation_id": "project_summary_api_v1_projects_summary_get",
+      "generated_function": "projectSummaryApiV1ProjectsSummaryGet",
+      "generated_file": "src/generated/endpoints/projects/projects.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/{project_id}",
+      "tags": [
+        "projects"
+      ],
+      "operation_id": "get_project_api_v1_projects__project_id__get",
+      "generated_function": "getProjectApiV1ProjectsProjectIdGet",
+      "generated_file": "src/generated/endpoints/projects/projects.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/projects/{project_id}/tasks",
+      "tags": [
+        "projects"
+      ],
+      "operation_id": "list_project_tasks_api_v1_projects__project_id__tasks_get",
+      "generated_function": "listProjectTasksApiV1ProjectsProjectIdTasksGet",
+      "generated_file": "src/generated/endpoints/projects/projects.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/projects/{project_id}/tasks",
+      "tags": [
+        "projects"
+      ],
+      "operation_id": "create_project_task_api_v1_projects__project_id__tasks_post",
+      "generated_function": "createProjectTaskApiV1ProjectsProjectIdTasksPost",
+      "generated_file": "src/generated/endpoints/projects/projects.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/projects/{project_id}/tasks/reorder",
+      "tags": [
+        "projects"
+      ],
+      "operation_id": "reorder_project_tasks_api_v1_projects__project_id__tasks_reorder_put",
+      "generated_function": "reorderProjectTasksApiV1ProjectsProjectIdTasksReorderPut",
+      "generated_file": "src/generated/endpoints/projects/projects.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/projects/{project_id}/tasks/{task_id}",
+      "tags": [
+        "projects"
+      ],
+      "operation_id": "delete_project_task_api_v1_projects__project_id__tasks__task_id__delete",
+      "generated_function": "deleteProjectTaskApiV1ProjectsProjectIdTasksTaskIdDelete",
+      "generated_file": "src/generated/endpoints/projects/projects.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/projects/{project_id}/tasks/{task_id}",
+      "tags": [
+        "projects"
+      ],
+      "operation_id": "update_project_task_api_v1_projects__project_id__tasks__task_id__patch",
+      "generated_function": "updateProjectTaskApiV1ProjectsProjectIdTasksTaskIdPatch",
+      "generated_file": "src/generated/endpoints/projects/projects.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/admin/evaluation/datasets",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_datasets_api_v1_rag_admin_evaluation_datasets_get",
+      "generated_function": "listDatasetsApiV1RagAdminEvaluationDatasetsGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/evaluation/datasets",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "create_dataset_api_v1_rag_admin_evaluation_datasets_post",
+      "generated_function": "createDatasetApiV1RagAdminEvaluationDatasetsPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/evaluation/datasets/import-golden",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "import_golden_dataset_api_v1_rag_admin_evaluation_datasets_import_golden_post",
+      "generated_function": "importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/admin/evaluation/datasets/{dataset_id}/cases",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_cases_api_v1_rag_admin_evaluation_datasets__dataset_id__cases_get",
+      "generated_function": "listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/evaluation/datasets/{dataset_id}/cases",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "create_case_api_v1_rag_admin_evaluation_datasets__dataset_id__cases_post",
+      "generated_function": "createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/evaluation/datasets/{dataset_id}/runs",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "run_dataset_api_v1_rag_admin_evaluation_datasets__dataset_id__runs_post",
+      "generated_function": "runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/evaluation/probe",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "probe_retrieval_api_v1_rag_admin_evaluation_probe_post",
+      "generated_function": "probeRetrievalApiV1RagAdminEvaluationProbePost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/admin/evaluation/runs",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_runs_api_v1_rag_admin_evaluation_runs_get",
+      "generated_function": "listRunsApiV1RagAdminEvaluationRunsGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/admin/evaluation/runs/{run_id}",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "get_run_api_v1_rag_admin_evaluation_runs__run_id__get",
+      "generated_function": "getRunApiV1RagAdminEvaluationRunsRunIdGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/admin/evaluation/runs/{run_id}/export",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "export_run_api_v1_rag_admin_evaluation_runs__run_id__export_get",
+      "generated_function": "exportRunApiV1RagAdminEvaluationRunsRunIdExportGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/admin/index-status",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "get_index_status_api_v1_rag_admin_index_status_get",
+      "generated_function": "getIndexStatusApiV1RagAdminIndexStatusGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/admin/index-versions",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_index_versions_api_v1_rag_admin_index_versions_get",
+      "generated_function": "listIndexVersionsApiV1RagAdminIndexVersionsGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/index-versions",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "create_index_version_api_v1_rag_admin_index_versions_post",
+      "generated_function": "createIndexVersionApiV1RagAdminIndexVersionsPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/index-versions/{version_id}/activate",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "activate_index_version_api_v1_rag_admin_index_versions__version_id__activate_post",
+      "generated_function": "activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/index-versions/{version_id}/rollback",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "rollback_index_version_api_v1_rag_admin_index_versions__version_id__rollback_post",
+      "generated_function": "rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/index-versions/{version_id}/validate",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "validate_index_version_api_v1_rag_admin_index_versions__version_id__validate_post",
+      "generated_function": "validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/admin/reindex-stale",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "reindex_stale_documents_api_v1_rag_admin_reindex_stale_post",
+      "generated_function": "reindexStaleDocumentsApiV1RagAdminReindexStalePost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "ui_used",
+      "usage": "generated",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/ask",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "ask_rag_api_v1_rag_ask_post",
+      "generated_function": "askRagApiV1RagAskPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_documents_api_v1_rag_documents_get",
+      "generated_function": "listDocumentsApiV1RagDocumentsGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/upload",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "upload_document_api_v1_rag_documents_upload_post",
+      "generated_function": "uploadDocumentApiV1RagDocumentsUploadPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/documents/{document_id}",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "delete_document_api_v1_rag_documents__document_id__delete",
+      "generated_function": "deleteDocumentApiV1RagDocumentsDocumentIdDelete",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/{document_id}",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "get_document_api_v1_rag_documents__document_id__get",
+      "generated_function": "getDocumentApiV1RagDocumentsDocumentIdGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/{document_id}/chunks",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_document_chunks_api_v1_rag_documents__document_id__chunks_get",
+      "generated_function": "listDocumentChunksApiV1RagDocumentsDocumentIdChunksGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/{document_id}/index",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "index_document_api_v1_rag_documents__document_id__index_post",
+      "generated_function": "indexDocumentApiV1RagDocumentsDocumentIdIndexPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/{document_id}/reindex",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "reindex_document_api_v1_rag_documents__document_id__reindex_post",
+      "generated_function": "reindexDocumentApiV1RagDocumentsDocumentIdReindexPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/jobs",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_jobs_api_v1_rag_jobs_get",
+      "generated_function": "listJobsApiV1RagJobsGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/jobs/{job_id}",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "get_job_api_v1_rag_jobs__job_id__get",
+      "generated_function": "getJobApiV1RagJobsJobIdGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/jobs/{job_id}/retry",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "retry_job_api_v1_rag_jobs__job_id__retry_post",
+      "generated_function": "retryJobApiV1RagJobsJobIdRetryPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/queries",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_queries_api_v1_rag_queries_get",
+      "generated_function": "listQueriesApiV1RagQueriesGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/retrieve",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "retrieve_chunks_api_v1_rag_retrieve_post",
+      "generated_function": "retrieveChunksApiV1RagRetrievePost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/config",
+      "tags": [
+        "settings"
+      ],
+      "operation_id": "get_config_settings_api_v1_settings_config_get",
+      "generated_function": "getConfigSettingsApiV1SettingsConfigGet",
+      "generated_file": "src/generated/endpoints/settings/settings.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/settings/config",
+      "tags": [
+        "settings"
+      ],
+      "operation_id": "update_config_settings_api_v1_settings_config_put",
+      "generated_function": "updateConfigSettingsApiV1SettingsConfigPut",
+      "generated_file": "src/generated/endpoints/settings/settings.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/settings/database",
+      "tags": [
+        "settings"
+      ],
+      "operation_id": "list_database_settings_api_v1_settings_database_get",
+      "generated_function": "listDatabaseSettingsApiV1SettingsDatabaseGet",
+      "generated_file": "src/generated/endpoints/settings/settings.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/settings/database",
+      "tags": [
+        "settings"
+      ],
+      "operation_id": "create_database_setting_api_v1_settings_database_post",
+      "generated_function": "createDatabaseSettingApiV1SettingsDatabasePost",
+      "generated_file": "src/generated/endpoints/settings/settings.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/settings/database/{setting_id}",
+      "tags": [
+        "settings"
+      ],
+      "operation_id": "delete_database_setting_api_v1_settings_database__setting_id__delete",
+      "generated_function": "deleteDatabaseSettingApiV1SettingsDatabaseSettingIdDelete",
+      "generated_file": "src/generated/endpoints/settings/settings.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/settings/database/{setting_id}",
+      "tags": [
+        "settings"
+      ],
+      "operation_id": "update_database_setting_api_v1_settings_database__setting_id__patch",
+      "generated_function": "updateDatabaseSettingApiV1SettingsDatabaseSettingIdPatch",
+      "generated_file": "src/generated/endpoints/settings/settings.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/directory",
+      "tags": [
+        "users"
+      ],
+      "operation_id": "list_directory_api_v1_users_directory_get",
+      "generated_function": "listDirectoryApiV1UsersDirectoryGet",
+      "generated_file": "src/generated/endpoints/users/users.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/me",
+      "tags": [
+        "users"
+      ],
+      "operation_id": "get_me_api_v1_users_me_get",
+      "generated_function": "getMeApiV1UsersMeGet",
+      "generated_file": "src/generated/endpoints/users/users.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/users/me",
+      "tags": [
+        "users"
+      ],
+      "operation_id": "update_me_api_v1_users_me_patch",
+      "generated_function": "updateMeApiV1UsersMePatch",
+      "generated_file": "src/generated/endpoints/users/users.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/users/me/password",
+      "tags": [
+        "users"
+      ],
+      "operation_id": "change_password_api_v1_users_me_password_patch",
+      "generated_function": "changePasswordApiV1UsersMePasswordPatch",
+      "generated_file": "src/generated/endpoints/users/users.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/me/sessions",
+      "tags": [
+        "users"
+      ],
+      "operation_id": "list_sessions_api_v1_users_me_sessions_get",
+      "generated_function": "listSessionsApiV1UsersMeSessionsGet",
+      "generated_file": "src/generated/endpoints/users/users.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/users/me/sessions/{session_id}",
+      "tags": [
+        "users"
+      ],
+      "operation_id": "revoke_session_api_v1_users_me_sessions__session_id__delete",
+      "generated_function": "revokeSessionApiV1UsersMeSessionsSessionIdDelete",
+      "generated_file": "src/generated/endpoints/users/users.ts",
+      "classification": "ui_used",
+      "usage": "handwritten_wrapper",
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/health/live",
+      "tags": [
+        "health"
+      ],
+      "operation_id": "live_health_live_get",
+      "generated_function": "liveHealthLiveGet",
+      "generated_file": "src/generated/endpoints/health/health.ts",
+      "classification": "health_observability",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/health/ready",
+      "tags": [
+        "health"
+      ],
+      "operation_id": "ready_health_ready_get",
+      "generated_function": "readyHealthReadyGet",
+      "generated_file": "src/generated/endpoints/health/health.ts",
+      "classification": "health_observability",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/health/version",
+      "tags": [
+        "health"
+      ],
+      "operation_id": "version_health_version_get",
+      "generated_function": "versionHealthVersionGet",
+      "generated_file": "src/generated/endpoints/health/health.ts",
+      "classification": "health_observability",
+      "usage": null,
+      "intentional_note": null
+    }
+  ],
+  "orphaned": [
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/audit-logs",
+      "tags": [
+        "admin"
+      ],
+      "operation_id": "list_audit_logs_api_v1_admin_audit_logs_get",
+      "generated_function": "listAuditLogsApiV1AdminAuditLogsGet",
+      "generated_file": "src/generated/endpoints/admin/admin.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/metrics",
+      "tags": [
+        "admin"
+      ],
+      "operation_id": "get_metrics_api_v1_admin_metrics_get",
+      "generated_function": "getMetricsApiV1AdminMetricsGet",
+      "generated_file": "src/generated/endpoints/admin/admin.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users/{user_id}",
+      "tags": [
+        "admin"
+      ],
+      "operation_id": "get_user_api_v1_admin_users__user_id__get",
+      "generated_function": "getUserApiV1AdminUsersUserIdGet",
+      "generated_file": "src/generated/endpoints/admin/admin.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/ai/evaluation-datasets/{dataset_id}",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "update_dataset_api_v1_ai_evaluation_datasets__dataset_id__patch",
+      "generated_function": "updateDatasetApiV1AiEvaluationDatasetsDatasetIdPatch",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/ai/providers",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "list_providers_api_v1_ai_providers_get",
+      "generated_function": "listProvidersApiV1AiProvidersGet",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/runs/async",
+      "tags": [
+        "ai"
+      ],
+      "operation_id": "queue_run_api_v1_ai_runs_async_post",
+      "generated_function": "queueRunApiV1AiRunsAsyncPost",
+      "generated_file": "src/generated/endpoints/ai/ai.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/chat/conversations",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "list_conversations_api_v1_chat_conversations_get",
+      "generated_function": "listConversationsApiV1ChatConversationsGet",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/chat/conversations",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "create_conversation_api_v1_chat_conversations_post",
+      "generated_function": "createConversationApiV1ChatConversationsPost",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/chat/conversations/{conversation_id}",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "delete_conversation_api_v1_chat_conversations__conversation_id__delete",
+      "generated_function": "deleteConversationApiV1ChatConversationsConversationIdDelete",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/chat/conversations/{conversation_id}",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "get_conversation_api_v1_chat_conversations__conversation_id__get",
+      "generated_function": "getConversationApiV1ChatConversationsConversationIdGet",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/chat/conversations/{conversation_id}",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "update_conversation_api_v1_chat_conversations__conversation_id__patch",
+      "generated_function": "updateConversationApiV1ChatConversationsConversationIdPatch",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/chat/conversations/{conversation_id}/clear",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "clear_conversation_api_v1_chat_conversations__conversation_id__clear_post",
+      "generated_function": "clearConversationApiV1ChatConversationsConversationIdClearPost",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/chat/conversations/{conversation_id}/messages",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "send_message_api_v1_chat_conversations__conversation_id__messages_post",
+      "generated_function": "sendMessageApiV1ChatConversationsConversationIdMessagesPost",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/chat/conversations/{conversation_id}/messages/stream",
+      "tags": [
+        "chat"
+      ],
+      "operation_id": "stream_message_api_v1_chat_conversations__conversation_id__messages_stream_post",
+      "generated_function": "streamMessageApiV1ChatConversationsConversationIdMessagesStreamPost",
+      "generated_file": "src/generated/endpoints/chat/chat.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/admin/evaluation/runs/{run_id}/export",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "export_run_api_v1_rag_admin_evaluation_runs__run_id__export_get",
+      "generated_function": "exportRunApiV1RagAdminEvaluationRunsRunIdExportGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/admin/index-versions",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_index_versions_api_v1_rag_admin_index_versions_get",
+      "generated_function": "listIndexVersionsApiV1RagAdminIndexVersionsGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/ask",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "ask_rag_api_v1_rag_ask_post",
+      "generated_function": "askRagApiV1RagAskPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_documents_api_v1_rag_documents_get",
+      "generated_function": "listDocumentsApiV1RagDocumentsGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/upload",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "upload_document_api_v1_rag_documents_upload_post",
+      "generated_function": "uploadDocumentApiV1RagDocumentsUploadPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/documents/{document_id}",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "delete_document_api_v1_rag_documents__document_id__delete",
+      "generated_function": "deleteDocumentApiV1RagDocumentsDocumentIdDelete",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/{document_id}",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "get_document_api_v1_rag_documents__document_id__get",
+      "generated_function": "getDocumentApiV1RagDocumentsDocumentIdGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/{document_id}/chunks",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_document_chunks_api_v1_rag_documents__document_id__chunks_get",
+      "generated_function": "listDocumentChunksApiV1RagDocumentsDocumentIdChunksGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/{document_id}/index",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "index_document_api_v1_rag_documents__document_id__index_post",
+      "generated_function": "indexDocumentApiV1RagDocumentsDocumentIdIndexPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/{document_id}/reindex",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "reindex_document_api_v1_rag_documents__document_id__reindex_post",
+      "generated_function": "reindexDocumentApiV1RagDocumentsDocumentIdReindexPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/jobs",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_jobs_api_v1_rag_jobs_get",
+      "generated_function": "listJobsApiV1RagJobsGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/jobs/{job_id}",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "get_job_api_v1_rag_jobs__job_id__get",
+      "generated_function": "getJobApiV1RagJobsJobIdGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/jobs/{job_id}/retry",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "retry_job_api_v1_rag_jobs__job_id__retry_post",
+      "generated_function": "retryJobApiV1RagJobsJobIdRetryPost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/queries",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "list_queries_api_v1_rag_queries_get",
+      "generated_function": "listQueriesApiV1RagQueriesGet",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/retrieve",
+      "tags": [
+        "rag"
+      ],
+      "operation_id": "retrieve_chunks_api_v1_rag_retrieve_post",
+      "generated_function": "retrieveChunksApiV1RagRetrievePost",
+      "generated_file": "src/generated/endpoints/rag/rag.ts",
+      "classification": "currently_orphaned",
+      "usage": null,
+      "intentional_note": null
+    }
+  ],
+  "has_contract_violations": false
+}

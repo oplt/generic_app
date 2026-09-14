@@ -32,7 +32,8 @@ services:
       - "127.0.0.1:8025:8025"
 
   minio:
-    image: minio/minio:RELEASE.2026-01-03T04-44-24Z
+    # Docker Hub no longer serves community minio/minio; pin a pullable Quay tag+digest.
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
     container_name: app_minio
     command: server /data --console-address ":9001"
     environment:

@@ -88,6 +88,12 @@ worker_heartbeat_timestamp_seconds = Gauge(
     ["worker"],
 )
 
+worker_readiness_probe_duration_seconds = Histogram(
+    "worker_readiness_probe_duration_seconds",
+    "Duration of uncached Celery/DB worker readiness probes",
+    ["outcome"],
+)
+
 worker_beat_schedule_lock_total = Counter(
     "worker_beat_schedule_lock_total",
     "Celery beat schedule singleton lock attempts",

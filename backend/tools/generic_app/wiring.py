@@ -6,6 +6,7 @@ deterministic, idempotent, and safe to re-run.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -120,16 +121,16 @@ def validate_wiring_targets(
     if frontend:
         checks.append(
             (
-                repo_root / "frontend/src/app/router.tsx",
+                repo_root / "frontend/src/app/pageRegistry.ts",
                 (
-                    ("// <generic-app:lazy-imports>", "// </generic-app:lazy-imports>"),
-                    (
-                        "{/* <generic-app:routes> */}",
-                        "{/* </generic-app:routes> */}",
-                    ),
+                    ("// <generic-app:page-registry>", "// </generic-app:page-registry>"),
                 ),
             )
         )
+        page_keys = repo_root / "frontend/src/app/pageKeys.json"
+        if not page_keys.is_file():
+            raise WiringError(f"Missing wiring target: {page_keys}")
+
     if profile:
         checks.append(
             (
@@ -389,81 +390,78 @@ def wire_profile_extra_modules(
     return changed
 
 
-def wire_frontend_router(
-    router_path: Path,
+def wire_frontend_page_registry(
+    repo_root: Path,
     names: ModuleNames,
     *,
     journal: MutationJournal | None = None,
-) -> bool:
-    changed = False
-    lazy_line = (
-        f"const {names.pascal}ListPage = lazy(() => "
-        f'import("../features/{names.key}/views/{names.pascal}ListView"));'
-    )
-    changed |= _patch_file(
-        router_path,
-        open_marker="// <generic-app:lazy-imports>",
-        close_marker="// </generic-app:lazy-imports>",
-        line=lazy_line,
-        journal=journal,
-        sort=True,
-    )
+) -> list[Path]:
+    """Register page_key in pageKeys.json + pageRegistry.ts (router auto-discovers)."""
 
-    # Multi-line JSX route — upsert by path attribute.
-    text = router_path.read_text(encoding="utf-8")
-    open_m = "{/* <generic-app:routes> */}"
-    close_m = "{/* </generic-app:routes> */}"
-    route_block = (
-        f'                    <Route\n'
-        f'                        path="/{names.key}"\n'
-        f"                        element={{\n"
-        f'                            <GatedPage pageKey="{names.key}.list" '
-        f'moduleKey="{names.key}">\n'
-        f"                                <{names.pascal}ListPage />\n"
-        f"                            </GatedPage>\n"
-        f"                        }}\n"
-        f"                    />"
+    changed_paths: list[Path] = []
+    page_key = f"{names.key}.list"
+    page_keys_path = repo_root / "frontend/src/app/pageKeys.json"
+    keys = json.loads(page_keys_path.read_text(encoding="utf-8"))
+    if not isinstance(keys, list):
+        raise WiringError("pageKeys.json must be a JSON array")
+    if page_key not in keys:
+        keys.append(page_key)
+        keys = sorted(set(keys))
+        new_payload = json.dumps(keys, indent=2) + "\n"
+        _write(journal, page_keys_path, new_payload)
+        changed_paths.append(page_keys_path)
+
+    registry_path = repo_root / "frontend/src/app/pageRegistry.ts"
+    entry = (
+        f'        page(\n'
+        f'            "{page_key}",\n'
+        f'            "/{names.key}",\n'
+        f'            () => import("../features/{names.key}/views/{names.pascal}ListView"),\n'
+        f'            {{ auth: true, moduleKey: "{names.key}" }}\n'
+        f"        ),"
     )
-    match = re.search(
-        re.escape(open_m) + r"(.*?)" + re.escape(close_m),
-        text,
-        re.DOTALL,
-    )
+    text = registry_path.read_text(encoding="utf-8")
+    open_m = "// <generic-app:page-registry>"
+    close_m = "// </generic-app:page-registry>"
+    match = re.search(re.escape(open_m) + r"(.*?)" + re.escape(close_m), text, re.DOTALL)
     if match is None:
-        raise WiringError("Missing frontend route markers")
+        raise WiringError("Missing page-registry markers")
     body = match.group(1)
+    # Drop prior entry for this page key if present.
     body = re.sub(
-        rf'\n\s*<Route\n\s*path="/{re.escape(names.key)}".*?\n\s*/>',
+        rf'\n\s*page\(\n\s*"{re.escape(page_key)}".*?\n\s*\),',
         "\n",
         body,
         count=1,
         flags=re.DOTALL,
     )
-    chunks = re.findall(
-        r"\n?\s*<Route\n.*?/>",
-        body,
-        flags=re.DOTALL,
-    )
-    # Normalize and add
+    chunks = re.findall(r"\n?\s*page\(\n.*?\n\s*\),", body, flags=re.DOTALL)
     normalized = [chunk.strip("\n") for chunk in chunks if chunk.strip()]
-    normalized.append(route_block)
-    # Sort by path=
-    def _path_key(chunk: str) -> str:
-        found = re.search(r'path="([^"]+)"', chunk)
-        return found.group(1) if found else chunk
-
-    normalized = sorted(set(normalized), key=_path_key)
-    new_text, route_changed = upsert_marked_block(
+    normalized.append(entry)
+    normalized = sorted(set(normalized), key=lambda chunk: chunk)
+    new_text, registry_changed = upsert_marked_block(
         text,
         open_marker=open_m,
         close_marker=close_m,
         lines=normalized,
         sort=False,
     )
-    if route_changed:
-        _write(journal, router_path, new_text)
-        changed = True
-    return changed
+    if registry_changed:
+        _write(journal, registry_path, new_text)
+        changed_paths.append(registry_path)
+    return changed_paths
+
+
+def wire_frontend_router(
+    router_path: Path,
+    names: ModuleNames,
+    *,
+    journal: MutationJournal | None = None,
+) -> bool:
+    """Deprecated path kept for marker compatibility; pages wire via pageRegistry."""
+
+    del router_path, names, journal
+    return False
 
 
 def apply_all_wiring(
@@ -515,8 +513,8 @@ def apply_all_wiring(
         _track(contrib, wire_celery_contrib(contrib, names, journal=journal))
 
     if frontend:
-        fe_router = repo_root / "frontend/src/app/router.tsx"
-        _track(fe_router, wire_frontend_router(fe_router, names, journal=journal))
+        for path in wire_frontend_page_registry(repo_root, names, journal=journal):
+            wired.append(str(path.relative_to(repo_root)))
 
     if profile:
         profiles = repo_root / "backend/modules/platform/profiles.py"

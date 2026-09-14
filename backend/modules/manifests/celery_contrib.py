@@ -89,6 +89,12 @@ def _queue_name(logical: str) -> str:
     return str(getattr(settings, attr, logical))
 
 
+def queue_name_for_logical(logical: str) -> str:
+    """Map a manifest logical queue key to the configured broker queue name."""
+
+    return _queue_name(logical)
+
+
 def build_celery_task_routes(
     active_modules: set[str] | frozenset[str] | tuple[str, ...],
 ) -> dict[str, dict[str, str]]:
@@ -171,4 +177,5 @@ __all__ = [
     "build_celery_task_routes",
     "celery_include_modules",
     "celery_runtime_for_profile",
+    "queue_name_for_logical",
 ]

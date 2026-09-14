@@ -274,10 +274,17 @@ def test_retrieval_service_uses_cached_results() -> None:
     service.vector_store.similarity_search = AsyncMock()
 
     async def _run() -> None:
-        with patch(
-            "backend.modules.rag.application.retrieval_service.get_cached_retrieval",
-            AsyncMock(return_value=[chunk]),
-        ) as cache_get:
+        with (
+            patch(
+                "backend.modules.rag.application.retrieval_service.get_cached_retrieval",
+                AsyncMock(return_value=[chunk]),
+            ) as cache_get,
+            patch.object(
+                service,
+                "_active_index_version_id",
+                AsyncMock(return_value="idx-test"),
+            ),
+        ):
             results = await service.retrieve(
                 "hello",
                 user_id="user-1",

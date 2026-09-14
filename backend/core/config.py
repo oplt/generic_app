@@ -579,5 +579,13 @@ class Settings(BaseSettings):
             raise ValueError("CHAT_DEFAULT_MODE=web requires WEB_SEARCH_ENABLED=true")
         return self
 
+    @classmethod
+    def for_openapi_export(cls) -> "Settings":
+        """Deterministic settings for OpenAPI schema generation without live infra."""
+
+        from backend.core.openapi_export import openapi_export_settings_kwargs
+
+        return cls(_env_file=None, **openapi_export_settings_kwargs())
+
 
 settings = Settings()

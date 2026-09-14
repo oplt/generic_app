@@ -39,6 +39,21 @@ jobs:
           UV_CACHE_DIR: ${{ runner.temp }}/uv-cache
         run: ./frontend/scripts/api-check.sh
 
+      - name: API contract coverage
+        run: |
+          npm run api:contract:unit
+          npm run api:contract:check
+
+      - name: Upload API contract report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-contract-coverage
+          path: |
+            docs/api-contract-coverage.json
+            docs/api-contract-coverage.md
+          if-no-files-found: warn
+
       - name: Lint
         run: npm run lint
 

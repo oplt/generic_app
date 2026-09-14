@@ -3,11 +3,13 @@
  */
 import {
     assignRoleApiV1PolicyRoleAssignmentsPost,
+    listPermissionsApiV1PolicyPermissionsGet,
     listRolesApiV1PolicyRolesGet,
     listUserRoleAssignmentsApiV1PolicyUsersUserIdRoleAssignmentsGet,
     revokeRoleApiV1PolicyRoleAssignmentsDelete,
 } from "../generated/endpoints/policy/policy";
 import type {
+    PermissionResponse,
     RoleAssignmentCreate,
     RoleAssignmentResponse,
     RoleResponse,
@@ -15,10 +17,15 @@ import type {
 } from "../generated/models";
 
 export type PolicyRole = RoleResponse;
+export type PolicyPermission = PermissionResponse;
 export type RoleAssignment = RoleAssignmentResponse;
 
 export async function listPolicyRoles(): Promise<PolicyRole[]> {
     return listRolesApiV1PolicyRolesGet();
+}
+
+export async function listPolicyPermissions(): Promise<PermissionResponse[]> {
+    return listPermissionsApiV1PolicyPermissionsGet();
 }
 
 export async function listUserRoleAssignments(userId: string): Promise<RoleAssignment[]> {

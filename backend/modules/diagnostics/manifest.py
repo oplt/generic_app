@@ -1,4 +1,4 @@
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface
 
 MANIFEST = ModuleManifest(
     key="diagnostics",
@@ -7,10 +7,12 @@ MANIFEST = ModuleManifest(
     description="Production-safe application and infrastructure diagnostics.",
     always_enabled=False,
     optional=False,
+    surface=ModuleSurface.ADMIN_FACING,
     dependencies=("policy", "observability"),
     backend_router_keys=("diagnostics",),
     required_permissions=("diagnostics.read",),
-    health_checks=("database", "redis", "queue", "storage", "vector"),
+    # Probe UI only — readiness requirements come from capability modules (rag/…).
+    health_checks=(),
     frontend_routes=(
         FrontendRoute(path="/admin/diagnostics", page_key="diagnostics.admin"),
     ),

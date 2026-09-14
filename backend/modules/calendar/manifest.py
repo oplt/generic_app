@@ -1,4 +1,4 @@
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest, NavEntry
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface, NavEntry
 
 MANIFEST = ModuleManifest(
     key="calendar",
@@ -6,6 +6,7 @@ MANIFEST = ModuleManifest(
     label="Calendar",
     description="Calendar items synchronized with project work.",
     always_enabled=True,
+    surface=ModuleSurface.USER_FACING,
     dependencies=("identity_access", "projects"),
     backend_router_keys=("calendar",),
     nav_entries=(

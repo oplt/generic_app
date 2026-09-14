@@ -30,9 +30,11 @@ export async function updateUserStatus(
 
 export {
     assignPolicyRole,
+    listPolicyPermissions,
     listPolicyRoles,
     listUserRoleAssignments,
     revokePolicyRole,
+    type PolicyPermission,
     type PolicyRole,
     type RoleAssignment,
 } from "./policy";

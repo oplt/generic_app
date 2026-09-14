@@ -1,41 +1,17 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Box, Skeleton, Stack } from "@mui/material";
 import { ModuleRouteGate } from "../components/guards/ModuleRouteGate";
 import { ProtectedRoute } from "../components/guards/ProtectedRoute";
 import { useAuth } from "../hooks/useAuth";
+import { assertPageRegistryComplete, authPages, PAGE_REGISTRY, publicPages } from "./pageRegistry";
 
-const AuthHomePage = lazy(() => import("../features/auth/views/AuthHomeView"));
+assertPageRegistryComplete();
+
 const AppLayout = lazy(() =>
     import("../components/layout/AppLayout").then((module) => ({ default: module.AppLayout }))
 );
-const DashboardPage = lazy(() => import("../features/dashboard/views/DashboardView"));
-const CalendarPage = lazy(() => import("../features/calendar/views/CalendarView"));
-const ProjectsPage = lazy(() => import("../features/projects/views/ProjectsView"));
-const ProjectDetailPage = lazy(() => import("../features/projects/views/ProjectDetailView"));
-const PlatformPage = lazy(() => import("../features/platform/views/PlatformView"));
-const ProfilePage = lazy(() => import("../features/profile/views/ProfileView"));
-const NotificationsPage = lazy(() => import("../features/notifications/views/NotificationsView"));
-const ObservabilityPage = lazy(() => import("../features/observability/views/ObservabilityView"));
-const ResetPasswordPage = lazy(() => import("../features/auth/views/ResetPasswordView"));
-const VerifyEmailPage = lazy(() => import("../features/auth/views/VerifyEmailView"));
-const AdminUsersPage = lazy(() => import("../features/admin-users/views/AdminUsersView"));
-const AdminPlatformPage = lazy(() => import("../features/platform-admin/views/AdminPlatformView"));
-const AdminSettingsPage = lazy(() => import("../features/settings-admin/views/AdminSettingsView"));
-const AdminRagIndexesPage = lazy(
-    () => import("../features/admin-rag/views/AdminRagIndexesView")
-);
-const AdminRagEvaluationPage = lazy(
-    () => import("../features/admin-rag/views/AdminRagEvaluationView")
-);
-const AdminJobsPage = lazy(() => import("../features/admin-jobs/views/AdminJobsView"));
-const AdminDiagnosticsPage = lazy(
-    () => import("../features/admin-diagnostics/views/AdminDiagnosticsView")
-);
-const AiStudioPage = lazy(() => import("../features/ai/views/AiStudioView"));
-const KnowledgeChatPage = lazy(() => import("../features/chat/views/KnowledgeChatView"));
-// <generic-app:lazy-imports>
-// </generic-app:lazy-imports>
+const NotFoundPage = PAGE_REGISTRY["not_found"].component;
 
 function PageLoader() {
     return (
@@ -53,7 +29,7 @@ function PageLoader() {
     );
 }
 
-function SuspensePage({ children }: { children: React.ReactNode }) {
+function SuspensePage({ children }: { children: ReactNode }) {
     return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
 }
 
@@ -64,7 +40,7 @@ function GatedPage({
 }: {
     pageKey: string;
     moduleKey?: string;
-    children: React.ReactNode;
+    children: ReactNode;
 }) {
     return (
         <ModuleRouteGate pageKey={pageKey} moduleKey={moduleKey}>
@@ -73,15 +49,45 @@ function GatedPage({
     );
 }
 
+function renderAuthPage(pageKey: string) {
+    const page = PAGE_REGISTRY[pageKey];
+    const Component = page.component;
+    const body = page.shell ? (
+        <SuspensePage>
+            <Component />
+        </SuspensePage>
+    ) : (
+        <GatedPage pageKey={page.pageKey} moduleKey={page.moduleKey}>
+            <Component />
+        </GatedPage>
+    );
+
+    if (page.admin) {
+        return body;
+    }
+    return body;
+}
+
 export function AppRouter() {
     const { isReady, isAuthenticated, isAdmin } = useAuth();
 
     return (
         <BrowserRouter>
             <Routes>
-                <Route path="/" element={<SuspensePage><AuthHomePage /></SuspensePage>} />
-                <Route path="/reset-password" element={<SuspensePage><ResetPasswordPage /></SuspensePage>} />
-                <Route path="/verify-email" element={<SuspensePage><VerifyEmailPage /></SuspensePage>} />
+                {publicPages().map((page) => {
+                    const Component = page.component;
+                    return (
+                        <Route
+                            key={page.pageKey}
+                            path={page.path}
+                            element={
+                                <SuspensePage>
+                                    <Component />
+                                </SuspensePage>
+                            }
+                        />
+                    );
+                })}
 
                 <Route
                     element={
@@ -92,143 +98,55 @@ export function AppRouter() {
                         </ProtectedRoute>
                     }
                 >
-                    <Route path="/dashboard" element={<SuspensePage><DashboardPage /></SuspensePage>} />
-                    <Route
-                        path="/calendar"
-                        element={
-                            <GatedPage pageKey="calendar.main" moduleKey="calendar">
-                                <CalendarPage />
-                            </GatedPage>
-                        }
-                    />
-                    <Route path="/projects" element={<SuspensePage><ProjectsPage /></SuspensePage>} />
-                    <Route path="/projects/:projectId" element={<SuspensePage><ProjectDetailPage /></SuspensePage>} />
-                    <Route path="/platform" element={<SuspensePage><PlatformPage /></SuspensePage>} />
-                    <Route
-                        path="/ai"
-                        element={
-                            <GatedPage pageKey="ai.studio" moduleKey="ai">
-                                <AiStudioPage />
-                            </GatedPage>
-                        }
-                    />
-                    <Route
-                        path="/knowledge-chat"
-                        element={
-                            <GatedPage pageKey="chat.knowledge" moduleKey="chat">
-                                <KnowledgeChatPage />
-                            </GatedPage>
-                        }
-                    />
+                    {authPages()
+                        .filter((page) => !page.admin)
+                        .map((page) => (
+                            <Route
+                                key={page.pageKey}
+                                path={page.path}
+                                element={renderAuthPage(page.pageKey)}
+                            />
+                        ))}
+
                     <Route path="/knowledge" element={<Navigate to="/knowledge-chat" replace />} />
-                    <Route path="/observability" element={<SuspensePage><ObservabilityPage /></SuspensePage>} />
-                    <Route path="/profile" element={<SuspensePage><ProfilePage /></SuspensePage>} />
-                    <Route path="/notifications" element={<SuspensePage><NotificationsPage /></SuspensePage>} />
                     {/* <generic-app:routes> */}
                     {/* </generic-app:routes> */}
-                    <Route
-                        path="/admin/users"
-                        element={
-                            <ProtectedRoute
-                                isReady={isReady}
-                                isAuthenticated={isAuthenticated}
-                                isAdmin={isAdmin}
-                                requireAdmin
-                            >
-                                <SuspensePage><AdminUsersPage /></SuspensePage>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/admin/platform"
-                        element={
-                            <ProtectedRoute
-                                isReady={isReady}
-                                isAuthenticated={isAuthenticated}
-                                isAdmin={isAdmin}
-                                requireAdmin
-                            >
-                                <SuspensePage><AdminPlatformPage /></SuspensePage>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/admin/rag-indexes"
-                        element={
-                            <ProtectedRoute
-                                isReady={isReady}
-                                isAuthenticated={isAuthenticated}
-                                isAdmin={isAdmin}
-                                requireAdmin
-                            >
-                                <GatedPage pageKey="rag.admin.indexes" moduleKey="rag">
-                                    <AdminRagIndexesPage />
-                                </GatedPage>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/admin/rag/evaluation"
-                        element={
-                            <ProtectedRoute
-                                isReady={isReady}
-                                isAuthenticated={isAuthenticated}
-                                isAdmin={isAdmin}
-                                requireAdmin
-                            >
-                                <GatedPage pageKey="rag.admin.evaluation" moduleKey="rag">
-                                    <AdminRagEvaluationPage />
-                                </GatedPage>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/admin/jobs"
-                        element={
-                            <ProtectedRoute
-                                isReady={isReady}
-                                isAuthenticated={isAuthenticated}
-                                isAdmin={isAdmin}
-                                requireAdmin
-                            >
-                                <GatedPage pageKey="jobs.admin.console" moduleKey="jobs">
-                                    <AdminJobsPage />
-                                </GatedPage>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/admin/diagnostics"
-                        element={
-                            <ProtectedRoute
-                                isReady={isReady}
-                                isAuthenticated={isAuthenticated}
-                                isAdmin={isAdmin}
-                                requireAdmin
-                            >
-                                <GatedPage pageKey="diagnostics.admin" moduleKey="diagnostics">
-                                    <AdminDiagnosticsPage />
-                                </GatedPage>
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/admin/settings"
-                        element={
-                            <ProtectedRoute
-                                isReady={isReady}
-                                isAuthenticated={isAuthenticated}
-                                isAdmin={isAdmin}
-                                requireAdmin
-                            >
-                                <SuspensePage><AdminSettingsPage /></SuspensePage>
-                            </ProtectedRoute>
-                        }
-                    />
+
+                    {authPages()
+                        .filter((page) => page.admin)
+                        .map((page) => {
+                            const Component = page.component;
+                            return (
+                                <Route
+                                    key={page.pageKey}
+                                    path={page.path}
+                                    element={
+                                        <ProtectedRoute
+                                            isReady={isReady}
+                                            isAuthenticated={isAuthenticated}
+                                            isAdmin={isAdmin}
+                                            requireAdmin
+                                        >
+                                            <GatedPage pageKey={page.pageKey} moduleKey={page.moduleKey}>
+                                                <Component />
+                                            </GatedPage>
+                                        </ProtectedRoute>
+                                    }
+                                />
+                            );
+                        })}
+
                     <Route path="/app" element={<Navigate to="/dashboard" replace />} />
                 </Route>
 
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route
+                    path="*"
+                    element={
+                        <SuspensePage>
+                            <NotFoundPage />
+                        </SuspensePage>
+                    }
+                />
             </Routes>
         </BrowserRouter>
     );

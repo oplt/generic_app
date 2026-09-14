@@ -1,7 +1,7 @@
 {% if options.frontend %}
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest, NavEntry
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface, NavEntry
 {% else %}
-from backend.modules.manifests.types import ModuleManifest
+from backend.modules.manifests.types import ModuleManifest, ModuleSurface
 {% endif %}
 
 MANIFEST = ModuleManifest(
@@ -11,6 +11,12 @@ MANIFEST = ModuleManifest(
     description="{{ names.label }} module scaffolded by generic-app create-module.",
     always_enabled={{ always_enabled }},
     optional={{ optional }},
+{% if options.frontend %}
+    surface=ModuleSurface.USER_FACING,
+{% else %}
+    surface=ModuleSurface.API_ONLY,
+    user_visible=False,
+{% endif %}
     dependencies={{ dependencies }},
     backend_router_keys=("{{ names.key }}",),
 {% if options.celery %}

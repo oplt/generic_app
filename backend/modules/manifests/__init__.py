@@ -10,13 +10,14 @@ from backend.modules.manifests.registry import (
     nav_entries_for_modules,
     validate_registry,
 )
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest, NavEntry
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface, NavEntry
 from backend.modules.manifests.validation import ModuleManifestError
 
 __all__ = [
     "FrontendRoute",
     "ModuleManifest",
     "ModuleManifestError",
+    "ModuleSurface",
     "NavEntry",
     "REGISTERED_MANIFESTS",
     "catalog_definitions",

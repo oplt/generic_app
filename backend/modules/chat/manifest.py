@@ -1,4 +1,4 @@
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest, NavEntry
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface, NavEntry
 
 MANIFEST = ModuleManifest(
     key="chat",
@@ -7,6 +7,7 @@ MANIFEST = ModuleManifest(
     description="Document-grounded chat over the RAG corpus.",
     always_enabled=False,
     optional=False,
+    surface=ModuleSurface.USER_FACING,
     dependencies=("rag", "ai", "identity_access"),
     backend_router_keys=("chat",),
     celery_queues=(),

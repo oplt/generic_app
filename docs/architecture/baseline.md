@@ -108,7 +108,7 @@ and [docs/capability-profiles.md](../capability-profiles.md).
 | RBAC | `modules/policy/` + membership heuristics | Broader replacement of remaining `is_admin` checks |
 | Module manifests | `modules/manifests/` + per-module `manifest.py` | Broader optional-module adoption |
 | Capability profiles | `platform/profiles.py` + pack derivation | Broader worker/queue process binding |
-| Module generator | `tools/generic_app/` + Jinja templates | Richer frontend route registration |
+| Module generator | `tools/generic_app/` + Jinja templates + pageKeys/pageRegistry wiring | Prefer generator; see [adding-a-feature.md](../adding-a-feature.md) |
 | OpenAPI TS SDK | `frontend/src/generated/` via Orval | Broader replacement of hand-written `src/api/*` types |
 | RAG index versions | `rag_index_versions` + admin UI | Multi-column vector storage for concurrent dim migrations |
 | Hybrid search | independent ANN + FTS lanes, RRF, strategies | Quality loop via evaluation workbench |

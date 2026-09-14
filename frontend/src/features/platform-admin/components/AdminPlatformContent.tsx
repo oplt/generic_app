@@ -6,11 +6,13 @@ import { AdminPlatformStats } from "./AdminPlatformStats";
 import { CloneConfigSection } from "./CloneConfigSection";
 import { FlagsSection } from "./FlagsSection";
 import { PlansSection } from "./PlansSection";
+import { StorageHealthCard } from "./StorageHealthCard";
 import { TemplatesSection } from "./TemplatesSection";
 
 export function AdminPlatformContent({ config, plans, flags, templates }: { config: PlatformConfig; plans: SubscriptionPlan[]; flags: FeatureFlag[]; templates: EmailTemplate[] }) {
     const model = usePlatformAdminContent(config, plans, flags, templates);
     return <PageShell maxWidth="xl"><AdminSettingsTabs /><AdminPlatformStats config={model.configDraft} plans={plans} flags={flags} templates={templates} />
+        <StorageHealthCard />
         <CloneConfigSection source={config} model={model} /><PlansSection plans={plans} model={model} />
         <FlagsSection flags={flags} model={model} /><TemplatesSection templates={templates} model={model} />
     </PageShell>;

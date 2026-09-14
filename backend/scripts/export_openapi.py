@@ -12,36 +12,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 
-def _ensure_minimal_settings_env() -> None:
-    """Allow importing the app without a fully provisioned runtime."""
-
-    defaults = {
-        "DATABASE_URL": "postgresql+asyncpg://openapi:openapi@127.0.0.1:5432/openapi",
-        "REDIS_URL": "redis://127.0.0.1:6379/0",
-        "JWT_SECRET": "openapi-export-only-not-for-production",
-        "CELERY_BROKER_URL": "redis://127.0.0.1:6379/1",
-        "CELERY_RESULT_BACKEND": "redis://127.0.0.1:6379/2",
-        "STORAGE_ENDPOINT": "http://127.0.0.1:9000",
-        "STORAGE_ACCESS_KEY": "openapi",
-        "STORAGE_SECRET_KEY": "openapi",
-        "STORAGE_BUCKET": "openapi",
-        "APP_ENV": "dev",
-        "LOG_TO_FILE": "false",
-    }
-    for key, value in defaults.items():
-        os.environ.setdefault(key, value)
-
-
 def export_openapi(output: Path) -> dict:
-    _ensure_minimal_settings_env()
-    # Import after env defaults so Settings() can construct.
-    from backend.api.main import app
+    # Install deterministic env BEFORE importing Settings / the app so schema
+    # generation never depends on a local .env or live infrastructure.
+    from backend.core.openapi_export import install_openapi_export_env
 
-    schema = app.openapi()
+    install_openapi_export_env(force=True)
+
+    from backend.api.main import create_app
+
+    application = create_app(include_lifespan=False)
+    schema = application.openapi()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return schema

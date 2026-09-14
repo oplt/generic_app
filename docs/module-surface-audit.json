@@ -1,0 +1,1000 @@
+{
+  "module_directories": [
+    "admin",
+    "ai",
+    "audit",
+    "calendar",
+    "chat",
+    "developer_diagnostics",
+    "diagnostics",
+    "identity_access",
+    "jobs",
+    "memory",
+    "notifications",
+    "platform",
+    "policy",
+    "profile",
+    "projects",
+    "rag",
+    "settings",
+    "storage",
+    "users"
+  ],
+  "modules": [
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "observability"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.observability.router",
+          "registered_in_router_registry": true,
+          "router_key": "observability"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "observability"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "observability.main",
+          "path": "/observability"
+        }
+      ],
+      "manifest_key": "observability",
+      "manifest_registered": true,
+      "module_directory": "(backend/observability)",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "user_facing",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": [
+          "backend/tests/test_observability.py",
+          "backend/tests/test_runtime_observability.py",
+          "backend/tests/test_settings_observability_cache.py"
+        ]
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "admin"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.admin.router",
+          "registered_in_router_registry": true,
+          "router_key": "admin"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "admin-users",
+        "admin-jobs",
+        "admin-diagnostics",
+        "admin-rag",
+        "platform-admin",
+        "settings-admin"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "admin.users",
+          "path": "/admin/users"
+        }
+      ],
+      "manifest_key": "admin",
+      "manifest_registered": true,
+      "module_directory": "admin",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "admin_facing",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": []
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": false,
+      "backend_router_keys": [
+        "ai",
+        "agent"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.ai.router",
+          "registered_in_router_registry": true,
+          "router_key": "ai"
+        },
+        {
+          "contribution": "backend.modules.ai.agent_router",
+          "registered_in_router_registry": true,
+          "router_key": "agent"
+        }
+      ],
+      "celery_queues": [
+        "ai",
+        "evaluation"
+      ],
+      "database_requirements": [
+        "ai_runs",
+        "prompt_templates"
+      ],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "ai"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "ai.studio",
+          "path": "/ai"
+        }
+      ],
+      "manifest_key": "ai",
+      "manifest_registered": true,
+      "module_directory": "ai",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "user_facing",
+      "tests": {
+        "module_tests": [
+          "backend/modules/ai/tests/test_document_consolidation.py",
+          "backend/modules/ai/tests/test_evaluation_scoring.py",
+          "backend/modules/ai/tests/test_rag_answer_run.py",
+          "backend/modules/ai/tests/test_retrieval_consolidation.py",
+          "backend/modules/ai/tests/test_route_registration.py"
+        ],
+        "root_test_name_hits": [
+          "backend/tests/test_ai_provider_http_clients.py",
+          "backend/tests/test_ai_rag_hardening.py",
+          "backend/tests/test_document_upload_failure_integration.py",
+          "backend/tests/test_failure_injection_resilience.py"
+        ]
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [],
+      "backend_routers_mounted": [],
+      "celery_queues": [],
+      "database_requirements": [
+        "audit_logs"
+      ],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [],
+      "manifest_key": "audit",
+      "manifest_registered": true,
+      "module_directory": "audit",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "backend_internal",
+      "surface": "internal",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": []
+      },
+      "user_visible": false
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "calendar"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.calendar.router",
+          "registered_in_router_registry": true,
+          "router_key": "calendar"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "calendar"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "calendar.main",
+          "path": "/calendar"
+        }
+      ],
+      "manifest_key": "calendar",
+      "manifest_registered": true,
+      "module_directory": "calendar",
+      "navigation_entries": [
+        {
+          "group": "workspace",
+          "label": "Calendar",
+          "path": "/calendar"
+        }
+      ],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "user_facing",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": []
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": false,
+      "backend_router_keys": [
+        "chat"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.chat.router",
+          "registered_in_router_registry": true,
+          "router_key": "chat"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "chat"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "chat.knowledge",
+          "path": "/knowledge-chat"
+        }
+      ],
+      "manifest_key": "chat",
+      "manifest_registered": true,
+      "module_directory": "chat",
+      "navigation_entries": [
+        {
+          "group": "workspace",
+          "label": "Knowledge chat",
+          "path": "/knowledge-chat"
+        }
+      ],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "user_facing",
+      "tests": {
+        "module_tests": [
+          "backend/modules/chat/tests/test_metrics.py",
+          "backend/modules/chat/tests/test_phase3.py",
+          "backend/modules/chat/tests/test_repository.py",
+          "backend/modules/chat/tests/test_service.py",
+          "backend/modules/chat/tests/test_streaming.py"
+        ],
+        "root_test_name_hits": [
+          "backend/tests/test_chat_hardening_integration.py",
+          "backend/tests/test_chat_phase0.py"
+        ]
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": false,
+      "backend_router_keys": [
+        "developer_diagnostics"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.developer_diagnostics.router",
+          "registered_in_router_registry": true,
+          "router_key": "developer_diagnostics"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [],
+      "embedding_host": "app.shell",
+      "frontend_feature_dirs_present": [
+        "developer-diagnostics"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [],
+      "manifest_key": "developer_diagnostics",
+      "manifest_registered": true,
+      "module_directory": "developer_diagnostics",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "embedded",
+      "surface": "embedded",
+      "tests": {
+        "module_tests": [
+          "backend/modules/developer_diagnostics/tests/test_developer_diagnostics.py"
+        ],
+        "root_test_name_hits": []
+      },
+      "user_visible": false
+    },
+    {
+      "always_enabled": false,
+      "backend_router_keys": [
+        "diagnostics"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.diagnostics.router",
+          "registered_in_router_registry": true,
+          "router_key": "diagnostics"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "admin-diagnostics"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "diagnostics.admin",
+          "path": "/admin/diagnostics"
+        }
+      ],
+      "manifest_key": "diagnostics",
+      "manifest_registered": true,
+      "module_directory": "diagnostics",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "admin_facing",
+      "tests": {
+        "module_tests": [
+          "backend/modules/diagnostics/tests/test_diagnostics.py"
+        ],
+        "root_test_name_hits": []
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "auth"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.identity_access.router",
+          "registered_in_router_registry": true,
+          "router_key": "auth"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [
+        "users",
+        "organizations",
+        "organization_memberships",
+        "refresh_sessions"
+      ],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "auth"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "auth.home",
+          "path": "/"
+        },
+        {
+          "page_key": "auth.reset_password",
+          "path": "/reset-password"
+        },
+        {
+          "page_key": "auth.verify_email",
+          "path": "/verify-email"
+        }
+      ],
+      "manifest_key": "identity_access",
+      "manifest_registered": true,
+      "module_directory": "identity_access",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "user_facing",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": []
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": false,
+      "backend_router_keys": [
+        "jobs"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.jobs.router",
+          "registered_in_router_registry": true,
+          "router_key": "jobs"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "admin-jobs"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "jobs.admin.console",
+          "path": "/admin/jobs"
+        }
+      ],
+      "manifest_key": "jobs",
+      "manifest_registered": true,
+      "module_directory": "jobs",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "admin_facing",
+      "tests": {
+        "module_tests": [
+          "backend/modules/jobs/tests/test_jobs_console.py"
+        ],
+        "root_test_name_hits": []
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": false,
+      "backend_router_keys": [
+        "memory"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.memory.api.routes",
+          "registered_in_router_registry": true,
+          "router_key": "memory"
+        }
+      ],
+      "celery_queues": [
+        "memory"
+      ],
+      "database_requirements": [
+        "memory_registry"
+      ],
+      "embedding_host": "profile.settings",
+      "frontend_feature_dirs_present": [
+        "profile"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [],
+      "manifest_key": "memory",
+      "manifest_registered": true,
+      "module_directory": "memory",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "embedded",
+      "surface": "embedded",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": [
+          "backend/tests/test_memory.py",
+          "backend/tests/test_memory_ranking.py",
+          "backend/tests/test_memory_search_cache.py"
+        ]
+      },
+      "user_visible": false
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "notifications"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.notifications.router",
+          "registered_in_router_registry": true,
+          "router_key": "notifications"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [
+        "notifications"
+      ],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "notifications"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "notifications.inbox",
+          "path": "/notifications"
+        }
+      ],
+      "manifest_key": "notifications",
+      "manifest_registered": true,
+      "module_directory": "notifications",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "user_facing",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": []
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "platform"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.platform.router",
+          "registered_in_router_registry": true,
+          "router_key": "platform"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [
+        "subscription_plans",
+        "feature_flags",
+        "webhook_endpoints",
+        "api_keys",
+        "email_templates"
+      ],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "platform",
+        "platform-admin"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "platform.workspace",
+          "path": "/platform"
+        },
+        {
+          "page_key": "platform.admin",
+          "path": "/admin/platform"
+        }
+      ],
+      "manifest_key": "platform",
+      "manifest_registered": true,
+      "module_directory": "platform",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "user_facing",
+      "tests": {
+        "module_tests": [
+          "backend/modules/platform/tests/test_capability_profiles.py",
+          "backend/modules/platform/tests/test_webhook_ssrf.py"
+        ],
+        "root_test_name_hits": [
+          "backend/tests/test_platform_cache.py",
+          "backend/tests/test_platform_response_mappers.py"
+        ]
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "policy"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.policy.router",
+          "registered_in_router_registry": true,
+          "router_key": "policy"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [
+        "policy_permissions",
+        "policy_roles",
+        "policy_role_permissions",
+        "policy_role_assignments"
+      ],
+      "embedding_host": "admin.users",
+      "frontend_feature_dirs_present": [
+        "admin-users"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [],
+      "manifest_key": "policy",
+      "manifest_registered": true,
+      "module_directory": "policy",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "embedded",
+      "surface": "embedded",
+      "tests": {
+        "module_tests": [
+          "backend/modules/policy/tests/test_policy_service.py"
+        ],
+        "root_test_name_hits": []
+      },
+      "user_visible": false
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "profile"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.profile.router",
+          "registered_in_router_registry": true,
+          "router_key": "profile"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "profile"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "profile.settings",
+          "path": "/profile"
+        }
+      ],
+      "manifest_key": "profile",
+      "manifest_registered": true,
+      "module_directory": "profile",
+      "navigation_entries": [
+        {
+          "group": "workspace",
+          "label": "Settings",
+          "path": "/profile"
+        }
+      ],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "user_facing",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": []
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "projects"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.projects.router",
+          "registered_in_router_registry": true,
+          "router_key": "projects"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [
+        "projects",
+        "project_tasks"
+      ],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "projects",
+        "dashboard"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "projects.list",
+          "path": "/projects"
+        },
+        {
+          "page_key": "projects.detail",
+          "path": "/projects/:projectId"
+        }
+      ],
+      "manifest_key": "projects",
+      "manifest_registered": true,
+      "module_directory": "projects",
+      "navigation_entries": [
+        {
+          "group": "workspace",
+          "label": "Projects",
+          "path": "/projects"
+        }
+      ],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "user_facing",
+      "tests": {
+        "module_tests": [
+          "backend/modules/projects/tests/test_permissions.py",
+          "backend/modules/projects/tests/test_project_list_cache.py"
+        ],
+        "root_test_name_hits": []
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": false,
+      "backend_router_keys": [
+        "rag"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.rag.api.routes",
+          "registered_in_router_registry": true,
+          "router_key": "rag"
+        }
+      ],
+      "celery_queues": [
+        "ingestion",
+        "cleanup"
+      ],
+      "database_requirements": [
+        "rag_documents",
+        "rag_chunks",
+        "rag_ingestion_jobs",
+        "rag_index_versions"
+      ],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "admin-rag"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "rag.admin.indexes",
+          "path": "/admin/rag-indexes"
+        },
+        {
+          "page_key": "rag.admin.evaluation",
+          "path": "/admin/rag/evaluation"
+        }
+      ],
+      "manifest_key": "rag",
+      "manifest_registered": true,
+      "module_directory": "rag",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "admin_facing",
+      "tests": {
+        "module_tests": [
+          "backend/modules/rag/tests/test_chunk_listing.py",
+          "backend/modules/rag/tests/test_chunk_overlap.py",
+          "backend/modules/rag/tests/test_evaluation_harness.py",
+          "backend/modules/rag/tests/test_evaluation_workbench.py",
+          "backend/modules/rag/tests/test_filtered_hnsw_recall.py",
+          "backend/modules/rag/tests/test_hybrid_search.py",
+          "backend/modules/rag/tests/test_index_versions.py",
+          "backend/modules/rag/tests/test_ingestion.py",
+          "backend/modules/rag/tests/test_ingestion_identity.py",
+          "backend/modules/rag/tests/test_ingestion_policy.py",
+          "backend/modules/rag/tests/test_malware_scanner.py",
+          "backend/modules/rag/tests/test_permissions.py",
+          "backend/modules/rag/tests/test_pgvector_schema_contract.py",
+          "backend/modules/rag/tests/test_quality_strategies.py",
+          "backend/modules/rag/tests/test_query_chunk_refs.py",
+          "backend/modules/rag/tests/test_rag_answer.py",
+          "backend/modules/rag/tests/test_rag_config_validation.py",
+          "backend/modules/rag/tests/test_retrieval.py",
+          "backend/modules/rag/tests/test_retrieval_outcome.py",
+          "backend/modules/rag/tests/test_vector_search.py"
+        ],
+        "root_test_name_hits": [
+          "backend/tests/test_ai_rag_hardening.py",
+          "backend/tests/test_rag_dedup_integration.py",
+          "backend/tests/test_rag_permissions_integration.py"
+        ]
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "settings"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.settings.router",
+          "registered_in_router_registry": true,
+          "router_key": "settings"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [
+        "settings"
+      ],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "settings-admin"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [
+        {
+          "page_key": "settings.admin",
+          "path": "/admin/settings"
+        }
+      ],
+      "manifest_key": "settings",
+      "manifest_registered": true,
+      "module_directory": "settings",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "full_stack",
+      "surface": "admin_facing",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": [
+          "backend/tests/test_settings_observability_cache.py"
+        ]
+      },
+      "user_visible": true
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [],
+      "backend_routers_mounted": [],
+      "celery_queues": [],
+      "database_requirements": [],
+      "embedding_host": null,
+      "frontend_feature_dirs_present": [
+        "platform-admin"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [],
+      "manifest_key": "storage",
+      "manifest_registered": true,
+      "module_directory": "storage",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "backend_internal",
+      "surface": "internal",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": []
+      },
+      "user_visible": false
+    },
+    {
+      "always_enabled": true,
+      "backend_router_keys": [
+        "users"
+      ],
+      "backend_routers_mounted": [
+        {
+          "contribution": "backend.modules.users.router",
+          "registered_in_router_registry": true,
+          "router_key": "users"
+        }
+      ],
+      "celery_queues": [],
+      "database_requirements": [
+        "users"
+      ],
+      "embedding_host": "admin.users",
+      "frontend_feature_dirs_present": [
+        "admin-users",
+        "profile"
+      ],
+      "frontend_router_references_feature": false,
+      "frontend_routes": [],
+      "manifest_key": "users",
+      "manifest_registered": true,
+      "module_directory": "users",
+      "navigation_entries": [],
+      "optional": false,
+      "status": "embedded",
+      "surface": "embedded",
+      "tests": {
+        "module_tests": [],
+        "root_test_name_hits": []
+      },
+      "user_visible": false
+    }
+  ],
+  "registered_manifest_keys": [
+    "admin",
+    "ai",
+    "api_keys",
+    "audit",
+    "billing",
+    "calendar",
+    "chat",
+    "developer_diagnostics",
+    "diagnostics",
+    "email_templates",
+    "feature_flags",
+    "identity_access",
+    "jobs",
+    "memory",
+    "notifications",
+    "observability",
+    "platform",
+    "policy",
+    "profile",
+    "projects",
+    "rag",
+    "settings",
+    "storage",
+    "users",
+    "webhooks"
+  ],
+  "registered_without_modules_dir": [
+    "api_keys",
+    "billing",
+    "email_templates",
+    "feature_flags",
+    "webhooks"
+  ],
+  "router_registry_keys": [
+    "admin",
+    "agent",
+    "ai",
+    "auth",
+    "calendar",
+    "chat",
+    "developer_diagnostics",
+    "diagnostics",
+    "jobs",
+    "memory",
+    "notifications",
+    "observability",
+    "platform",
+    "policy",
+    "profile",
+    "projects",
+    "rag",
+    "settings",
+    "users"
+  ],
+  "schema_version": 1,
+  "summary": {
+    "api_only": [],
+    "backend_internal": [
+      "audit",
+      "storage"
+    ],
+    "embedded": [
+      "developer_diagnostics",
+      "memory",
+      "policy",
+      "users"
+    ],
+    "full_stack": [
+      "admin",
+      "ai",
+      "calendar",
+      "chat",
+      "diagnostics",
+      "identity_access",
+      "jobs",
+      "notifications",
+      "platform",
+      "profile",
+      "projects",
+      "rag",
+      "settings",
+      "(backend/observability)"
+    ],
+    "manifest_ui_declared_fe_gap": [],
+    "orphan_unregistered": [],
+    "registered_no_ui_surface": []
+  }
+}

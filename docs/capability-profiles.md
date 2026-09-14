@@ -7,6 +7,8 @@ module packs: each profile key is also a `MODULE_PACKS` entry.
 Profiles never install packages at runtime. They only select modules already
 registered in `backend/modules/manifests/registry.py`.
 
+Feature onboarding: [adding-a-feature.md](adding-a-feature.md).
+
 ## Profiles
 
 | Key | Extends | Optional modules | Intent |
@@ -21,15 +23,27 @@ registered in `backend/modules/manifests/registry.py`.
 
 Source: `backend/modules/platform/profiles.py`.
 
+Generated modules default to `--optional` so they do **not** appear in every
+profile. Attach a specialist with:
+
+```bash
+./scripts/generic-app create-module inventory --crud --frontend --profile rag
+```
+
+That appends the key under `PROFILE_EXTRA_MODULES` for `rag` (and any profile
+that extends it only if you also list it there — extras are per-profile).
+
 ## What a profile resolves
 
-`resolve_capability_profile(key)` returns a matrix:
+`resolve_capability_profile(key)` / `resolve_active_modules(key)` return:
 
 - `active_modules` (always-on + optional)
 - `backend_router_keys`, `celery_queues`, `scheduled_tasks`
 - `frontend_routes` / nav contributions
 - `settings_prefixes`, `health_checks`, `required_permissions`
 - `feature_flags` declared on manifests + `recommended_feature_flags`
+- `health_checks` used at readiness (e.g. storage/vector only when the profile
+  needs them — see [startup-dependencies.md](startup-dependencies.md))
 
 Optional routers (billing, webhooks, …) still call `ensure_module_enabled`.
 Celery workers should be started with the queues listed on the active profile
@@ -46,7 +60,8 @@ validate_capability_profiles()
 ```
 
 Failures include unknown modules, broken `extends` cycles, and missing expected
-routers/queues for a profile.
+routers/queues for a profile. Architecture tests also assert core vs rag slices
+differ ([testing-architecture.md](testing-architecture.md)).
 
 ## Configuration
 

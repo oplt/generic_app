@@ -1,7 +1,7 @@
 import { Box, Stack, Typography } from "@mui/material";
 
 type EmptyStateProps = {
-    icon: React.ReactNode;
+    icon?: React.ReactNode;
     title: string;
     description: string;
     action?: React.ReactNode;
@@ -17,17 +17,19 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
             }}
         >
             <Stack spacing={1.5} alignItems="center">
-                <Box
-                    sx={{
-                        width: 48,
-                        height: 48,
-                        display: "grid",
-                        placeItems: "center",
-                        color: "text.secondary",
-                    }}
-                >
-                    {icon}
-                </Box>
+                {icon ? (
+                    <Box
+                        sx={{
+                            width: 48,
+                            height: 48,
+                            display: "grid",
+                            placeItems: "center",
+                            color: "text.secondary",
+                        }}
+                    >
+                        {icon}
+                    </Box>
+                ) : null}
                 <Typography variant="h6">{title}</Typography>
                 <Typography color="text.secondary" sx={{ maxWidth: 460 }}>
                     {description}

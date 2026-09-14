@@ -1,5 +1,6 @@
 import { Skeleton, Stack, Typography } from "@mui/material";
 
+import { EmptyState } from "../../../components/ui/EmptyState";
 import { PageShell } from "../../../components/ui/PageShell";
 import { QueryBoundary } from "../../../components/ui/QueryBoundary";
 import { SectionCard } from "../../../components/ui/SectionCard";
@@ -24,7 +25,10 @@ export function OrdersListView() {
                     onRetry={() => void query.refetch()}
                     loadingFallback={<Skeleton variant="rounded" height={120} />}
                     emptyFallback={
-                        <Typography color="text.secondary">No orders yet.</Typography>
+                        <EmptyState
+                            title="No orders yet"
+                            description="Create the first item to populate this list."
+                        />
                     }
                 >
                     <Stack spacing={1.5}>
@@ -39,3 +43,5 @@ export function OrdersListView() {
         </PageShell>
     );
 }
+
+export default OrdersListView;

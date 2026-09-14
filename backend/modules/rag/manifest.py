@@ -1,4 +1,4 @@
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface
 
 MANIFEST = ModuleManifest(
     key="rag",
@@ -7,6 +7,7 @@ MANIFEST = ModuleManifest(
     description="Document ingestion, retrieval, and knowledge grounding.",
     always_enabled=False,
     optional=False,
+    surface=ModuleSurface.ADMIN_FACING,
     dependencies=("ai", "storage", "projects"),
     backend_router_keys=("rag",),
     celery_queues=("ingestion", "cleanup"),

@@ -1,4 +1,4 @@
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest, NavEntry
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface, NavEntry
 
 MANIFEST = ModuleManifest(
     key="projects",
@@ -6,6 +6,7 @@ MANIFEST = ModuleManifest(
     label="Projects",
     description="Core project and task workspace.",
     always_enabled=True,
+    surface=ModuleSurface.USER_FACING,
     dependencies=("identity_access",),
     backend_router_keys=("projects",),
     required_permissions=("project.read", "project.create", "project.update", "project.delete"),
@@ -19,5 +20,8 @@ MANIFEST = ModuleManifest(
             required_permission="project.read",
         ),
     ),
-    frontend_routes=(FrontendRoute(path="/projects", page_key="projects.list"),),
+    frontend_routes=(
+        FrontendRoute(path="/projects", page_key="projects.list"),
+        FrontendRoute(path="/projects/:projectId", page_key="projects.detail"),
+    ),
 )

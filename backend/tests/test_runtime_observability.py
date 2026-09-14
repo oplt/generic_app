@@ -27,6 +27,18 @@ class RuntimeObservabilityTest(unittest.TestCase):
 
         otel._configured = False
         with (
+            patch(
+                "backend.observability.otel.load_config",
+                return_value=SimpleNamespace(
+                    enabled=True,
+                    traces_exporter="otlp",
+                    otlp_endpoint="http://localhost:4318",
+                    otlp_protocol="http/protobuf",
+                    otlp_insecure=True,
+                    service_name="fastapi-backend",
+                    environment="test",
+                ),
+            ),
             patch("backend.observability.otel._setup_trace_exporter", return_value=None),
             patch("backend.observability.otel._setup_library_instrumentation", return_value=None),
             patch(

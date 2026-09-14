@@ -1,4 +1,4 @@
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, ModuleSurface
 
 MANIFEST = ModuleManifest(
     key="jobs",
@@ -7,6 +7,7 @@ MANIFEST = ModuleManifest(
     description="Operational background jobs console.",
     always_enabled=False,
     optional=False,
+    surface=ModuleSurface.ADMIN_FACING,
     dependencies=("policy", "rag"),
     backend_router_keys=("jobs",),
     required_permissions=("jobs.read", "jobs.retry", "jobs.cancel"),

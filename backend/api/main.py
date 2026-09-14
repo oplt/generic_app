@@ -42,21 +42,59 @@ logger = logging.getLogger("backend.startup")
 
 
 async def _ping_redis() -> None:
+    """Soft dependency: cache/rate-limit/broker helpers degrade without Redis."""
+
     try:
         await redis_client.ping()
         logger.info("Redis connection established url=%s", redact_url(settings.REDIS_URL))
     except Exception:
-        logger.warning("Redis ping failed during startup", exc_info=True)
+        logger.warning("Redis ping failed during startup (soft)", exc_info=True)
 
 
 async def _ensure_platform_defaults() -> None:
+    """Hard dependency: Postgres must accept platform seed writes."""
+
     async with SessionLocal() as db:
         await PlatformService(db).ensure_defaults()
     logger.info("Platform defaults ensured")
 
 
+async def _bootstrap_object_storage(*, required: bool) -> None:
+    """Capability-scoped bucket prep.
+
+    Soft when storage is not a readiness requirement (core/lean avatars optional).
+    Soft-fail even when required — `/health/ready` gates traffic; startup logs error.
+    """
+
+    if not object_storage.is_configured:
+        if required:
+            logger.error(
+                "Object storage required by active capabilities but STORAGE_BUCKET unset"
+            )
+        else:
+            logger.info("Object storage bootstrap skipped (not configured; not required)")
+        return
+    if not settings.STORAGE_AUTO_CREATE_BUCKET:
+        logger.info(
+            "Object storage configured; auto-create disabled required=%s",
+            required,
+        )
+        return
+    await object_storage.ensure_bucket()
+    if object_storage._last_bootstrap_error and required:
+        logger.error(
+            "Object storage bootstrap failed while required by active capabilities "
+            "error=%s",
+            object_storage._last_bootstrap_error,
+        )
+
+
 async def _worker_metrics_loop() -> None:
-    """Refresh worker gauges independently of health-page traffic."""
+    """Refresh worker gauges independently of health-page traffic.
+
+    ``worker_readiness`` uses a shared Redis cache so multiple API replicas do
+    not each broadcast Celery inspect / DB aggregates every interval.
+    """
 
     while True:
         try:
@@ -80,6 +118,7 @@ async def lifespan(app: FastAPI):
     from backend.modules.manifests import ModuleManifestError, validate_registry
     from backend.modules.platform.profiles import (
         CapabilityProfileError,
+        resolve_active_modules,
         validate_capability_profiles,
     )
 
@@ -90,28 +129,32 @@ async def lifespan(app: FastAPI):
         logger.exception("Module manifest / capability profile validation failed")
         raise
 
-    from backend.modules.platform.profiles import resolve_active_modules
-
-    active = set(resolve_active_modules().active_modules)
+    resolution = resolve_active_modules()
+    active = set(resolution.active_modules)
+    storage_required = "storage" in resolution.health_checks
     if "rag" in active:
         validate_rag_config()
     if "memory" in active:
         validate_memory_config()
     logger.info(
-        "Capability profile active profile=%s modules=%s",
+        "Capability profile active profile=%s modules=%s health_checks=%s",
         settings.capability_profile,
         ",".join(sorted(active)),
+        ",".join(resolution.health_checks),
     )
     dependency_started = perf_counter()
+    # Soft deps first (never abort gather); hard platform seed last so DB
+    # failures still fail startup intentionally.
     await asyncio.gather(
-        object_storage.ensure_bucket(),
+        _bootstrap_object_storage(required=storage_required),
         _ping_redis(),
-        _ensure_platform_defaults(),
     )
+    await _ensure_platform_defaults()
     startup_dependency_duration_seconds.observe(perf_counter() - dependency_started)
     logger.info(
-        "Startup dependencies ready duration_ms=%.2f",
+        "Startup dependencies ready duration_ms=%.2f storage_required=%s",
         (perf_counter() - dependency_started) * 1000,
+        storage_required,
     )
     logger.info("Application startup complete")
     worker_metrics_task = asyncio.create_task(_worker_metrics_loop())
@@ -126,36 +169,52 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown complete")
 
 
-app = FastAPI(
-    title=settings.APP_NAME,
-    docs_url="/docs" if settings.APP_ENV != "production" else None,
-    redoc_url="/redoc" if settings.APP_ENV != "production" else None,
-    lifespan=lifespan,
-)
+def create_app(*, include_lifespan: bool = True) -> FastAPI:
+    """Build the FastAPI application.
 
-app.add_middleware(DeveloperDiagnosticsMiddleware)
-app.add_middleware(CorrelationIdMiddleware)
-app.add_middleware(RequestLoggingMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(PublicRateLimitMiddleware)
-app.add_middleware(CSRFMiddleware)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-CSRF-Token", "X-Correlation-ID", "X-Request-ID"],
-    expose_headers=[
-        "X-Correlation-ID",
-        "X-Request-ID",
-        DIAGNOSTICS_HEADER,
-        TRACE_ID_HEADER,
-    ],
-)
+    Layers (keep separate for tooling):
+    * configuration parsing → ``backend.core.config.settings``
+    * app construction → routers/middleware/OpenAPI (this function)
+    * runtime lifespan → DB seed, Redis ping, storage bootstrap, metrics loop
 
-register_exception_handlers(app)
-app.include_router(api_router)
-app.include_router(health_router)
+    OpenAPI export uses ``include_lifespan=False`` so schema generation never
+    runs startup dependency checks (Postgres / Redis / MinIO / providers).
+    """
 
-# Metrics and OTLP instrumentation must register before the ASGI app starts.
-setup_observability(app)
+    application = FastAPI(
+        title=settings.APP_NAME,
+        docs_url="/docs" if settings.APP_ENV != "production" else None,
+        redoc_url="/redoc" if settings.APP_ENV != "production" else None,
+        lifespan=lifespan if include_lifespan else None,
+    )
+
+    application.add_middleware(DeveloperDiagnosticsMiddleware)
+    application.add_middleware(CorrelationIdMiddleware)
+    application.add_middleware(RequestLoggingMiddleware)
+    application.add_middleware(SecurityHeadersMiddleware)
+    application.add_middleware(PublicRateLimitMiddleware)
+    application.add_middleware(CSRFMiddleware)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "X-CSRF-Token", "X-Correlation-ID", "X-Request-ID"],
+        expose_headers=[
+            "X-Correlation-ID",
+            "X-Request-ID",
+            DIAGNOSTICS_HEADER,
+            TRACE_ID_HEADER,
+        ],
+    )
+
+    register_exception_handlers(application)
+    application.include_router(api_router)
+    application.include_router(health_router)
+
+    # Metrics and OTLP instrumentation must register before the ASGI app starts.
+    setup_observability(application)
+    return application
+
+
+app = create_app()

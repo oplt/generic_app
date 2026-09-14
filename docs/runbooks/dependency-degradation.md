@@ -16,8 +16,20 @@ overlapping Celery beat ticks stay safe.
 required check is `ok`; otherwise 503 with `status: degraded`, per-check values, and
 `dependency_states`.
 
-Required checks: `db`, `redis`, `queue`, plus `storage` when RAG or a bucket is configured,
-plus `vector` when RAG is enabled.
+Required checks: `db`, `redis`, `queue`, plus `storage` / `vector` when those keys appear
+in the active capability profile's `health_checks` (typically via the `rag` module).
+A configured `STORAGE_BUCKET` alone does **not** make storage a hard ready check on
+core/lean profiles — see [startup-dependencies.md](../startup-dependencies.md).
+
+## Startup vs ready
+
+| Moment | Soft | Hard |
+| --- | --- | --- |
+| Lifespan | Redis ping; optional bucket bootstrap | Manifest/profile validation; platform DB seed |
+| `/health/ready` | — | Required checks for the active profile |
+
+Worker readiness probes are Redis-cached (~25s) so multiple API replicas share one
+Celery inspect / DB aggregate cycle.
 
 ## Dependency matrix
 
@@ -25,7 +37,7 @@ plus `vector` when RAG is enabled.
 | --- | --- | --- | --- | --- |
 | PostgreSQL | Sessions, outbox, jobs, RAG | N/A (no fail-open for writes) | Ready=503; workers error and bounded-retry or dead-letter | Restore DB; reclaim stale job/outbox leases |
 | Redis | Cache, rate limits, beat locks, Celery broker | Cache reads return miss; rate limit uses bounded local fallback; beat locks fail-open | Ready=503; broker publish fails → outbox retries with lease | Restore Redis; local rate-limit map is process-scoped only |
-| Object storage (S3/MinIO) | Document bytes | Not required when RAG/bucket off | Ready=503 when required; uploads fail before durable commit paths | Restore bucket/credentials; reconcile orphan objects |
+| Object storage (S3/MinIO) | Document bytes | Soft bootstrap; not required on core/lean | Ready=503 when profile `health_checks` include `storage`; uploads fail before durable commit | Restore bucket/credentials; reconcile orphan objects |
 | pgvector | Retrieval + readiness | Explicit RAG degraded outcomes (no JSON similarity fallback) | Ready=503 when RAG on; retrieval reports degradation | Repair extension/index/dimensions; re-index |
 | AI provider | Generation | Bounded retries (`AI_PROVIDER_MAX_RETRIES` + backoff/jitter) then fail | Chat/AI endpoints error; no unbounded retry storm | Restore provider; confirm timeout settings |
 | Celery workers / queue | Heartbeat + depth metrics | Queue lag visible in ready `details.queue_metrics` | Ready=503 when queue probe fails | Scale/restart workers; reclaim `application_jobs` running leases |

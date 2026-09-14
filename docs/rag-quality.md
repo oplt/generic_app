@@ -62,7 +62,8 @@ Workbench runs persist the active quality flags under `configuration.quality`.
 ## Evaluation note (Phase 12 acceptance)
 
 No quality flag is flipped on by default. Measured offline golden diffs for the
-new optional strategies should be recorded in `tasks.txt` when promoted; promote a
+new optional strategies should be recorded when promoted (workbench notes / PR);
+promote a
 strategy to default only after a clear workbench/harness win on representative
 tenant data.
 

@@ -53,6 +53,15 @@ membership changes invalidate those tags.
 - `GET /api/v1/policy/me/permissions`
 - `GET /api/v1/policy/users/{id}/role-assignments`
 
-Admin Users page can assign/revoke the system `system_admin` role.
+Manifest surface: **embedded** on `admin.users` (no standalone `/admin/access` page).
+
+Frontend:
+
+- `features/admin-users` → Access tab (roles + permissions catalogs; descriptions in tooltips)
+- `UserRolesDialog` → grant/revoke **system-scoped** roles (not org/project membership roles)
+
+`GET /me/permissions` stays client/API for effective-grant checks — not a primary admin table.
 
 Migration: `h8d5f3b1c926_add_policy_rbac_tables.py`.
+
+See also: [capability-matrix.md](capability-matrix.md).

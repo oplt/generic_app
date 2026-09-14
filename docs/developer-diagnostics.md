@@ -10,7 +10,9 @@ When enabled, each authenticated API request can publish a safe per-request summ
 
 * response header `X-Developer-Diagnostics` (JSON, no bodies)
 * in-memory recent ring buffer via `GET /api/v1/developer/diagnostics/recent`
-* floating UI panel (visible only when the status endpoint reports `enabled: true`)
+* floating UI panel mounted in `AppLayout` (shell embed; **not** a primary router page)
+* visible only when the status endpoint reports `enabled: true` (`DEVELOPER_DIAGNOSTICS_ENABLED`)
+* module manifest: `surface=embedded`, `embedding_host=app.shell`
 
 ## Captured fields
 

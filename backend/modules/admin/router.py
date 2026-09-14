@@ -146,12 +146,19 @@ async def get_metrics(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_admin_user),
 ):
-    total, verified, active, notifs = await asyncio.gather(
-        db.scalar(select(func.count()).select_from(User)),
-        db.scalar(select(func.count()).select_from(User).where(User.is_verified.is_(True))),
-        db.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True))),
+    # Evidence: previously four independent COUNT round-trips. Collapse user
+    # aggregates into one SELECT; notifications stay a second bounded query.
+    user_counts, notifs = await asyncio.gather(
+        db.execute(
+            select(
+                func.count(),
+                func.count().filter(User.is_verified.is_(True)),
+                func.count().filter(User.is_active.is_(True)),
+            ).select_from(User)
+        ),
         db.scalar(select(func.count()).select_from(Notification)),
     )
+    total, verified, active = user_counts.one()
 
     return MetricsResponse(
         total_users=total or 0,

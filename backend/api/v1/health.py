@@ -110,7 +110,12 @@ async def ready():
         key: value for key, value in worker_details.items() if value is not None
     }
 
-    storage_required = settings.RAG_ENABLED or bool(settings.STORAGE_BUCKET)
+    from backend.modules.platform.profiles import resolve_active_modules
+
+    resolution = resolve_active_modules()
+    storage_required = "storage" in resolution.health_checks
+    vector_required = "vector" in resolution.health_checks
+
     if storage_required:
         storage_ok, storage_detail = await object_storage.readiness()
         checks["storage"] = "ok" if storage_ok else "error"
@@ -118,7 +123,6 @@ async def ready():
     else:
         checks["storage"] = "not_required"
 
-    vector_required = settings.RAG_ENABLED
     if vector_required and checks["db"] == "ok":
         async with AsyncSession(engine) as db:
             vector = await pgvector_readiness(db)

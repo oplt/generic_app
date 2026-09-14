@@ -332,6 +332,7 @@ build/
 budget-report.json
 playwright-report/
 test-results/
+coverage/
 playwright/.cache/
 
 # Caches

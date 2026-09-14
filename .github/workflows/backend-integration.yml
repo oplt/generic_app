@@ -32,17 +32,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
-      object-storage:
-        image: minio/minio:RELEASE.2025-02-28T09-55-16Z
-        env:
-          MINIO_ROOT_USER: minio
-          MINIO_ROOT_PASSWORD: minio-password
-        ports: ["9000:9000", "9001:9001"]
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
     env:
       DATABASE_URL: postgresql+asyncpg://app:app@localhost:5432/app_db
       REDIS_URL: redis://localhost:6379/0
@@ -64,6 +53,33 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
+
+      # Docker Hub no longer serves community minio/minio images. Quay still has
+      # historical tags; GHA service containers cannot pass `server /data`, so
+      # start MinIO explicitly and pin by digest.
+      - name: Start MinIO
+        run: |
+          set -euo pipefail
+          IMAGE="quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e"
+          docker run -d --rm --name ci-minio \
+            -p 9000:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=minio \
+            -e MINIO_ROOT_PASSWORD=minio-password \
+            --entrypoint minio \
+            "${IMAGE}" \
+            server /data --console-address ":9001"
+          for _ in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              echo "MinIO ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO failed to become healthy" >&2
+          docker logs ci-minio >&2 || true
+          exit 1
+        working-directory: .
+
       - uses: astral-sh/setup-uv@v5
         with:
           version: latest
