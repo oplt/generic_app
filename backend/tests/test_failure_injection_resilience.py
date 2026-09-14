@@ -33,9 +33,11 @@ class ProductionGuardTest(unittest.TestCase):
         with patch("backend.lib.failure_injection.guard.settings") as mock_settings:
             mock_settings.is_production = True
             mock_settings.FAILURE_INJECTION_ENABLED = True
-            with self.assertRaises(FailureInjectionForbidden):
-                with injecting(FaultKind.REDIS_TIMEOUT):
-                    pass
+            with (
+                self.assertRaises(FailureInjectionForbidden),
+                injecting(FaultKind.REDIS_TIMEOUT),
+            ):
+                pass
 
     def test_injection_permitted_false_in_production(self) -> None:
         with patch("backend.lib.failure_injection.guard.settings") as mock_settings:
@@ -189,16 +191,15 @@ class AiProviderInjectionTest(unittest.IsolatedAsyncioTestCase):
 class CeleryInjectionTest(unittest.TestCase):
     def test_worker_failure_raises(self) -> None:
         task = MagicMock()
-        with injecting(FaultKind.CELERY_WORKER_FAILURE):
-            with self.assertRaises(InjectedFailure):
-                dispatch_background_sync_job(
-                    target=lambda: None,
-                    kwargs={},
-                    celery_task=task,
-                    celery_kwargs={},
-                    queue="default",
-                    job_name="demo",
-                )
+        with injecting(FaultKind.CELERY_WORKER_FAILURE), self.assertRaises(InjectedFailure):
+            dispatch_background_sync_job(
+                target=lambda: None,
+                kwargs={},
+                celery_task=task,
+                celery_kwargs={},
+                queue="default",
+                job_name="demo",
+            )
         task.apply_async.assert_not_called()
 
     def test_duplicate_execution_publishes_twice(self) -> None:
@@ -254,16 +255,17 @@ class RagInjectionTest(unittest.IsolatedAsyncioTestCase):
         from backend.modules.rag.application.embedding_service import EmbeddingService
 
         service = EmbeddingService()
-        with injecting(FaultKind.RAG_EMBEDDING_FAILURE):
-            with self.assertRaises(InjectedFailure):
-                await service.embed_texts(["hello"])
+        with injecting(FaultKind.RAG_EMBEDDING_FAILURE), self.assertRaises(InjectedFailure):
+            await service.embed_texts(["hello"])
 
 
 class SerializationAndSecretsTest(unittest.TestCase):
     def test_injected_errors_do_not_embed_secrets(self) -> None:
-        with injecting(FaultKind.POSTGRES_CONNECTION):
-            with self.assertRaises(InjectedFailure) as context:
-                maybe_inject(FaultKind.POSTGRES_CONNECTION)
+        with (
+            injecting(FaultKind.POSTGRES_CONNECTION),
+            self.assertRaises(InjectedFailure) as context,
+        ):
+            maybe_inject(FaultKind.POSTGRES_CONNECTION)
         assert_no_secrets(str(context.exception))
         assert_no_secrets({"kind": FaultKind.REDIS_TIMEOUT.value, "detail": "timeout"})
 

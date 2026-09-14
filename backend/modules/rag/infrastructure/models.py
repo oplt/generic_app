@@ -3,7 +3,21 @@ from uuid import uuid4
 
 from backend.db.base import Base
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Computed,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 RAG_VECTOR_DIMENSIONS = 1536
@@ -58,10 +72,26 @@ class RagDocument(Base):
 
 class RagChunk(Base):
     __tablename__ = "rag_chunks"
+    __table_args__ = (
+        Index("ix_rag_chunks_document_index_version", "document_id", "index_version_id"),
+        Index(
+            "uq_rag_chunks_document_version_chunk_index",
+            "document_id",
+            "index_version_id",
+            "chunk_index",
+            unique=True,
+            postgresql_where=text("index_version_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
     document_id: Mapped[str] = mapped_column(
         ForeignKey("rag_documents.id", ondelete="CASCADE"), index=True
+    )
+    index_version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("rag_index_versions.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
     )
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     organization_id: Mapped[str | None] = mapped_column(
@@ -78,6 +108,11 @@ class RagChunk(Base):
     )
     chunk_index: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)
+    content_tsv: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('simple', coalesce(content, ''))", persisted=True),
+        nullable=True,
+    )
     token_count: Mapped[int] = mapped_column(Integer, default=0)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Kept for migration/repair tooling only. Normal ingestion writes `embedding`.
@@ -122,6 +157,40 @@ class RagQueryRecord(Base):
     )
 
 
+class RagQueryChunkRef(Base):
+    """Normalized query → retrieved chunk relationship (relational SoT).
+
+    ``rag_queries.retrieved_chunk_ids_json`` remains an immutable API/audit
+    snapshot only; cleanup and referential integrity use this table.
+    """
+
+    __tablename__ = "rag_query_chunk_refs"
+    __table_args__ = (
+        UniqueConstraint("query_id", "chunk_id", name="uq_rag_query_chunk_refs_query_chunk"),
+        Index("ix_rag_query_chunk_refs_query_rank", "query_id", "rank"),
+        Index("ix_rag_query_chunk_refs_chunk_id", "chunk_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    query_id: Mapped[str] = mapped_column(
+        ForeignKey("rag_queries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    chunk_id: Mapped[str] = mapped_column(
+        ForeignKey("rag_chunks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    rank: Mapped[int] = mapped_column(Integer, nullable=False)
+    retrieval_lane: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    raw_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fused_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rerank_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
 class RagIngestionJob(Base):
     __tablename__ = "rag_ingestion_jobs"
 
@@ -151,6 +220,14 @@ class RagIndexVersion(Base):
     """Lifecycle record for a RAG pipeline / embedding configuration."""
 
     __tablename__ = "rag_index_versions"
+    __table_args__ = (
+        Index(
+            "uq_rag_index_versions_one_active",
+            "status",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
     key: Mapped[str] = mapped_column(String(64), unique=True, index=True)

@@ -20,7 +20,7 @@ TRACE_ID_HEADER = "X-Trace-Id"
 _MAX_RECENT = 50
 _MAX_LIST_ITEMS = 20
 
-_current: ContextVar["RequestDiagnostics | None"] = ContextVar(
+_current: ContextVar[RequestDiagnostics | None] = ContextVar(
     "developer_request_diagnostics", default=None
 )
 _recent: deque[dict[str, Any]] = deque(maxlen=_MAX_RECENT)

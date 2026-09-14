@@ -8,6 +8,489 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary List Datasets
+ */
+export const listDatasetsApiV1RagAdminEvaluationDatasetsGetQueryParams = zod.object({
+  "organization_id": zod.union([zod.string(),zod.null()]).optional()
+})
+
+export const listDatasetsApiV1RagAdminEvaluationDatasetsGetResponseItem = zod.object({
+  "created_at": zod.iso.datetime({}),
+  "description": zod.union([zod.string(),zod.null()]),
+  "id": zod.string(),
+  "name": zod.string(),
+  "organization_id": zod.union([zod.string(),zod.null()]),
+  "tags": zod.array(zod.string()).optional(),
+  "updated_at": zod.iso.datetime({}),
+  "user_id": zod.string()
+})
+export const listDatasetsApiV1RagAdminEvaluationDatasetsGetResponse = zod.array(listDatasetsApiV1RagAdminEvaluationDatasetsGetResponseItem)
+
+/**
+ * @summary Create Dataset
+ */
+export const createDatasetApiV1RagAdminEvaluationDatasetsPostBodyNameMax = 255;
+
+
+
+export const createDatasetApiV1RagAdminEvaluationDatasetsPostBody = zod.object({
+  "description": zod.union([zod.string(),zod.null()]).optional(),
+  "name": zod.string().min(1).max(createDatasetApiV1RagAdminEvaluationDatasetsPostBodyNameMax),
+  "organization_id": zod.union([zod.string(),zod.null()]).optional(),
+  "tags": zod.array(zod.string()).optional()
+})
+
+/**
+ * @summary Import Golden Dataset
+ */
+export const importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostQueryParams = zod.object({
+  "organization_id": zod.union([zod.string(),zod.null()]).optional()
+})
+
+/**
+ * @summary List Cases
+ */
+export const listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams = zod.object({
+  "dataset_id": zod.string()
+})
+
+export const listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetQueryParams = zod.object({
+  "organization_id": zod.union([zod.string(),zod.null()]).optional()
+})
+
+export const listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetResponseItem = zod.object({
+  "created_at": zod.iso.datetime({}),
+  "dataset_id": zod.string(),
+  "expected_chunk_ids": zod.array(zod.string()).optional(),
+  "expected_document_ids": zod.array(zod.string()).optional(),
+  "expected_facts": zod.array(zod.string()).optional(),
+  "expected_sources": zod.array(zod.string()).optional(),
+  "id": zod.string(),
+  "judgments": zod.record(zod.string(), zod.number()).optional(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "question": zod.string(),
+  "tags": zod.array(zod.string()).optional()
+})
+export const listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetResponse = zod.array(listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetResponseItem)
+
+/**
+ * @summary Create Case
+ */
+export const createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostParams = zod.object({
+  "dataset_id": zod.string()
+})
+
+export const createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostQueryParams = zod.object({
+  "organization_id": zod.union([zod.string(),zod.null()]).optional()
+})
+
+export const createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostBodyQuestionMax = 8000;
+
+
+
+export const createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostBody = zod.object({
+  "expected_chunk_ids": zod.array(zod.string()).optional(),
+  "expected_document_ids": zod.array(zod.string()).optional(),
+  "expected_facts": zod.array(zod.string()).optional(),
+  "expected_sources": zod.array(zod.string()).optional(),
+  "judgments": zod.record(zod.string(), zod.number()).optional(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "question": zod.string().min(1).max(createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostBodyQuestionMax),
+  "tags": zod.array(zod.string()).optional()
+})
+
+/**
+ * @summary Run Dataset
+ */
+export const runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostParams = zod.object({
+  "dataset_id": zod.string()
+})
+
+export const runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostBodyIncludeGenerationJudgesDefault = false;export const runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostBodyNameDefault = "run";
+export const runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostBodyNameMax = 255;
+
+export const runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostBodyTopKMaxOne = 20;
+
+
+
+export const runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostBody = zod.object({
+  "baseline_run_id": zod.union([zod.string(),zod.null()]).optional(),
+  "include_generation_judges": zod.boolean().optional(),
+  "name": zod.string().max(runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostBodyNameMax).default(runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostBodyNameDefault),
+  "organization_id": zod.union([zod.string(),zod.null()]).optional(),
+  "project_id": zod.union([zod.string(),zod.null()]).optional(),
+  "strategy": zod.union([zod.enum(['vector', 'lexical', 'hybrid_rrf']),zod.null()]).optional(),
+  "top_k": zod.union([zod.number().min(1).max(runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostBodyTopKMaxOne),zod.null()]).optional()
+})
+
+/**
+ * @summary Probe Retrieval
+ */
+export const probeRetrievalApiV1RagAdminEvaluationProbePostBodyIncludeGenerationJudgesDefault = false;export const probeRetrievalApiV1RagAdminEvaluationProbePostBodyQueryMax = 4000;
+
+export const probeRetrievalApiV1RagAdminEvaluationProbePostBodyTopKMaxOne = 20;
+
+
+
+export const probeRetrievalApiV1RagAdminEvaluationProbePostBody = zod.object({
+  "document_ids": zod.array(zod.string()).optional(),
+  "include_generation_judges": zod.boolean().optional(),
+  "organization_id": zod.union([zod.string(),zod.null()]).optional(),
+  "project_id": zod.union([zod.string(),zod.null()]).optional(),
+  "query": zod.string().min(1).max(probeRetrievalApiV1RagAdminEvaluationProbePostBodyQueryMax),
+  "strategy": zod.union([zod.enum(['vector', 'lexical', 'hybrid_rrf']),zod.null()]).optional(),
+  "top_k": zod.union([zod.number().min(1).max(probeRetrievalApiV1RagAdminEvaluationProbePostBodyTopKMaxOne),zod.null()]).optional()
+})
+
+export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseAssembledContextDefault = "";export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseCandidatesItemChunkIndexDefault = 0;export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseCandidatesItemContentDefault = "";export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseCandidatesItemFilenameDefault = "";export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseCandidatesItemIncludedDefault = false;export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseContextChunksItemChunkIndexDefault = 0;export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseContextChunksItemContentDefault = "";export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseContextChunksItemFilenameDefault = "";export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseContextChunksItemIncludedDefault = false;export const probeRetrievalApiV1RagAdminEvaluationProbePostResponseTopKDefault = 0;
+
+export const probeRetrievalApiV1RagAdminEvaluationProbePostResponse = zod.object({
+  "assembled_context": zod.string().optional(),
+  "candidates": zod.array(zod.object({
+  "chunk_id": zod.string(),
+  "chunk_index": zod.number().optional(),
+  "content": zod.string().optional(),
+  "document_id": zod.string(),
+  "filename": zod.string().optional(),
+  "fused_score": zod.union([zod.number(),zod.null()]).optional(),
+  "included": zod.boolean().optional(),
+  "lexical_rank": zod.union([zod.number(),zod.null()]).optional(),
+  "lexical_score": zod.union([zod.number(),zod.null()]).optional(),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional(),
+  "page_number": zod.union([zod.number(),zod.null()]).optional(),
+  "rank": zod.number(),
+  "reranker_score": zod.union([zod.number(),zod.null()]).optional(),
+  "section": zod.union([zod.string(),zod.null()]).optional(),
+  "vector_rank": zod.union([zod.number(),zod.null()]).optional(),
+  "vector_score": zod.union([zod.number(),zod.null()]).optional()
+})).optional(),
+  "context_chunks": zod.array(zod.object({
+  "chunk_id": zod.string(),
+  "chunk_index": zod.number().optional(),
+  "content": zod.string().optional(),
+  "document_id": zod.string(),
+  "filename": zod.string().optional(),
+  "fused_score": zod.union([zod.number(),zod.null()]).optional(),
+  "included": zod.boolean().optional(),
+  "lexical_rank": zod.union([zod.number(),zod.null()]).optional(),
+  "lexical_score": zod.union([zod.number(),zod.null()]).optional(),
+  "metadata": zod.record(zod.string(), zod.unknown()).optional(),
+  "page_number": zod.union([zod.number(),zod.null()]).optional(),
+  "rank": zod.number(),
+  "reranker_score": zod.union([zod.number(),zod.null()]).optional(),
+  "section": zod.union([zod.string(),zod.null()]).optional(),
+  "vector_rank": zod.union([zod.number(),zod.null()]).optional(),
+  "vector_score": zod.union([zod.number(),zod.null()]).optional()
+})).optional(),
+  "generation": zod.union([zod.object({
+  "answer": zod.union([zod.string(),zod.null()]).optional(),
+  "provider": zod.union([zod.string(),zod.null()]).optional(),
+  "scores": zod.union([zod.record(zod.string(), zod.number()),zod.null()]).optional()
+}),zod.null()]).optional(),
+  "latencies_ms": zod.record(zod.string(), zod.number()).optional(),
+  "strategy": zod.string(),
+  "top_k": zod.number().optional()
+})
+
+/**
+ * @summary List Runs
+ */
+export const listRunsApiV1RagAdminEvaluationRunsGetQueryParams = zod.object({
+  "dataset_id": zod.union([zod.string(),zod.null()]).optional(),
+  "organization_id": zod.union([zod.string(),zod.null()]).optional()
+})
+
+export const listRunsApiV1RagAdminEvaluationRunsGetResponseItemsItemIncludedInContextDefault = true;export const listRunsApiV1RagAdminEvaluationRunsGetResponseItemsItemScoreDefault = 0;
+
+export const listRunsApiV1RagAdminEvaluationRunsGetResponseItem = zod.object({
+  "baseline_run_id": zod.union([zod.string(),zod.null()]).optional(),
+  "comparison": zod.union([zod.object({
+  "baseline_run_id": zod.string(),
+  "deltas": zod.record(zod.string(), zod.number()).optional()
+}),zod.null()]).optional(),
+  "completed_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "configuration": zod.record(zod.string(), zod.unknown()).optional(),
+  "created_at": zod.iso.datetime({}),
+  "dataset_id": zod.string(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
+  "id": zod.string(),
+  "items": zod.array(zod.object({
+  "candidates": zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  "case_id": zod.string(),
+  "id": zod.string(),
+  "included_in_context": zod.boolean().default(listRunsApiV1RagAdminEvaluationRunsGetResponseItemsItemIncludedInContextDefault),
+  "latency": zod.record(zod.string(), zod.unknown()).optional(),
+  "metrics": zod.record(zod.string(), zod.unknown()).optional(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "ranked_chunk_ids": zod.array(zod.string()).optional(),
+  "score": zod.number().optional()
+})).optional(),
+  "latency": zod.record(zod.string(), zod.unknown()).optional(),
+  "metrics": zod.record(zod.string(), zod.unknown()).optional(),
+  "name": zod.string(),
+  "organization_id": zod.union([zod.string(),zod.null()]),
+  "status": zod.string(),
+  "user_id": zod.string()
+})
+export const listRunsApiV1RagAdminEvaluationRunsGetResponse = zod.array(listRunsApiV1RagAdminEvaluationRunsGetResponseItem)
+
+/**
+ * @summary Get Run
+ */
+export const getRunApiV1RagAdminEvaluationRunsRunIdGetParams = zod.object({
+  "run_id": zod.string()
+})
+
+export const getRunApiV1RagAdminEvaluationRunsRunIdGetQueryParams = zod.object({
+  "organization_id": zod.union([zod.string(),zod.null()]).optional()
+})
+
+export const getRunApiV1RagAdminEvaluationRunsRunIdGetResponseItemsItemIncludedInContextDefault = true;export const getRunApiV1RagAdminEvaluationRunsRunIdGetResponseItemsItemScoreDefault = 0;
+
+export const getRunApiV1RagAdminEvaluationRunsRunIdGetResponse = zod.object({
+  "baseline_run_id": zod.union([zod.string(),zod.null()]).optional(),
+  "comparison": zod.union([zod.object({
+  "baseline_run_id": zod.string(),
+  "deltas": zod.record(zod.string(), zod.number()).optional()
+}),zod.null()]).optional(),
+  "completed_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "configuration": zod.record(zod.string(), zod.unknown()).optional(),
+  "created_at": zod.iso.datetime({}),
+  "dataset_id": zod.string(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
+  "id": zod.string(),
+  "items": zod.array(zod.object({
+  "candidates": zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  "case_id": zod.string(),
+  "id": zod.string(),
+  "included_in_context": zod.boolean().default(getRunApiV1RagAdminEvaluationRunsRunIdGetResponseItemsItemIncludedInContextDefault),
+  "latency": zod.record(zod.string(), zod.unknown()).optional(),
+  "metrics": zod.record(zod.string(), zod.unknown()).optional(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "ranked_chunk_ids": zod.array(zod.string()).optional(),
+  "score": zod.number().optional()
+})).optional(),
+  "latency": zod.record(zod.string(), zod.unknown()).optional(),
+  "metrics": zod.record(zod.string(), zod.unknown()).optional(),
+  "name": zod.string(),
+  "organization_id": zod.union([zod.string(),zod.null()]),
+  "status": zod.string(),
+  "user_id": zod.string()
+})
+
+/**
+ * @summary Export Run
+ */
+export const exportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams = zod.object({
+  "run_id": zod.string()
+})
+
+export const exportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryFormatDefault = "json";
+export const exportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryFormatRegExp = new RegExp('^(json|csv)$');
+
+
+export const exportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryParams = zod.object({
+  "format": zod.string().regex(exportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryFormatRegExp).default(exportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryFormatDefault),
+  "organization_id": zod.union([zod.string(),zod.null()]).optional()
+})
+
+export const exportRunApiV1RagAdminEvaluationRunsRunIdExportGetResponse = zod.unknown()
+
+/**
+ * @summary Get Index Status
+ */
+export const getIndexStatusApiV1RagAdminIndexStatusGetResponseDimensionMigrationRequiredDefault = false;export const getIndexStatusApiV1RagAdminIndexStatusGetResponseDocumentsIncompleteDefault = 0;
+
+export const getIndexStatusApiV1RagAdminIndexStatusGetResponse = zod.object({
+  "active_version": zod.object({
+  "activated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "chunker_version": zod.string(),
+  "created_at": zod.iso.datetime({}),
+  "embedding_dimensions": zod.number(),
+  "embedding_model": zod.string(),
+  "embedding_provider": zod.string(),
+  "embedding_schema_version": zod.string(),
+  "id": zod.string(),
+  "key": zod.string(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "parser_version": zod.string(),
+  "retired_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "status": zod.string(),
+  "validated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional()
+}),
+  "building_readiness": zod.union([zod.record(zod.string(), zod.unknown()),zod.null()]).optional(),
+  "building_version": zod.union([zod.object({
+  "activated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "chunker_version": zod.string(),
+  "created_at": zod.iso.datetime({}),
+  "embedding_dimensions": zod.number(),
+  "embedding_model": zod.string(),
+  "embedding_provider": zod.string(),
+  "embedding_schema_version": zod.string(),
+  "id": zod.string(),
+  "key": zod.string(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "parser_version": zod.string(),
+  "retired_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "status": zod.string(),
+  "validated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional()
+}),zod.null()]).optional(),
+  "desired_index_version": zod.union([zod.string(),zod.null()]).optional(),
+  "dimension_migration_required": zod.boolean().optional(),
+  "documents_current": zod.number(),
+  "documents_incomplete": zod.number().optional(),
+  "documents_indexed": zod.number(),
+  "documents_stale": zod.number(),
+  "documents_total": zod.number(),
+  "jobs_active": zod.number(),
+  "jobs_failed": zod.number(),
+  "pipeline": zod.record(zod.string(), zod.unknown()),
+  "schema_embedding_dimensions": zod.number(),
+  "versions": zod.array(zod.object({
+  "activated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "chunker_version": zod.string(),
+  "created_at": zod.iso.datetime({}),
+  "embedding_dimensions": zod.number(),
+  "embedding_model": zod.string(),
+  "embedding_provider": zod.string(),
+  "embedding_schema_version": zod.string(),
+  "id": zod.string(),
+  "key": zod.string(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "parser_version": zod.string(),
+  "retired_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "status": zod.string(),
+  "validated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional()
+})).optional()
+})
+
+/**
+ * @summary List Index Versions
+ */
+export const listIndexVersionsApiV1RagAdminIndexVersionsGetResponseItem = zod.object({
+  "activated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "chunker_version": zod.string(),
+  "created_at": zod.iso.datetime({}),
+  "embedding_dimensions": zod.number(),
+  "embedding_model": zod.string(),
+  "embedding_provider": zod.string(),
+  "embedding_schema_version": zod.string(),
+  "id": zod.string(),
+  "key": zod.string(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "parser_version": zod.string(),
+  "retired_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "status": zod.string(),
+  "validated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional()
+})
+export const listIndexVersionsApiV1RagAdminIndexVersionsGetResponse = zod.array(listIndexVersionsApiV1RagAdminIndexVersionsGetResponseItem)
+
+/**
+ * @summary Create Index Version
+ */
+export const createIndexVersionApiV1RagAdminIndexVersionsPostBodyNotesMaxOne = 2000;
+
+
+
+export const createIndexVersionApiV1RagAdminIndexVersionsPostBody = zod.object({
+  "notes": zod.union([zod.string().max(createIndexVersionApiV1RagAdminIndexVersionsPostBodyNotesMaxOne),zod.null()]).optional()
+})
+
+/**
+ * @summary Activate Index Version
+ */
+export const activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePostParams = zod.object({
+  "version_id": zod.string()
+})
+
+export const activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePostResponse = zod.object({
+  "activated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "chunker_version": zod.string(),
+  "created_at": zod.iso.datetime({}),
+  "embedding_dimensions": zod.number(),
+  "embedding_model": zod.string(),
+  "embedding_provider": zod.string(),
+  "embedding_schema_version": zod.string(),
+  "id": zod.string(),
+  "key": zod.string(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "parser_version": zod.string(),
+  "retired_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "status": zod.string(),
+  "validated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional()
+})
+
+/**
+ * @summary Rollback Index Version
+ */
+export const rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPostParams = zod.object({
+  "version_id": zod.string()
+})
+
+export const rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPostResponse = zod.object({
+  "activated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "chunker_version": zod.string(),
+  "created_at": zod.iso.datetime({}),
+  "embedding_dimensions": zod.number(),
+  "embedding_model": zod.string(),
+  "embedding_provider": zod.string(),
+  "embedding_schema_version": zod.string(),
+  "id": zod.string(),
+  "key": zod.string(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "parser_version": zod.string(),
+  "retired_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "status": zod.string(),
+  "validated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional()
+})
+
+/**
+ * @summary Validate Index Version
+ */
+export const validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePostParams = zod.object({
+  "version_id": zod.string()
+})
+
+export const validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePostResponse = zod.object({
+  "activated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "chunker_version": zod.string(),
+  "created_at": zod.iso.datetime({}),
+  "embedding_dimensions": zod.number(),
+  "embedding_model": zod.string(),
+  "embedding_provider": zod.string(),
+  "embedding_schema_version": zod.string(),
+  "id": zod.string(),
+  "key": zod.string(),
+  "notes": zod.union([zod.string(),zod.null()]).optional(),
+  "parser_version": zod.string(),
+  "retired_at": zod.union([zod.iso.datetime({}),zod.null()]).optional(),
+  "status": zod.string(),
+  "validated_at": zod.union([zod.iso.datetime({}),zod.null()]).optional()
+})
+
+/**
+ * @summary Reindex Stale Documents
+ */
+export const reindexStaleDocumentsApiV1RagAdminReindexStalePostBodyLimitDefault = 50;
+export const reindexStaleDocumentsApiV1RagAdminReindexStalePostBodyLimitMax = 500;
+
+
+
+export const reindexStaleDocumentsApiV1RagAdminReindexStalePostBody = zod.object({
+  "limit": zod.number().min(1).max(reindexStaleDocumentsApiV1RagAdminReindexStalePostBodyLimitMax).default(reindexStaleDocumentsApiV1RagAdminReindexStalePostBodyLimitDefault)
+})
+
+export const reindexStaleDocumentsApiV1RagAdminReindexStalePostResponse = zod.object({
+  "active_index_version": zod.string(),
+  "enqueued": zod.number(),
+  "job_ids": zod.array(zod.string()),
+  "requested": zod.number(),
+  "skipped": zod.number(),
+  "target_index_version": zod.union([zod.string(),zod.null()]).optional(),
+  "target_index_version_id": zod.union([zod.string(),zod.null()]).optional()
+})
+
+/**
  * @summary Ask Rag
  */
 export const askRagApiV1RagAskPostBodyModeDefault = "documents";export const askRagApiV1RagAskPostBodyQueryMax = 4000;
@@ -327,6 +810,7 @@ export const retrieveChunksApiV1RagRetrievePostBody = zod.object({
   "project_id": zod.union([zod.string(),zod.null()]).optional(),
   "query": zod.string().min(1).max(retrieveChunksApiV1RagRetrievePostBodyQueryMax),
   "source_type": zod.union([zod.string().max(retrieveChunksApiV1RagRetrievePostBodySourceTypeMaxOne),zod.null()]).optional(),
+  "strategy": zod.union([zod.enum(['vector', 'lexical', 'hybrid_rrf']),zod.null()]).optional(),
   "top_k": zod.union([zod.number().min(1).max(retrieveChunksApiV1RagRetrievePostBodyTopKMaxOne),zod.null()]).optional()
 })
 

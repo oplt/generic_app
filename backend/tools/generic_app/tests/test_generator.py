@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import ast
+import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from backend.tools.generic_app.alembic_resolve import (
+    AlembicResolveError,
+    resolve_alembic_down_revision,
+)
 from backend.tools.generic_app.cli import main
 from backend.tools.generic_app.create_module import (
     GeneratorOptions,
@@ -16,13 +21,20 @@ from backend.tools.generic_app.create_module import (
 )
 from backend.tools.generic_app.naming import ModuleNames
 from backend.tools.generic_app.wiring import (
-    wire_api_router,
-    wire_manifest_registry,
-    wire_policy_catalog,
+    WiringError,
+    apply_all_wiring,
 )
 
 GOLDENS = Path(__file__).resolve().parent / "goldens"
 REPO_ROOT = Path(__file__).resolve().parents[4]
+
+
+def _ignore_noise(path: Path) -> bool:
+    return (
+        path.name == "__pycache__"
+        or path.suffix in {".pyc", ".pyo"}
+        or ".pytest_cache" in path.parts
+    )
 
 
 class NamingTest(unittest.TestCase):
@@ -65,8 +77,14 @@ class GoldenRenderTest(unittest.TestCase):
             events=True,
             storage=True,
             wire=False,
+            enablement="optional",
         )
-        files = {item.relative_path: item.content for item in render_module(names, options)}
+        files = {
+            item.relative_path: item.content
+            for item in render_module(
+                names, options, down_revision="l2b9d4e5f150"
+            )
+        }
         self._assert_golden("full_orders", files)
 
     def test_generated_python_parses(self) -> None:
@@ -77,13 +95,39 @@ class GoldenRenderTest(unittest.TestCase):
             permissions=True,
             events=True,
             wire=False,
+            enablement="optional",
         )
-        for item in render_module(names, options):
+        for item in render_module(names, options, down_revision="l2b9d4e5f150"):
             if item.relative_path.endswith(".py"):
                 try:
                     ast.parse(item.content)
                 except SyntaxError as exc:
                     self.fail(f"Syntax error in {item.relative_path}: {exc}")
+
+    def test_enablement_variants(self) -> None:
+        names = ModuleNames.from_key("widgets")
+        optional = render_module(
+            names, GeneratorOptions(enablement="optional")
+        )
+        core = render_module(names, GeneratorOptions(enablement="core"))
+        profile = render_module(
+            names, GeneratorOptions(enablement="profile", profile="rag")
+        )
+        optional_manifest = next(
+            item.content for item in optional if item.relative_path.endswith("manifest.py")
+        )
+        core_manifest = next(
+            item.content for item in core if item.relative_path.endswith("manifest.py")
+        )
+        profile_manifest = next(
+            item.content for item in profile if item.relative_path.endswith("manifest.py")
+        )
+        self.assertIn("always_enabled=False", optional_manifest)
+        self.assertIn("optional=True", optional_manifest)
+        self.assertIn("always_enabled=True", core_manifest)
+        self.assertIn("optional=False", core_manifest)
+        self.assertIn("always_enabled=False", profile_manifest)
+        self.assertIn("optional=False", profile_manifest)
 
     def _assert_golden(self, suite: str, files: dict[str, str]) -> None:
         golden_root = GOLDENS / suite
@@ -100,7 +144,7 @@ class GoldenRenderTest(unittest.TestCase):
         expected_paths = {
             str(path.relative_to(golden_root))
             for path in golden_root.rglob("*")
-            if path.is_file()
+            if path.is_file() and not _ignore_noise(path)
         }
         self.assertEqual(expected_paths, set(files))
         for relative, content in files.items():
@@ -112,72 +156,226 @@ class GoldenRenderTest(unittest.TestCase):
             )
 
 
-class WiringTest(unittest.TestCase):
-    def test_wires_registry_and_router(self) -> None:
+class AlembicResolveTest(unittest.TestCase):
+    def test_repo_has_single_head(self) -> None:
+        head = resolve_alembic_down_revision(REPO_ROOT)
+        self.assertEqual(head, "n4d1f6a7b372")
+
+    def test_multi_head_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            alembic = root / "backend" / "alembic"
+            versions = alembic / "versions"
+            versions.mkdir(parents=True)
+            (root / "backend" / "alembic.ini").write_text(
+                "[alembic]\nscript_location = backend/alembic\n",
+                encoding="utf-8",
+            )
+            (alembic / "env.py").write_text("# stub\n", encoding="utf-8")
+            (alembic / "script.py.mako").write_text("", encoding="utf-8")
+            for rev, parent in (("aaaa", None), ("bbbb", None)):
+                (versions / f"{rev}_x.py").write_text(
+                    f'revision = "{rev}"\ndown_revision = {parent!r}\n'
+                    "branch_labels = None\ndepends_on = None\n"
+                    "def upgrade():\n    pass\n"
+                    "def downgrade():\n    pass\n",
+                    encoding="utf-8",
+                )
+            with self.assertRaises(AlembicResolveError):
+                resolve_alembic_down_revision(root)
+
+
+class MarkerWiringTest(unittest.TestCase):
+    def _stub_repo(self, root: Path) -> None:
+        registry = root / "backend/modules/manifests/registry.py"
+        registry.parent.mkdir(parents=True)
+        registry.write_text(
+            (
+                "# <generic-app:manifest-imports>\n"
+                "# </generic-app:manifest-imports>\n"
+                "REGISTERED_MANIFESTS = (\n"
+                "    # <generic-app:manifest-entries>\n"
+                "    # </generic-app:manifest-entries>\n"
+                ")\n"
+            ),
+            encoding="utf-8",
+        )
+        router = root / "backend/api/router_registry.py"
+        router.parent.mkdir(parents=True)
+        router.write_text(
+            (
+                "ROUTER_CONTRIBUTIONS = {\n"
+                "    # <generic-app:router-contributions>\n"
+                "    # </generic-app:router-contributions>\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        env = root / "backend/alembic/env.py"
+        env.parent.mkdir(parents=True)
+        env.write_text(
+            "# <generic-app:model-imports>\n# </generic-app:model-imports>\n",
+            encoding="utf-8",
+        )
+        catalog = root / "backend/modules/policy/catalog.py"
+        catalog.parent.mkdir(parents=True)
+        catalog.write_text(
+            (
+                "# <generic-app:permission-constants>\n"
+                "# </generic-app:permission-constants>\n"
+                "ALL_PERMISSIONS = (\n"
+                "    # <generic-app:permission-entries>\n"
+                "    # </generic-app:permission-entries>\n"
+                ")\n"
+            ),
+            encoding="utf-8",
+        )
+        celery = root / "backend/modules/manifests/celery_contrib.py"
+        celery.write_text(
+            (
+                "MODULE_TASK_ROUTES = {\n"
+                "    # <generic-app:task-routes>\n"
+                "    # </generic-app:task-routes>\n"
+                "}\n"
+                "GENERATED_TASK_MODULES = (\n"
+                "    # <generic-app:task-modules>\n"
+                "    # </generic-app:task-modules>\n"
+                ")\n"
+            ),
+            encoding="utf-8",
+        )
+        profiles = root / "backend/modules/platform/profiles.py"
+        profiles.parent.mkdir(parents=True)
+        profiles.write_text(
+            (
+                "PROFILE_EXTRA_MODULES = {\n"
+                "    # <generic-app:profile-extra-modules>\n"
+                "    # </generic-app:profile-extra-modules>\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        fe = root / "frontend/src/app/router.tsx"
+        fe.parent.mkdir(parents=True)
+        fe.write_text(
+            (
+                "// <generic-app:lazy-imports>\n"
+                "// </generic-app:lazy-imports>\n"
+                "export function AppRouter() {\n"
+                "  return (\n"
+                "    <>\n"
+                "      {/* <generic-app:routes> */}\n"
+                "      {/* </generic-app:routes> */}\n"
+                "    </>\n"
+                "  );\n"
+                "}\n"
+            ),
+            encoding="utf-8",
+        )
+        (root / "frontend/src").mkdir(parents=True, exist_ok=True)
+        (root / "backend/modules").mkdir(parents=True, exist_ok=True)
+        (root / "backend/alembic/versions").mkdir(parents=True, exist_ok=True)
+        (root / "backend/alembic.ini").write_text(
+            "[alembic]\nscript_location = backend/alembic\n",
+            encoding="utf-8",
+        )
+        (root / "backend/alembic/script.py.mako").write_text("", encoding="utf-8")
+        (root / "backend/alembic/versions/aaaa_head.py").write_text(
+            'revision = "aaaa"\ndown_revision = None\n'
+            "branch_labels = None\ndepends_on = None\n"
+            "def upgrade():\n    pass\n"
+            "def downgrade():\n    pass\n",
+            encoding="utf-8",
+        )
+
+    def test_wires_markers_idempotently(self) -> None:
         names = ModuleNames.from_key("orders")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            registry = root / "registry.py"
-            router = root / "router.py"
-            catalog = root / "catalog.py"
-            registry.write_text(
-                (
-                    "from backend.observability.manifest import MANIFEST as OBSERVABILITY\n\n"
-                    "REGISTERED_MANIFESTS = (\n"
-                    "    MEMORY,\n"
-                    "    *OPTIONAL_PLATFORM_MANIFESTS,\n"
-                    ")\n"
-                ),
-                encoding="utf-8",
+            self._stub_repo(root)
+            first = apply_all_wiring(
+                root,
+                names,
+                crud=True,
+                permissions=True,
+                celery=True,
+                frontend=True,
+                profile="rag",
             )
-            router.write_text(
-                (
-                    "from backend.modules.settings.router import router as settings_router\n"
-                    "api_router = APIRouter()\n"
-                    'api_router.include_router(admin_router, prefix="/admin", tags=["admin"])\n'
-                ),
-                encoding="utf-8",
+            second = apply_all_wiring(
+                root,
+                names,
+                crud=True,
+                permissions=True,
+                celery=True,
+                frontend=True,
+                profile="rag",
             )
-            catalog.write_text(
-                (
-                    'ADMIN_MANAGE = "admin.manage"\n'
-                    "ALL_PERMISSIONS: tuple[str, ...] = (\n"
-                    "    ADMIN_MANAGE,\n"
-                    ")\n"
-                ),
-                encoding="utf-8",
-            )
+            self.assertTrue(first)
+            self.assertEqual(second, [])
+            registry = (root / "backend/modules/manifests/registry.py").read_text()
+            self.assertIn("MANIFEST as ORDERS", registry)
+            self.assertEqual(registry.count("MANIFEST as ORDERS"), 1)
+            router = (root / "backend/api/router_registry.py").read_text()
+            self.assertIn('"orders": RouterContribution', router)
+            celery = (root / "backend/modules/manifests/celery_contrib.py").read_text()
+            self.assertIn("orders.example_task", celery)
+            self.assertIn("backend.modules.orders.workers", celery)
+            fe = (root / "frontend/src/app/router.tsx").read_text()
+            self.assertIn("OrdersListPage", fe)
+            self.assertIn('pageKey="orders.list"', fe)
+            profiles = (root / "backend/modules/platform/profiles.py").read_text()
+            self.assertIn('"rag": ("orders",)', profiles)
 
-            self.assertTrue(wire_manifest_registry(registry, names))
-            self.assertTrue(wire_api_router(router, names))
-            self.assertTrue(wire_policy_catalog(catalog, names))
-            registry_text = registry.read_text(encoding="utf-8")
-            self.assertIn("MANIFEST as ORDERS", registry_text)
-            self.assertIn("ORDERS,", registry_text)
-            router_text = router.read_text(encoding="utf-8")
-            self.assertIn("orders_router", router_text)
-            catalog_text = catalog.read_text(encoding="utf-8")
-            self.assertIn('ORDERS_READ = "orders.read"', catalog_text)
+    def test_missing_marker_fails(self) -> None:
+        names = ModuleNames.from_key("orders")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._stub_repo(root)
+            (root / "backend/api/router_registry.py").write_text(
+                "ROUTER_CONTRIBUTIONS = {}\n", encoding="utf-8"
+            )
+            with self.assertRaises(WiringError):
+                apply_all_wiring(
+                    root,
+                    names,
+                    crud=False,
+                    permissions=False,
+                    celery=False,
+                    frontend=False,
+                    profile=None,
+                )
 
-    def test_create_module_dry_run_smoke_import(self) -> None:
+
+class AtomicGenerationTest(unittest.TestCase):
+    def test_rollback_on_wiring_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "backend/modules").mkdir(parents=True)
+            (root / "frontend/src").mkdir(parents=True)
+            # Intentionally missing marker targets so wiring fails after writes.
+            with self.assertRaises(RuntimeError) as ctx:
+                create_module(
+                    "broken_mod",
+                    options=GeneratorOptions(crud=False, wire=True, force=True),
+                    repo_root=root,
+                )
+            self.assertIn("rolled back", str(ctx.exception).lower())
+            self.assertFalse((root / "backend/modules/broken_mod").exists())
+
+    def test_dry_run_writes_nothing(self) -> None:
         result = create_module(
             "widgets",
             options=GeneratorOptions(crud=True, wire=False),
             repo_root=REPO_ROOT,
             dry_run=True,
         )
-        self.assertEqual(result.module_key, "widgets")
-        self.assertGreaterEqual(len(result.files), 8)
-        # Ensure rendered manifest imports for real.
-        manifest = next(
-            item for item in result.files if item.relative_path.endswith("manifest.py")
-        )
-        # Avoid importing the full app — syntax-check the scaffold instead.
-        ast.parse(manifest.content)
+        self.assertTrue(any("Dry run" in note for note in result.notes))
+        self.assertFalse((REPO_ROOT / "backend/modules/widgets").exists())
 
+
+class LiveImportSmokeTest(unittest.TestCase):
     def test_generated_module_imports_cleanly(self) -> None:
-        import shutil
-
         module_key = "zz_scaffold_smoke"
         module_dir = REPO_ROOT / "backend" / "modules" / module_key
         alembic_glob = list(
@@ -193,17 +391,24 @@ class WiringTest(unittest.TestCase):
             create_module(
                 module_key,
                 options=GeneratorOptions(
-                    crud=True, permissions=True, wire=False, force=True
+                    crud=True,
+                    permissions=True,
+                    wire=False,
+                    force=True,
+                    enablement="optional",
                 ),
                 repo_root=REPO_ROOT,
             )
-            from backend.modules.zz_scaffold_smoke.api.router import router as smoke_router
-            from backend.modules.zz_scaffold_smoke.manifest import (
-                MANIFEST as smoke_manifest,
+            from backend.modules.zz_scaffold_smoke.api.router import (  # noqa: WPS433
+                router as smoke_router,
             )
 
-            self.assertEqual(smoke_manifest.key, module_key)
-            self.assertGreaterEqual(len(smoke_router.routes), 1)
+            self.assertTrue(smoke_router.routes)
+            manifest = (
+                REPO_ROOT / "backend/modules/zz_scaffold_smoke/manifest.py"
+            ).read_text(encoding="utf-8")
+            self.assertIn("always_enabled=False", manifest)
+            self.assertIn("optional=True", manifest)
         finally:
             if module_dir.exists():
                 shutil.rmtree(module_dir)
@@ -211,6 +416,10 @@ class WiringTest(unittest.TestCase):
                 f"*add_{module_key}_table.py"
             ):
                 path.unlink(missing_ok=True)
-            for name in list(sys.modules):
-                if name.startswith("backend.modules.zz_scaffold_smoke"):
-                    del sys.modules[name]
+            sys.modules.pop("backend.modules.zz_scaffold_smoke", None)
+            sys.modules.pop("backend.modules.zz_scaffold_smoke.api", None)
+            sys.modules.pop("backend.modules.zz_scaffold_smoke.api.router", None)
+
+
+# Prevent pytest from collecting golden fixture trees as tests.
+collect_ignore_glob = ["goldens/*"]

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.deps.db import get_db
 from backend.modules.diagnostics.schemas import DiagnosticsResponse
 from backend.modules.diagnostics.service import DiagnosticsService
 from backend.modules.identity_access.models import User
 from backend.modules.policy.deps import require_permission
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/diagnostics", tags=["diagnostics"])
 

@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Select, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.modules.rag.infrastructure.models import (
     RagEvaluationCase,
     RagEvaluationDataset,
     RagEvaluationRun,
     RagEvaluationRunItem,
 )
+from sqlalchemy import Select, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class RagEvaluationRepository:

@@ -1,42 +1,18 @@
-import { apiFetch } from "./client";
+/**
+ * Compatibility wrapper around generated Diagnostics OpenAPI clients.
+ */
+import { getDiagnosticsApiV1AdminDiagnosticsGet } from "../generated/endpoints/diagnostics/diagnostics";
+import type {
+    AiProviderDiagnostics,
+    DiagnosticsResponse,
+    DiagnosticsSection,
+    DiagnosticsSectionState,
+} from "../generated/models";
 
-export type OperationalState =
-    | "healthy"
-    | "degraded"
-    | "unavailable"
-    | "not_required"
-    | "unknown";
-
-export type DiagnosticsSection = {
-    state: OperationalState;
-    detail: string | null;
-    metrics: Record<string, unknown>;
-};
-
-export type AiProviderDiagnostics = {
-    key: string;
-    label: string;
-    configured: boolean;
-    state: OperationalState;
-    detail: string;
-    supports_generation: boolean;
-    supports_embeddings: boolean;
-    latency_summary_ms: number | null;
-};
-
-export type DiagnosticsReport = {
-    generated_at: string;
-    overall_state: OperationalState;
-    application: DiagnosticsSection;
-    postgresql: DiagnosticsSection;
-    redis: DiagnosticsSection;
-    celery: DiagnosticsSection;
-    storage: DiagnosticsSection;
-    ai_providers: AiProviderDiagnostics[];
-    rag: DiagnosticsSection;
-    observability_hints: Record<string, unknown>;
-};
+export type OperationalState = DiagnosticsSectionState;
+export type { AiProviderDiagnostics, DiagnosticsSection };
+export type DiagnosticsReport = DiagnosticsResponse;
 
 export async function getDiagnostics(): Promise<DiagnosticsReport> {
-    return apiFetch("/admin/diagnostics");
+    return getDiagnosticsApiV1AdminDiagnosticsGet();
 }

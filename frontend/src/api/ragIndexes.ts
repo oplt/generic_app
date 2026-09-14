@@ -1,66 +1,46 @@
-import { apiFetch } from "./client";
+/**
+ * Compatibility wrapper around generated RAG index-administration OpenAPI clients.
+ */
+import {
+    activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost,
+    createIndexVersionApiV1RagAdminIndexVersionsPost,
+    getIndexStatusApiV1RagAdminIndexStatusGet,
+    reindexStaleDocumentsApiV1RagAdminReindexStalePost,
+    rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost,
+    validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost,
+} from "../generated/endpoints/rag/rag";
+import type {
+    RagIndexReindexStaleResponse,
+    RagIndexStatusResponse,
+    RagIndexVersionResponse,
+} from "../generated/models";
 
-export type RagIndexVersion = {
-    id: string;
-    key: string;
-    status: string;
-    parser_version: string;
-    chunker_version: string;
-    embedding_schema_version: string;
-    embedding_provider: string;
-    embedding_model: string;
-    embedding_dimensions: number;
-    notes: string | null;
-    created_at: string;
-    activated_at: string | null;
-    retired_at: string | null;
-    validated_at: string | null;
-};
-
-export type RagIndexStatus = {
-    active_version: RagIndexVersion;
-    pipeline: Record<string, string | number>;
-    schema_embedding_dimensions: number;
-    documents_total: number;
-    documents_indexed: number;
-    documents_current: number;
-    documents_stale: number;
-    jobs_active: number;
-    jobs_failed: number;
-    dimension_migration_required: boolean;
-    versions: RagIndexVersion[];
-};
-
-export type RagReindexStaleResult = {
-    requested: number;
-    enqueued: number;
-    skipped: number;
-    job_ids: string[];
-    active_index_version: string;
-};
+export type RagIndexVersion = RagIndexVersionResponse;
+export type RagIndexStatus = RagIndexStatusResponse;
+export type RagReindexStaleResult = RagIndexReindexStaleResponse;
 
 export async function getRagIndexStatus(): Promise<RagIndexStatus> {
-    return apiFetch("/rag/admin/index-status");
+    return getIndexStatusApiV1RagAdminIndexStatusGet();
 }
 
 export async function createRagIndexVersion(notes?: string): Promise<RagIndexVersion> {
-    return apiFetch("/rag/admin/index-versions", {
-        method: "POST",
-        body: JSON.stringify({ notes: notes ?? null }),
+    return createIndexVersionApiV1RagAdminIndexVersionsPost({
+        notes: notes ?? null,
     });
 }
 
 export async function validateRagIndexVersion(versionId: string): Promise<RagIndexVersion> {
-    return apiFetch(`/rag/admin/index-versions/${versionId}/validate`, { method: "POST" });
+    return validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost(versionId);
 }
 
 export async function activateRagIndexVersion(versionId: string): Promise<RagIndexVersion> {
-    return apiFetch(`/rag/admin/index-versions/${versionId}/activate`, { method: "POST" });
+    return activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost(versionId);
+}
+
+export async function rollbackRagIndexVersion(versionId: string): Promise<RagIndexVersion> {
+    return rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost(versionId);
 }
 
 export async function reindexStaleRagDocuments(limit = 50): Promise<RagReindexStaleResult> {
-    return apiFetch("/rag/admin/reindex-stale", {
-        method: "POST",
-        body: JSON.stringify({ limit }),
-    });
+    return reindexStaleDocumentsApiV1RagAdminReindexStalePost({ limit });
 }

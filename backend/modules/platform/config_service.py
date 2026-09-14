@@ -9,7 +9,6 @@ from backend.core.cache import (
 from backend.core.config import settings
 from backend.modules.manifests import (
     ModuleManifestError,
-    effective_modules,
     frontend_routes_for_modules,
     get_manifest_map,
     nav_entries_for_modules,
@@ -135,11 +134,11 @@ class PlatformConfigService:
 
         enabled_modules = self._resolve_enabled_modules(module_pack, explicit_overrides)
         try:
-            active = effective_modules(enabled_modules)
             active_profile_resolution = resolve_capability_profile(
                 module_pack,
                 module_overrides=explicit_overrides,
             )
+            active = set(active_profile_resolution.active_modules)
         except (ModuleManifestError, CapabilityProfileError) as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 

@@ -1,24 +1,30 @@
 # Transaction ownership
 
-Each write use case has one component responsible for its commit. Repositories
-only add, update, delete, flush, and query rows; they never commit. A failed
-request or worker stage rolls back before the session is returned to the pool.
+Rule of thumb for write paths:
 
-## Owners
+```text
+service / use-case owns the business transaction
+dependency owns session lifecycle (get_db)
+external side effects happen after commit, or via outbox / effect ledger
+```
 
-| Use-case boundary | Owner | Commit rule |
+Avoid holding an open DB transaction across remote HTTP, SMTP, embedding, or
+object-storage I/O unless explicitly justified and documented.
+
+## Audited paths (Phase 3)
+
+| Path | Ownership | Notes |
 | --- | --- | --- |
-| API routes that mutate directly (`admin`, `users`, `notifications`, `settings`, and platform configuration routes) | Route | Commit after the complete route-level mutation, including its audit row. |
-| API routes delegating to application/domain services (`projects`, `chat`, `profile`, `calendar`, `identity_access`, `rag`, `ai`, and `memory`) | Called service | The route passes the request session and does not commit separately. |
-| Application workers (`job_service`) | Worker stage | Each job-state transition is one short transaction; failures explicitly roll back. |
-| Outbox dispatcher | Dispatcher invocation | Claim/update and dispatch status are committed once per invocation; failures roll back the batch. |
-| RAG indexing | `DocumentIngestionService` stage | Intentional saga: validation state, external parsing/embedding, and final persistence are separate transactions. This is documented and tested rather than treated as one long transaction. |
+| RAG document upload | Service commits DB + outbox; storage compensated on failure | Storage write precedes durable DB row; rollback deletes object |
+| RAG document soft-delete | Service commits DB, then queues cleanup worker | Cleanup is async |
+| RAG document cleanup worker | DB cleanup commits first; object-storage delete after commit | Storage failure after commit is logged/raised for retry of storage only |
+| RAG evaluation `run_dataset` | Creates run row and commits before embed/retrieve loop; commits per case + final status | Prevents embedding HTTP while holding an open write txn |
+| Email / external effects | Effect ledger + `run_with_effect_idempotency` | Durable before provider call |
+| Project create + Idempotency-Key | Handler runs inside idempotency claim; response stored after success | Framework owns claim lifecycle |
 
-The API database dependency owns session lifetime and rollback-on-exception; it
-does not commit implicitly. This prevents a failed route from returning an
-aborted session to the pool while preserving the explicit owner for each write.
+## Explicit exceptions
 
-When composing a new use case, choose one owner from the table before adding a
-write. Do not add a route-level commit around a service that already owns the
-mutation. If an external call must occur between durable states, name each stage
-and commit boundary explicitly, as RAG indexing does.
+- Short read-modify-write sequences that only touch the local DB may keep a single
+  request-scoped transaction (FastAPI `get_db`).
+- Vector chunk deletes during cleanup remain in the DB transaction (same session /
+  adapter); only remote object storage is deferred past commit.

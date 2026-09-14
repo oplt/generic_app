@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.modules.rag.application.document_ingestion_service import DocumentIngestionService
@@ -46,6 +47,9 @@ class IngestionPolicyTest(unittest.IsolatedAsyncioTestCase):
         with patch(
             "backend.modules.rag.application.document_ingestion_service.invalidate_retrieval_cache_for_document",
             AsyncMock(),
+        ), patch(
+            "backend.modules.rag.application.index_version_service.IndexVersionService.resolve_write_version",
+            AsyncMock(return_value=SimpleNamespace(id="ver-1", key="idx-1")),
         ):
             await service.index_document(
                 document_id="doc-1",

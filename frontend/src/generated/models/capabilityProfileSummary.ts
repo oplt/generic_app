@@ -24,5 +24,6 @@ export interface CapabilityProfileSummary {
   recommended_feature_flags?: string[];
   required_permissions?: string[];
   scheduled_tasks?: string[];
+  selected_modules?: string[];
   settings_prefixes?: string[];
 }

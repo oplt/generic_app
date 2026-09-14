@@ -1,7 +1,7 @@
 """Add orders table for the orders module.
 
 Revision ID: g850b4817839
-Revises: h8d5f3b1c926
+Revises: l2b9d4e5f150
 Create Date: 2026-01-01 00:00:00.000000
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "g850b4817839"
-down_revision: Union[str, Sequence[str], None] = "h8d5f3b1c926"
+down_revision: Union[str, Sequence[str], None] = "l2b9d4e5f150"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

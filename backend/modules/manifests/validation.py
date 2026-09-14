@@ -57,35 +57,86 @@ def _assert_no_cycles(by_key: dict[str, ModuleManifest]) -> None:
 def resolve_effective_modules(
     *,
     manifests: tuple[ModuleManifest, ...],
-    enabled_optional: set[str] | list[str],
+    enabled_optional: set[str] | list[str] = (),
+    enabled_selected: set[str] | list[str] = (),
+    close_dependencies: bool = True,
 ) -> set[str]:
-    """Return always-on modules plus enabled optional modules after dependency checks.
+    """Return always-on ∪ profile-selected ∪ optional modules.
 
-    Pack lists may still mention always-on modules for documentation; those entries
-    are ignored. Unknown keys fail clearly.
+    * ``enabled_optional`` — pack/catalog toggles (``manifest.optional``).
+    * ``enabled_selected`` — profile-selected specialists (available but not
+      always-on and not pack toggles), e.g. ``ai`` / ``rag`` / ``chat``.
+    * When ``close_dependencies`` is true, required dependencies are pulled in
+      automatically so profiles can list leaf modules without repeating the
+      full graph.
     """
 
     by_key = index_manifests(manifests)
-    requested = set(enabled_optional)
-    unknown = requested - set(by_key)
+    known = set(by_key)
+
+    requested_optional = set(enabled_optional)
+    requested_selected = set(enabled_selected)
+    unknown = (requested_optional | requested_selected) - known
     if unknown:
         raise ModuleManifestError(
-            "Unknown module(s) in pack/overrides: " + ", ".join(sorted(unknown))
+            "Unknown module(s) in pack/overrides/profile: " + ", ".join(sorted(unknown))
         )
 
     enabled = {key for key, manifest in by_key.items() if manifest.always_enabled}
-    optional_requested = {key for key in requested if by_key[key].optional}
-    enabled |= optional_requested
 
-    missing: list[str] = []
-    for key in sorted(enabled):
+    for key in requested_optional:
+        manifest = by_key[key]
+        if manifest.always_enabled:
+            # Packs may document always-on modules; ignore.
+            continue
+        if not manifest.optional:
+            raise ModuleManifestError(
+                f"Module {key!r} is not an optional pack toggle; "
+                "enable it via capability profile modules instead"
+            )
+        enabled.add(key)
+
+    for key in requested_selected:
+        manifest = by_key[key]
+        if manifest.always_enabled:
+            continue
+        if manifest.optional:
+            # Optional catalog keys may also appear in profile.modules; allow.
+            enabled.add(key)
+            continue
+        enabled.add(key)
+
+    if close_dependencies:
+        enabled = _close_dependencies(by_key, enabled)
+    else:
+        missing: list[str] = []
+        for key in sorted(enabled):
+            for dependency in by_key[key].dependencies:
+                if dependency not in enabled:
+                    missing.append(f"{key} -> {dependency}")
+        if missing:
+            raise ModuleManifestError(
+                "Enabled module is missing required dependencies: " + "; ".join(missing)
+            )
+    return enabled
+
+
+def _close_dependencies(
+    by_key: dict[str, ModuleManifest],
+    seeds: set[str],
+) -> set[str]:
+    enabled = set(seeds)
+    pending = list(seeds)
+    while pending:
+        key = pending.pop()
         for dependency in by_key[key].dependencies:
             if dependency not in enabled:
-                missing.append(f"{key} -> {dependency}")
-    if missing:
-        raise ModuleManifestError(
-            "Enabled module is missing required dependencies: " + "; ".join(missing)
-        )
+                if dependency not in by_key:
+                    raise ModuleManifestError(
+                        f"Module {key!r} depends on unknown module {dependency!r}"
+                    )
+                enabled.add(dependency)
+                pending.append(dependency)
     return enabled
 
 

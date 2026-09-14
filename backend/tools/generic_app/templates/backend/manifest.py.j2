@@ -1,12 +1,16 @@
+{% if options.frontend %}
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest, NavEntry
+{% else %}
 from backend.modules.manifests.types import ModuleManifest
+{% endif %}
 
 MANIFEST = ModuleManifest(
     key="{{ names.key }}",
     version="1.0.0",
     label="{{ names.label }}",
     description="{{ names.label }} module scaffolded by generic-app create-module.",
-    always_enabled=True,
-    optional=False,
+    always_enabled={{ always_enabled }},
+    optional={{ optional }},
     dependencies={{ dependencies }},
     backend_router_keys=("{{ names.key }}",),
 {% if options.celery %}
@@ -20,5 +24,27 @@ MANIFEST = ModuleManifest(
 {% endif %}
 {% if options.crud %}
     database_requirements=("{{ names.table }}",),
+{% endif %}
+{% if options.frontend %}
+    nav_entries=(
+        NavEntry(
+            label="{{ names.label }}",
+            path="{{ nav_path }}",
+            group="workspace",
+            icon="{{ names.key }}",
+{% if permissions %}
+            required_permission="{{ names.permission_prefix }}.read",
+{% endif %}
+        ),
+    ),
+    frontend_routes=(
+        FrontendRoute(
+            path="{{ nav_path }}",
+            page_key="{{ page_key }}",
+{% if permissions %}
+            required_permission="{{ names.permission_prefix }}.read",
+{% endif %}
+        ),
+    ),
 {% endif %}
 )

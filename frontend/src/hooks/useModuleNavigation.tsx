@@ -26,7 +26,7 @@ function iconFor(name: string | null | undefined) {
 
 /**
  * Compose workspace navigation from core entries plus module manifest contributions.
- * Only allow-listed icon keys and server-provided paths are used (no dynamic imports).
+ * Backend ``module_nav`` is the authoritative allow-list for feature pages.
  */
 export function useModuleNavigation(coreDomainPlural: string): NavItem[] {
     const { data: platformMetadata } = usePlatformMetadata();
@@ -50,22 +50,18 @@ export function useModuleNavigation(coreDomainPlural: string): NavItem[] {
             group: "workspace",
         });
 
-        const knowledge = byPath.get("/knowledge-chat");
-        if (knowledge) {
+        // Remaining workspace contributions from active modules (calendar, chat, …).
+        const seen = new Set(items.map((item) => item.path));
+        for (const entry of contributed) {
+            if (entry.path === "/projects" || seen.has(entry.path)) continue;
+            if (entry.group && entry.group !== "workspace") continue;
             items.push({
-                label: knowledge.label,
-                icon: iconFor(knowledge.icon),
-                path: knowledge.path,
-                group: knowledge.group || "workspace",
-            });
-        } else {
-            // Fallback while older API responses omit module_nav.
-            items.push({
-                label: "Knowledge chat",
-                icon: <KnowledgeIcon />,
-                path: "/knowledge-chat",
+                label: entry.label,
+                icon: iconFor(entry.icon),
+                path: entry.path,
                 group: "workspace",
             });
+            seen.add(entry.path);
         }
 
         return items;

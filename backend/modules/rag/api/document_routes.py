@@ -12,6 +12,7 @@ from backend.core.pagination import (
 )
 from backend.core.text_snippet import text_snippet
 from backend.core.uploads import UploadTooLargeError, read_upload_limited
+from backend.lib.idempotency import Idempotency, IdempotencySession
 from backend.lib.project_access import SqlAlchemyProjectAccessPort
 from backend.modules.identity_access.models import User
 from backend.modules.policy import authorize, catalog
@@ -144,15 +145,24 @@ async def index_document(
     document_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    idem: IdempotencySession = Depends(Idempotency("rag.document.index", required=False)),
 ):
     require_rag_enabled()
     service = DocumentIngestionService(db)
-    job = await service.enqueue_document_indexing(
-        document_id=document_id,
-        user_id=current_user.id,
-        is_admin=current_user.is_admin,
+
+    async def _index() -> RagIngestionJobResponse:
+        job = await service.enqueue_document_indexing(
+            document_id=document_id,
+            user_id=current_user.id,
+            is_admin=current_user.is_admin,
+        )
+        return RagIngestionJobResponse.model_validate(job)
+
+    return await idem.execute(
+        _index,
+        status_code=202,
+        dump=lambda response: response.model_dump(mode="json"),
     )
-    return RagIngestionJobResponse.model_validate(job)
 
 
 @router.post(
@@ -164,16 +174,25 @@ async def reindex_document(
     document_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    idem: IdempotencySession = Depends(Idempotency("rag.document.reindex", required=False)),
 ):
     """Semantic alias for indexing, kept for document-chat clients."""
     require_rag_enabled()
     service = DocumentIngestionService(db)
-    job = await service.enqueue_document_indexing(
-        document_id=document_id,
-        user_id=current_user.id,
-        is_admin=current_user.is_admin,
+
+    async def _reindex() -> RagIngestionJobResponse:
+        job = await service.enqueue_document_indexing(
+            document_id=document_id,
+            user_id=current_user.id,
+            is_admin=current_user.is_admin,
+        )
+        return RagIngestionJobResponse.model_validate(job)
+
+    return await idem.execute(
+        _reindex,
+        status_code=202,
+        dump=lambda response: response.model_dump(mode="json"),
     )
-    return RagIngestionJobResponse.model_validate(job)
 
 
 @router.get(

@@ -10,8 +10,8 @@ from backend.modules.admin.manifest import MANIFEST as ADMIN
 from backend.modules.ai.manifest import MANIFEST as AI
 from backend.modules.calendar.manifest import MANIFEST as CALENDAR
 from backend.modules.chat.manifest import MANIFEST as CHAT
-from backend.modules.diagnostics.manifest import MANIFEST as DIAGNOSTICS
 from backend.modules.developer_diagnostics.manifest import MANIFEST as DEVELOPER_DIAGNOSTICS
+from backend.modules.diagnostics.manifest import MANIFEST as DIAGNOSTICS
 from backend.modules.identity_access.manifest import MANIFEST as IDENTITY_ACCESS
 from backend.modules.jobs.manifest import MANIFEST as JOBS
 from backend.modules.manifests.types import ModuleManifest, NavEntry
@@ -35,6 +35,9 @@ from backend.modules.storage.manifest import MANIFEST as STORAGE
 from backend.modules.users.manifest import MANIFEST as USERS
 from backend.observability.manifest import MANIFEST as OBSERVABILITY
 
+# <generic-app:manifest-imports>
+# </generic-app:manifest-imports>
+
 # Order is documentary only; dependency validation is graph-based.
 REGISTERED_MANIFESTS: tuple[ModuleManifest, ...] = (
     STORAGE,
@@ -56,6 +59,8 @@ REGISTERED_MANIFESTS: tuple[ModuleManifest, ...] = (
     RAG,
     CHAT,
     MEMORY,
+    # <generic-app:manifest-entries>
+    # </generic-app:manifest-entries>
     *OPTIONAL_PLATFORM_MANIFESTS,
 )
 
@@ -74,10 +79,15 @@ def validate_registry() -> None:
     validate_manifest_graph(REGISTERED_MANIFESTS)
 
 
-def effective_modules(enabled_optional: set[str] | list[str]) -> set[str]:
+def effective_modules(
+    enabled_optional: set[str] | list[str] = (),
+    *,
+    enabled_selected: set[str] | list[str] = (),
+) -> set[str]:
     return resolve_effective_modules(
         manifests=REGISTERED_MANIFESTS,
         enabled_optional=enabled_optional,
+        enabled_selected=enabled_selected,
     )
 
 

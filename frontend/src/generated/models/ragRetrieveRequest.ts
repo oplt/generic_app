@@ -6,6 +6,7 @@
  */
 import type { RagRetrieveRequestProjectId } from './ragRetrieveRequestProjectId';
 import type { RagRetrieveRequestSourceType } from './ragRetrieveRequestSourceType';
+import type { RagRetrieveRequestStrategy } from './ragRetrieveRequestStrategy';
 import type { RagRetrieveRequestTopK } from './ragRetrieveRequestTopK';
 
 export interface RagRetrieveRequest {
@@ -17,5 +18,6 @@ export interface RagRetrieveRequest {
    */
   query: string;
   source_type?: RagRetrieveRequestSourceType;
+  strategy?: RagRetrieveRequestStrategy;
   top_k?: RagRetrieveRequestTopK;
 }

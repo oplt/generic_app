@@ -72,10 +72,11 @@ def _counter_sum(metric) -> float | None:
         name = sample.name
         if name.endswith("_created") or name.endswith("_bucket") or name.endswith("_sum"):
             continue
-        if name.endswith("_count") and not name.endswith("_total"):
+        if name.endswith("_count") and not name.endswith("_total") and "_total" not in getattr(
+            metric, "_name", ""
+        ):
             # histogram counts — skip when summing counters
-            if "_total" not in getattr(metric, "_name", ""):
-                continue
+            continue
         total += float(sample.value)
         found = True
     return total if found else None
@@ -306,7 +307,11 @@ class DiagnosticsService:
             state = "degraded"
         return DiagnosticsSection(
             state=state,
-            detail="PostgreSQL reachable" if state == "healthy" else "PostgreSQL up; pgvector not ready",
+            detail=(
+                "PostgreSQL reachable"
+                if state == "healthy"
+                else "PostgreSQL up; pgvector not ready"
+            ),
             metrics={
                 "connectivity": connectivity,
                 "latency_ms": latency_ms,
@@ -498,7 +503,9 @@ class DiagnosticsService:
                     detail=detail,
                     supports_generation=descriptor.supports_generation,
                     supports_embeddings=descriptor.supports_embeddings,
-                    latency_summary_ms=embedding_avg if key == settings.AI_EMBEDDING_PROVIDER else None,
+                    latency_summary_ms=(
+                        embedding_avg if key == settings.AI_EMBEDDING_PROVIDER else None
+                    ),
                 )
             )
         return providers

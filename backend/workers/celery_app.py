@@ -2,37 +2,25 @@ from celery import Celery
 
 from backend.core.config import settings
 from backend.core.logging import setup_logging
+from backend.modules.manifests.celery_contrib import (
+    celery_include_modules,
+    celery_runtime_for_profile,
+)
 
 setup_logging()
+
+_resolution, _task_routes, _beat_schedule = celery_runtime_for_profile()
 
 celery_app = Celery(
     "app_backend",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["backend.workers.tasks"],
+    include=celery_include_modules(_resolution.active_modules),
 )
 
 celery_app.conf.update(
     task_default_queue=settings.CELERY_TASK_DEFAULT_QUEUE,
-    task_routes={
-        "backend.workers.tasks.send_email_task": {"queue": settings.CELERY_EMAIL_QUEUE},
-        "backend.workers.tasks.index_rag_document_task": {
-            "queue": settings.CELERY_INGESTION_QUEUE
-        },
-        "backend.workers.tasks.cleanup_rag_document_task": {
-            "queue": settings.CELERY_CLEANUP_QUEUE
-        },
-        "backend.workers.tasks.cleanup_chat_retention_task": {
-            "queue": settings.CELERY_CLEANUP_QUEUE
-        },
-        "backend.workers.tasks.run_ai_evaluation_task": {
-            "queue": settings.CELERY_EVALUATION_QUEUE
-        },
-        "backend.workers.tasks.extract_turn_memories_task": {
-            "queue": settings.CELERY_MEMORY_QUEUE
-        },
-        "backend.workers.tasks.run_ai_generation_task": {"queue": settings.CELERY_AI_QUEUE},
-    },
+    task_routes=_task_routes,
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
@@ -47,20 +35,12 @@ celery_app.conf.update(
     task_soft_time_limit=settings.CELERY_TASK_SOFT_TIME_LIMIT_SECONDS,
     timezone="UTC",
     enable_utc=True,
-    beat_schedule={
-        "dispatch-background-job-outbox": {
-            "task": "backend.workers.tasks.dispatch_outbox_task",
-            "schedule": 30.0,
-        },
-        "cleanup-expired-chat-conversations": {
-            "task": "backend.workers.tasks.cleanup_chat_retention_task",
-            "schedule": 3600.0,
-        },
-        "cleanup-expired-idempotency-records": {
-            "task": "backend.workers.tasks.cleanup_idempotency_records_task",
-            "schedule": 900.0,
-        },
-    },
+    beat_schedule=_beat_schedule,
 )
+
+# Expose resolved profile for diagnostics/tests.
+celery_app.conf.capability_profile = _resolution.profile_key
+celery_app.conf.active_modules = list(_resolution.active_modules)
+celery_app.conf.active_celery_queues = list(_resolution.celery_queues)
 
 import backend.workers.logging_hooks  # noqa: F401,E402 — register Celery signal handlers

@@ -9,6 +9,7 @@ from backend.core.pagination import (
     paginated_response,
     pagination_params,
 )
+from backend.lib.idempotency import Idempotency, IdempotencySession
 from backend.modules.identity_access.models import User
 from backend.modules.platform.api_key_service import ApiKeyService
 from backend.modules.platform.schemas import (
@@ -56,11 +57,22 @@ async def create_api_key(
     payload: ApiKeyCreateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    idem: IdempotencySession = Depends(Idempotency("platform.api_keys.create", required=False)),
 ):
     service = ApiKeyService(db)
-    api_key, plaintext_key = await service.create_api_key_for_user(current_user, payload.name)
-    response = _api_key_to_response(api_key)
-    return ApiKeyCreateResponse(**response.model_dump(), plaintext_key=plaintext_key)
+
+    async def _create() -> ApiKeyCreateResponse:
+        api_key, plaintext_key = await service.create_api_key_for_user(
+            current_user, payload.name
+        )
+        response = _api_key_to_response(api_key)
+        return ApiKeyCreateResponse(**response.model_dump(), plaintext_key=plaintext_key)
+
+    return await idem.execute(
+        _create,
+        status_code=201,
+        dump=lambda response: response.model_dump(mode="json"),
+    )
 
 
 @router.delete("/api-keys/{api_key_id}", response_model=ApiKeyResponse)

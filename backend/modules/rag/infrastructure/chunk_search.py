@@ -27,6 +27,7 @@ def _scope_filters(
     document_ids: list[str] | None,
     source_type: str | None,
     organization_id: str | None,
+    index_version_id: str | None,
 ) -> tuple[list[str], dict[str, Any]]:
     filters = [
         (
@@ -50,6 +51,14 @@ def _scope_filters(
     if source_type:
         filters.append("d.source_type = :source_type")
         params["source_type"] = source_type
+    if index_version_id:
+        filters.append("c.index_version_id = :index_version_id")
+        params["index_version_id"] = index_version_id
+    # Parent rows are reference-only (no embedding); exclude from lexical too.
+    filters.append(
+        "(c.metadata_json IS NULL OR (c.metadata_json::jsonb->>'chunk_role') "
+        "IS DISTINCT FROM 'parent')"
+    )
     return filters, params
 
 
@@ -89,6 +98,7 @@ async def similarity_search_indexed(
     score_threshold: float,
     candidate_limit: int | None = None,
     organization_id: str | None = None,
+    index_version_id: str | None = None,
 ) -> list[RetrievedChunk]:
     readiness = await pgvector_readiness(db)
     if not readiness.available:
@@ -102,6 +112,7 @@ async def similarity_search_indexed(
         document_ids=document_ids,
         source_type=source_type,
         organization_id=organization_id,
+        index_version_id=index_version_id,
     )
     filters.extend(
         [
@@ -154,6 +165,7 @@ async def lexical_search_indexed(
     query: str,
     candidate_limit: int,
     organization_id: str | None = None,
+    index_version_id: str | None = None,
 ) -> list[RetrievedChunk]:
     """Independent FTS lane ordered by lexical rank, not vector distance."""
 
@@ -167,6 +179,7 @@ async def lexical_search_indexed(
         document_ids=document_ids,
         source_type=source_type,
         organization_id=organization_id,
+        index_version_id=index_version_id,
     )
     filters.append("c.content_tsv @@ plainto_tsquery('simple', :search_query)")
     params.update(

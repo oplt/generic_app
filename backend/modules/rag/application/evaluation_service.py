@@ -11,9 +11,6 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-from fastapi import HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from backend.lib.concurrency import bounded_gather
 from backend.lib.vectors import can_index_embedding
 from backend.modules.rag.application.candidate_expansion import resolve_candidate_plan
@@ -39,6 +36,8 @@ from backend.modules.rag.infrastructure.models import (
 from backend.modules.rag.infrastructure.rag_config import RagConfig
 from backend.modules.rag.infrastructure.repositories import RagRepository
 from backend.modules.rag.infrastructure.vector_store_adapter import build_vector_store
+from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 GOLDEN_PATH = Path(__file__).resolve().parents[1] / "evaluation" / "golden_v1.json"
 
@@ -275,6 +274,10 @@ class RagEvaluationService:
             latency_json={},
             baseline_run_id=baseline_run_id,
         )
+        # Commit before remote embedding / retrieval so the DB lease is not held
+        # across external I/O (transaction ownership).
+        await self.db.commit()
+        await self.db.refresh(run)
 
         case_metrics: list[dict[str, float]] = []
         latency_samples: dict[str, list[float]] = {
@@ -335,6 +338,7 @@ class RagEvaluationService:
                     notes=None,
                     score=float(metrics.get("ndcg_at_k", 0.0)),
                 )
+                await self.db.commit()
 
             aggregate = {
                 key: round(statistics.fmean(item[key] for item in case_metrics), 6)
@@ -360,12 +364,14 @@ class RagEvaluationService:
             run.comparison_json = comparison
             run.completed_at = datetime.now(UTC)
             await self.db.flush()
+            await self.db.commit()
             return run
         except Exception as exc:
             run.status = "failed"
             run.error_message = str(exc)[:1000]
             run.completed_at = datetime.now(UTC)
             await self.db.flush()
+            await self.db.commit()
             raise
 
     async def get_run(
@@ -479,7 +485,12 @@ class RagEvaluationService:
     ) -> dict[str, Any]:
         resolved_top_k = top_k or self.config.top_k
         plan = resolve_candidate_plan(self.config, top_k=resolved_top_k, strategy=strategy)
-        filters: dict[str, Any] | None = None
+        filters: dict[str, Any] = {}
+        from backend.modules.rag.application.index_version_service import IndexVersionService
+
+        active = await IndexVersionService(self.db, config=self.config).get_active_version()
+        if active is not None:
+            filters["index_version_id"] = active.id
         if document_ids:
             valid = await self.rag_repo.filter_document_ids_for_user(
                 user_id,
@@ -502,7 +513,7 @@ class RagEvaluationService:
                         "context": 0.0,
                     },
                 }
-            filters = {"document_ids": valid}
+            filters["document_ids"] = valid
 
         latencies = {
             "embedding": 0.0,
@@ -541,11 +552,12 @@ class RagEvaluationService:
             return await self.rag_repo.lexical_search_indexed(
                 user_id=user_id,
                 project_id=project_id,
-                document_ids=(filters or {}).get("document_ids"),
+                document_ids=filters.get("document_ids"),
                 source_type=None,
                 query=query,
                 candidate_limit=plan.lexical_limit,
                 organization_id=organization_id,
+                index_version_id=filters.get("index_version_id"),
             )
 
         if plan.strategy == "vector":

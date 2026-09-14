@@ -24,6 +24,7 @@ import {
     Logout as LogoutIcon,
     Menu as MenuIcon,
     Notifications as NotificationsIcon,
+    Settings as SettingsIcon,
 } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
 import { colors, fonts } from "../../app/designTokens";

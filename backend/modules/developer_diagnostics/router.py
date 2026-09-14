@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.api.deps.auth import get_current_user
 from backend.api.deps.db import get_db
 from backend.core.config import settings
-from backend.observability.request_diagnostics import is_enabled, recent_snapshots
 from backend.modules.developer_diagnostics.schemas import (
     DeveloperDiagnosticsRecentResponse,
     DeveloperDiagnosticsStatus,
@@ -16,6 +15,7 @@ from backend.modules.developer_diagnostics.schemas import (
 from backend.modules.identity_access.models import User
 from backend.modules.policy import catalog
 from backend.modules.policy.service import PolicyService
+from backend.observability.request_diagnostics import is_enabled, recent_snapshots
 from backend.observability.service import build_public_url
 
 router = APIRouter(prefix="/developer/diagnostics", tags=["developer-diagnostics"])

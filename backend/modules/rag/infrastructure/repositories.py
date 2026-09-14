@@ -17,6 +17,7 @@ from backend.modules.rag.infrastructure.models import (
     RagChunk,
     RagDocument,
     RagIngestionJob,
+    RagQueryChunkRef,
     RagQueryRecord,
 )
 from sqlalchemy import delete, func, or_, select
@@ -249,12 +250,21 @@ class RagRepository:
         self,
         document: RagDocument,
         chunks: list[dict],
+        *,
+        index_version_id: str,
     ) -> list[RagChunk]:
-        await self.db.execute(delete(RagChunk).where(RagChunk.document_id == document.id))
+        # Side-by-side: only replace chunks for this index version; leave others.
+        await self.db.execute(
+            delete(RagChunk).where(
+                RagChunk.document_id == document.id,
+                RagChunk.index_version_id == index_version_id,
+            )
+        )
         rows: list[RagChunk] = []
         for item in chunks:
             row = RagChunk(
                 document_id=document.id,
+                index_version_id=index_version_id,
                 user_id=document.user_id,
                 organization_id=document.organization_id,
                 project_id=document.project_id,
@@ -267,38 +277,36 @@ class RagRepository:
             self.db.add(row)
             rows.append(row)
         await self.db.flush()
-        await store_chunk_embeddings_batch(
-            self.db,
-            table="rag_chunks",
-            items=[
-                (row.id, item.get("embedding") or [])
-                for row, item in zip(rows, chunks, strict=True)
-            ],
-        )
-        await self.db.flush()
+        embed_items = [
+            (row.id, item.get("embedding") or [])
+            for row, item in zip(rows, chunks, strict=True)
+            if item.get("embedding")
+        ]
+        if embed_items:
+            await store_chunk_embeddings_batch(
+                self.db,
+                table="rag_chunks",
+                items=embed_items,
+            )
+            await self.db.flush()
         return rows
 
     async def delete_chunks_for_document(self, document_id: str) -> None:
         await self.db.execute(delete(RagChunk).where(RagChunk.document_id == document_id))
 
     async def delete_query_records_for_document(self, document_id: str) -> None:
-        """Delete query history whose retrieved chunk IDs belong to one document."""
-        result = await self.db.execute(
-            select(RagChunk.id).where(RagChunk.document_id == document_id)
+        """Delete query history that retrieved chunks belonging to one document.
+
+        Uses ``rag_query_chunk_refs`` (relational SoT). Chunk deletion also
+        cascades refs via FK; this removes the parent query rows for cleanup.
+        """
+        chunk_ids = select(RagChunk.id).where(RagChunk.document_id == document_id)
+        query_ids = (
+            select(RagQueryChunkRef.query_id)
+            .where(RagQueryChunkRef.chunk_id.in_(chunk_ids))
+            .distinct()
         )
-        chunk_ids = list(result.scalars().all())
-        for start in range(0, len(chunk_ids), 100):
-            batch = chunk_ids[start : start + 100]
-            await self.db.execute(
-                delete(RagQueryRecord).where(
-                    or_(
-                        *[
-                            RagQueryRecord.retrieved_chunk_ids_json.like(f'%"{chunk_id}"%')
-                            for chunk_id in batch
-                        ]
-                    )
-                )
-            )
+        await self.db.execute(delete(RagQueryRecord).where(RagQueryRecord.id.in_(query_ids)))
 
     async def delete_ingestion_jobs_for_document(self, document_id: str) -> None:
         await self.db.execute(
@@ -384,6 +392,7 @@ class RagRepository:
         score_threshold: float,
         candidate_limit: int | None = None,
         organization_id: str | None = None,
+        index_version_id: str | None = None,
     ) -> list[RetrievedChunk]:
         return await chunk_search.similarity_search_indexed(
             self.db,
@@ -397,6 +406,7 @@ class RagRepository:
             score_threshold=score_threshold,
             candidate_limit=candidate_limit,
             organization_id=organization_id,
+            index_version_id=index_version_id,
         )
 
     async def lexical_search_indexed(
@@ -409,6 +419,7 @@ class RagRepository:
         query: str,
         candidate_limit: int,
         organization_id: str | None = None,
+        index_version_id: str | None = None,
     ) -> list[RetrievedChunk]:
         return await chunk_search.lexical_search_indexed(
             self.db,
@@ -419,6 +430,7 @@ class RagRepository:
             query=query,
             candidate_limit=candidate_limit,
             organization_id=organization_id,
+            index_version_id=index_version_id,
         )
 
     async def create_ingestion_job(
@@ -527,6 +539,7 @@ class RagRepository:
         retrieved_chunk_ids: list[str],
         model_name: str,
         latency_ms: int,
+        chunk_refs: list[dict] | None = None,
     ) -> RagQueryRecord:
         row = RagQueryRecord(
             user_id=user_id,
@@ -540,6 +553,36 @@ class RagRepository:
         )
         self.db.add(row)
         await self.db.flush()
+
+        # Relational SoT; JSON above is an immutable API/audit snapshot only.
+        # Skip ids that no longer exist so logging never fails on racey deletes.
+        ordered_ids = list(dict.fromkeys(retrieved_chunk_ids))
+        if ordered_ids:
+            existing = await self.db.execute(
+                select(RagChunk.id).where(RagChunk.id.in_(ordered_ids))
+            )
+            existing_ids = set(existing.scalars().all())
+            meta_by_id = {
+                str(item.get("chunk_id")): item
+                for item in (chunk_refs or [])
+                if item.get("chunk_id")
+            }
+            for rank, chunk_id in enumerate(ordered_ids, start=1):
+                if chunk_id not in existing_ids:
+                    continue
+                meta = meta_by_id.get(chunk_id) or {}
+                self.db.add(
+                    RagQueryChunkRef(
+                        query_id=row.id,
+                        chunk_id=chunk_id,
+                        rank=int(meta.get("rank") or rank),
+                        retrieval_lane=meta.get("retrieval_lane"),
+                        raw_score=meta.get("raw_score"),
+                        fused_score=meta.get("fused_score"),
+                        rerank_score=meta.get("rerank_score"),
+                    )
+                )
+            await self.db.flush()
         return row
 
     async def list_queries_for_user(

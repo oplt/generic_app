@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from backend.core.config import settings
-from backend.lib.vectors import estimate_tokens
+from backend.lib.vectors import decode_tokens, encode_text, estimate_tokens
 from backend.modules.rag.domain.models import DocumentChunk, ParsedDocument
 from backend.modules.rag.infrastructure.langchain_text_splitters import split_documents
 from backend.modules.rag.infrastructure.rag_config import RagConfig
@@ -62,29 +62,87 @@ def _split_documents_with_token_counts(
 def _child_windows(
     content: str,
     *,
-    parent_index: int,
     child_size: int,
     child_overlap: int,
     tokenizer_model: str | None,
-) -> list[tuple[str, int]]:
-    if child_size < 1:
+) -> list[dict]:
+    """Tokenizer-aligned child windows (same estimate/encode abstraction as parents)."""
+
+    if child_size < 1 or not content:
         return []
-    tokens = content.split()
-    if not tokens:
-        return [(content, estimate_tokens(content, model=tokenizer_model))]
-    # Approximate token windows via whitespace tokens for deterministic children.
-    step = max(1, child_size - child_overlap)
-    windows: list[tuple[str, int]] = []
-    for start in range(0, len(tokens), step):
-        piece = " ".join(tokens[start : start + child_size]).strip()
-        if not piece:
-            continue
-        windows.append((piece, estimate_tokens(piece, model=tokenizer_model)))
-        if start + child_size >= len(tokens):
-            break
+
+    token_ids = encode_text(content, model=tokenizer_model)
+    windows: list[dict] = []
+    if token_ids is not None:
+        step = max(1, child_size - child_overlap)
+        for start in range(0, len(token_ids), step):
+            piece_ids = token_ids[start : start + child_size]
+            if not piece_ids:
+                continue
+            piece = decode_tokens(piece_ids, model=tokenizer_model) or ""
+            if not piece.strip():
+                continue
+            # Approximate char span via progressive decode for metadata only.
+            prefix = decode_tokens(token_ids[:start], model=tokenizer_model) or ""
+            char_start = len(prefix)
+            char_end = char_start + len(piece)
+            windows.append(
+                {
+                    "content": piece,
+                    "token_count": len(piece_ids),
+                    "token_start": start,
+                    "token_end": start + len(piece_ids),
+                    "char_start": char_start,
+                    "char_end": char_end,
+                }
+            )
+            if start + child_size >= len(token_ids):
+                break
+    else:
+        # Fallback: same RecursiveCharacterTextSplitter length_function as parents.
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=child_size,
+            chunk_overlap=child_overlap,
+            length_function=lambda value: estimate_tokens(value, model=tokenizer_model),
+        )
+        search_from = 0
+        for piece in splitter.split_text(content):
+            if not piece.strip():
+                continue
+            idx = content.find(piece, search_from)
+            if idx < 0:
+                idx = search_from
+            char_start = idx
+            char_end = idx + len(piece)
+            token_start = estimate_tokens(content[:char_start], model=tokenizer_model) - 1
+            token_start = max(0, token_start) if char_start else 0
+            token_count = estimate_tokens(piece, model=tokenizer_model)
+            windows.append(
+                {
+                    "content": piece,
+                    "token_count": token_count,
+                    "token_start": token_start,
+                    "token_end": token_start + token_count,
+                    "char_start": char_start,
+                    "char_end": char_end,
+                }
+            )
+            search_from = char_end
+
     if not windows:
-        windows.append((content, estimate_tokens(content, model=tokenizer_model)))
-    _ = parent_index
+        token_count = estimate_tokens(content, model=tokenizer_model)
+        windows.append(
+            {
+                "content": content,
+                "token_count": token_count,
+                "token_start": 0,
+                "token_end": token_count,
+                "char_start": 0,
+                "char_end": len(content),
+            }
+        )
     return windows
 
 
@@ -182,58 +240,99 @@ class ChunkingService:
                     )
                 )
         else:
-            # Index children for ANN; keep parent text for optional expansion.
-            child_index = 0
+            # Persist parents as reference rows (no ANN embedding) and children
+            # for retrieval. Do not duplicate full parent text on every child.
+            tokenizer_model = getattr(self.config, "embedding_model", None)
+            for parent_index, (parent_content, parent_tokens, parent_meta) in enumerate(parents):
+                chunks.append(
+                    DocumentChunk(
+                        document_id=document_id,
+                        user_id=user_id,
+                        chunk_index=parent_index,
+                        content=parent_content,
+                        token_count=parent_tokens,
+                        organization_id=organization_id,
+                        project_id=project_id,
+                        metadata={
+                            **parent_meta,
+                            "chunk_index": parent_index,
+                            "chunk_role": "parent",
+                            "chunk_token_count": parent_tokens,
+                            "chunk_char_count": len(parent_content),
+                        },
+                    )
+                )
+
+            child_index = len(parents)
             for parent_index, (parent_content, parent_tokens, parent_meta) in enumerate(parents):
                 windows = _child_windows(
                     parent_content,
-                    parent_index=parent_index,
                     child_size=child_size,
                     child_overlap=child_overlap,
-                    tokenizer_model=getattr(self.config, "embedding_model", None),
+                    tokenizer_model=tokenizer_model,
                 )
-                for window_offset, (child_content, child_tokens) in enumerate(windows):
+                for window_offset, window in enumerate(windows):
                     chunks.append(
                         DocumentChunk(
                             document_id=document_id,
                             user_id=user_id,
                             chunk_index=child_index,
-                            content=child_content,
-                            token_count=child_tokens,
+                            content=window["content"],
+                            token_count=int(window["token_count"]),
                             organization_id=organization_id,
                             project_id=project_id,
                             metadata={
-                                **parent_meta,
+                                **{
+                                    key: value
+                                    for key, value in parent_meta.items()
+                                    if key
+                                    not in {
+                                        "chunk_role",
+                                        "chunk_index",
+                                        "chunk_token_count",
+                                        "chunk_char_count",
+                                        "overlap_char_count",
+                                    }
+                                },
                                 "chunk_index": child_index,
                                 "chunk_role": "child",
                                 "parent_chunk_index": parent_index,
-                                "parent_content": parent_content,
                                 "parent_token_count": parent_tokens,
                                 "child_offset": window_offset,
-                                "chunk_token_count": child_tokens,
-                                "chunk_char_count": len(child_content),
-                                "chunk_count": None,  # filled below
+                                "token_start": window["token_start"],
+                                "token_end": window["token_end"],
+                                "char_start": window["char_start"],
+                                "char_end": window["char_end"],
+                                "chunk_token_count": window["token_count"],
+                                "chunk_char_count": len(window["content"]),
+                                "section_path": parent_meta.get("section_path"),
+                                "page_number": parent_meta.get("page_number"),
                             },
                         )
                     )
                     child_index += 1
             for chunk in chunks:
                 chunk.metadata["chunk_count"] = len(chunks)
-                parent_idx = chunk.metadata.get("parent_chunk_index")
-                chunk.metadata["prev_chunk_index"] = (
-                    chunk.chunk_index - 1 if chunk.chunk_index > 0 else None
-                )
-                chunk.metadata["next_chunk_index"] = (
-                    chunk.chunk_index + 1 if chunk.chunk_index + 1 < len(chunks) else None
-                )
-                chunk.metadata["parent_prev_chunk_index"] = (
-                    parent_idx - 1 if isinstance(parent_idx, int) and parent_idx > 0 else None
-                )
-                chunk.metadata["parent_next_chunk_index"] = (
-                    parent_idx + 1
-                    if isinstance(parent_idx, int) and parent_idx + 1 < len(parents)
-                    else None
-                )
+                if chunk.metadata.get("chunk_role") == "child":
+                    parent_idx = chunk.metadata.get("parent_chunk_index")
+                    chunk.metadata["prev_chunk_index"] = (
+                        chunk.chunk_index - 1 if chunk.chunk_index > 0 else None
+                    )
+                    chunk.metadata["next_chunk_index"] = (
+                        chunk.chunk_index + 1
+                        if chunk.chunk_index + 1 < len(chunks)
+                        else None
+                    )
+                    chunk.metadata["parent_prev_chunk_index"] = (
+                        parent_idx - 1
+                        if isinstance(parent_idx, int) and parent_idx > 0
+                        else None
+                    )
+                    chunk.metadata["parent_next_chunk_index"] = (
+                        parent_idx + 1
+                        if isinstance(parent_idx, int) and parent_idx + 1 < len(parents)
+                        else None
+                    )
 
         if len(chunks) > settings.RAG_MAX_DOCUMENT_CHUNKS:
             raise HTTPException(

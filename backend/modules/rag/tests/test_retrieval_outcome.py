@@ -50,6 +50,7 @@ class RetrievalOutcomeTest(unittest.IsolatedAsyncioTestCase):
     async def test_retrieve_returns_degraded_on_failure(self):
         db = MagicMock()
         service = RetrievalService(db)
+        service._active_index_version_id = AsyncMock(return_value="ver-active")
         service.config = SimpleNamespace(
             enabled=True,
             top_k=5,
@@ -81,6 +82,7 @@ class RetrievalOutcomeTest(unittest.IsolatedAsyncioTestCase):
     async def test_retrieve_preserves_pgvector_degradation_reason(self):
         db = MagicMock()
         service = RetrievalService(db)
+        service._active_index_version_id = AsyncMock(return_value="ver-active")
         service.config = SimpleNamespace(
             enabled=True,
             top_k=5,
@@ -114,6 +116,7 @@ class RetrievalOutcomeTest(unittest.IsolatedAsyncioTestCase):
     async def test_retrieve_marks_no_matches(self):
         db = MagicMock()
         service = RetrievalService(db)
+        service._active_index_version_id = AsyncMock(return_value="ver-active")
         service.config = SimpleNamespace(
             enabled=True,
             top_k=5,
@@ -151,6 +154,7 @@ class RetrievalOutcomeTest(unittest.IsolatedAsyncioTestCase):
     async def test_retrieve_applies_candidate_multiplier_once_before_vector_store(self):
         db = MagicMock()
         service = RetrievalService(db)
+        service._active_index_version_id = AsyncMock(return_value="ver-active")
         service.config = SimpleNamespace(
             enabled=True,
             top_k=5,
@@ -209,6 +213,7 @@ class RetrievalOutcomeTest(unittest.IsolatedAsyncioTestCase):
     async def test_retrieve_fuses_lexical_only_match_into_candidate_set(self):
         db = MagicMock()
         service = RetrievalService(db)
+        service._active_index_version_id = AsyncMock(return_value="ver-active")
         service.config = SimpleNamespace(
             enabled=True,
             top_k=2,

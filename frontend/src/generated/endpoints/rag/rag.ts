@@ -25,11 +25,18 @@ import type {
 
 import type {
   BodyUploadDocumentApiV1RagDocumentsUploadPost,
+  CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostParams,
+  ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams,
+  GetRunApiV1RagAdminEvaluationRunsRunIdGetParams,
   HTTPValidationError,
+  ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostParams,
+  ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams,
+  ListDatasetsApiV1RagAdminEvaluationDatasetsGetParams,
   ListDocumentChunksApiV1RagDocumentsDocumentIdChunksGetParams,
   ListDocumentsApiV1RagDocumentsGetParams,
   ListJobsApiV1RagJobsGetParams,
   ListQueriesApiV1RagQueriesGetParams,
+  ListRunsApiV1RagAdminEvaluationRunsGetParams,
   PaginatedResponseRagChunkResponse,
   PaginatedResponseRagDocumentResponse,
   PaginatedResponseRagIngestionJobResponse,
@@ -38,6 +45,19 @@ import type {
   RagAskResponse,
   RagDocumentResponse,
   RagDocumentUploadResponse,
+  RagEvalCaseCreateRequest,
+  RagEvalCaseResponse,
+  RagEvalDatasetCreateRequest,
+  RagEvalDatasetResponse,
+  RagEvalProbeRequest,
+  RagEvalProbeResponse,
+  RagEvalRunRequest,
+  RagEvalRunResponse,
+  RagIndexReindexStaleRequest,
+  RagIndexReindexStaleResponse,
+  RagIndexStatusResponse,
+  RagIndexVersionCreateRequest,
+  RagIndexVersionResponse,
   RagIngestionJobResponse,
   RagRetrieveRequest,
   RagRetrieveResponse
@@ -51,6 +71,1489 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
 /**
+ * @summary List Datasets
+ */
+export const getListDatasetsApiV1RagAdminEvaluationDatasetsGetUrl = (params?: ListDatasetsApiV1RagAdminEvaluationDatasetsGetParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/rag/admin/evaluation/datasets?${stringifiedParams}` : `/api/v1/rag/admin/evaluation/datasets`
+}
+
+export const listDatasetsApiV1RagAdminEvaluationDatasetsGet = async (params?: ListDatasetsApiV1RagAdminEvaluationDatasetsGetParams, options?: RequestInit): Promise<RagEvalDatasetResponse[]> => {
+  
+  return customFetch<RagEvalDatasetResponse[]>(getListDatasetsApiV1RagAdminEvaluationDatasetsGetUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getListDatasetsApiV1RagAdminEvaluationDatasetsGetQueryKey = (params?: ListDatasetsApiV1RagAdminEvaluationDatasetsGetParams,) => {
+    return [
+    `/api/v1/rag/admin/evaluation/datasets`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListDatasetsApiV1RagAdminEvaluationDatasetsGetQueryOptions = <TData = Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError = HTTPValidationError>(params?: ListDatasetsApiV1RagAdminEvaluationDatasetsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDatasetsApiV1RagAdminEvaluationDatasetsGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>> = ({ signal }) => listDatasetsApiV1RagAdminEvaluationDatasetsGet(params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListDatasetsApiV1RagAdminEvaluationDatasetsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>>
+export type ListDatasetsApiV1RagAdminEvaluationDatasetsGetQueryError = HTTPValidationError
+
+
+export function useListDatasetsApiV1RagAdminEvaluationDatasetsGet<TData = Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError = HTTPValidationError>(
+ params: undefined |  ListDatasetsApiV1RagAdminEvaluationDatasetsGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDatasetsApiV1RagAdminEvaluationDatasetsGet<TData = Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError = HTTPValidationError>(
+ params?: ListDatasetsApiV1RagAdminEvaluationDatasetsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListDatasetsApiV1RagAdminEvaluationDatasetsGet<TData = Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError = HTTPValidationError>(
+ params?: ListDatasetsApiV1RagAdminEvaluationDatasetsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Datasets
+ */
+
+export function useListDatasetsApiV1RagAdminEvaluationDatasetsGet<TData = Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError = HTTPValidationError>(
+ params?: ListDatasetsApiV1RagAdminEvaluationDatasetsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listDatasetsApiV1RagAdminEvaluationDatasetsGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListDatasetsApiV1RagAdminEvaluationDatasetsGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary Create Dataset
+ */
+export const getCreateDatasetApiV1RagAdminEvaluationDatasetsPostUrl = () => {
+
+
+  
+
+  return `/api/v1/rag/admin/evaluation/datasets`
+}
+
+export const createDatasetApiV1RagAdminEvaluationDatasetsPost = async (ragEvalDatasetCreateRequest: RagEvalDatasetCreateRequest, options?: RequestInit): Promise<RagEvalDatasetResponse> => {
+  
+  return customFetch<RagEvalDatasetResponse>(getCreateDatasetApiV1RagAdminEvaluationDatasetsPostUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      ragEvalDatasetCreateRequest,)
+  }
+);}
+
+
+
+
+export const getCreateDatasetApiV1RagAdminEvaluationDatasetsPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDatasetApiV1RagAdminEvaluationDatasetsPost>>, TError,{data: RagEvalDatasetCreateRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDatasetApiV1RagAdminEvaluationDatasetsPost>>, TError,{data: RagEvalDatasetCreateRequest}, TContext> => {
+
+const mutationKey = ['createDatasetApiV1RagAdminEvaluationDatasetsPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDatasetApiV1RagAdminEvaluationDatasetsPost>>, {data: RagEvalDatasetCreateRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDatasetApiV1RagAdminEvaluationDatasetsPost(data,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDatasetApiV1RagAdminEvaluationDatasetsPostMutationResult = NonNullable<Awaited<ReturnType<typeof createDatasetApiV1RagAdminEvaluationDatasetsPost>>>
+    export type CreateDatasetApiV1RagAdminEvaluationDatasetsPostMutationBody = RagEvalDatasetCreateRequest
+    export type CreateDatasetApiV1RagAdminEvaluationDatasetsPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Create Dataset
+ */
+export const useCreateDatasetApiV1RagAdminEvaluationDatasetsPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDatasetApiV1RagAdminEvaluationDatasetsPost>>, TError,{data: RagEvalDatasetCreateRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createDatasetApiV1RagAdminEvaluationDatasetsPost>>,
+        TError,
+        {data: RagEvalDatasetCreateRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getCreateDatasetApiV1RagAdminEvaluationDatasetsPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Import Golden Dataset
+ */
+export const getImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostUrl = (params?: ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/rag/admin/evaluation/datasets/import-golden?${stringifiedParams}` : `/api/v1/rag/admin/evaluation/datasets/import-golden`
+}
+
+export const importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost = async (params?: ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostParams, options?: RequestInit): Promise<RagEvalDatasetResponse> => {
+  
+  return customFetch<RagEvalDatasetResponse>(getImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostUrl(params),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+
+export const getImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost>>, TError,{params?: ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost>>, TError,{params?: ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostParams}, TContext> => {
+
+const mutationKey = ['importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost>>, {params?: ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostParams}> = (props) => {
+          const {params} = props ?? {};
+
+          return  importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost(params,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostMutationResult = NonNullable<Awaited<ReturnType<typeof importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost>>>
+    
+    export type ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Import Golden Dataset
+ */
+export const useImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost>>, TError,{params?: ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof importGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPost>>,
+        TError,
+        {params?: ImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostParams},
+        TContext
+      > => {
+
+      const mutationOptions = getImportGoldenDatasetApiV1RagAdminEvaluationDatasetsImportGoldenPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary List Cases
+ */
+export const getListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetUrl = (datasetId: string,
+    params?: ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/rag/admin/evaluation/datasets/${datasetId}/cases?${stringifiedParams}` : `/api/v1/rag/admin/evaluation/datasets/${datasetId}/cases`
+}
+
+export const listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet = async (datasetId: string,
+    params?: ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams, options?: RequestInit): Promise<RagEvalCaseResponse[]> => {
+  
+  return customFetch<RagEvalCaseResponse[]>(getListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetUrl(datasetId,params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetQueryKey = (datasetId?: string,
+    params?: ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams,) => {
+    return [
+    `/api/v1/rag/admin/evaluation/datasets/${datasetId}/cases`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetQueryOptions = <TData = Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError = HTTPValidationError>(datasetId: string,
+    params?: ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetQueryKey(datasetId,params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>> = ({ signal }) => listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet(datasetId,params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(datasetId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetQueryResult = NonNullable<Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>>
+export type ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetQueryError = HTTPValidationError
+
+
+export function useListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet<TData = Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError = HTTPValidationError>(
+ datasetId: string,
+    params: undefined |  ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet<TData = Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError = HTTPValidationError>(
+ datasetId: string,
+    params?: ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>,
+          TError,
+          Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet<TData = Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError = HTTPValidationError>(
+ datasetId: string,
+    params?: ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Cases
+ */
+
+export function useListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet<TData = Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError = HTTPValidationError>(
+ datasetId: string,
+    params?: ListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListCasesApiV1RagAdminEvaluationDatasetsDatasetIdCasesGetQueryOptions(datasetId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary Create Case
+ */
+export const getCreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostUrl = (datasetId: string,
+    params?: CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/rag/admin/evaluation/datasets/${datasetId}/cases?${stringifiedParams}` : `/api/v1/rag/admin/evaluation/datasets/${datasetId}/cases`
+}
+
+export const createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost = async (datasetId: string,
+    ragEvalCaseCreateRequest: RagEvalCaseCreateRequest,
+    params?: CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostParams, options?: RequestInit): Promise<RagEvalCaseResponse> => {
+  
+  return customFetch<RagEvalCaseResponse>(getCreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostUrl(datasetId,params),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      ragEvalCaseCreateRequest,)
+  }
+);}
+
+
+
+
+export const getCreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost>>, TError,{datasetId: string;data: RagEvalCaseCreateRequest;params?: CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost>>, TError,{datasetId: string;data: RagEvalCaseCreateRequest;params?: CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostParams}, TContext> => {
+
+const mutationKey = ['createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost>>, {datasetId: string;data: RagEvalCaseCreateRequest;params?: CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostParams}> = (props) => {
+          const {datasetId,data,params} = props ?? {};
+
+          return  createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost(datasetId,data,params,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostMutationResult = NonNullable<Awaited<ReturnType<typeof createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost>>>
+    export type CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostMutationBody = RagEvalCaseCreateRequest
+    export type CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Create Case
+ */
+export const useCreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost>>, TError,{datasetId: string;data: RagEvalCaseCreateRequest;params?: CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPost>>,
+        TError,
+        {datasetId: string;data: RagEvalCaseCreateRequest;params?: CreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostParams},
+        TContext
+      > => {
+
+      const mutationOptions = getCreateCaseApiV1RagAdminEvaluationDatasetsDatasetIdCasesPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Run Dataset
+ */
+export const getRunDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostUrl = (datasetId: string,) => {
+
+
+  
+
+  return `/api/v1/rag/admin/evaluation/datasets/${datasetId}/runs`
+}
+
+export const runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost = async (datasetId: string,
+    ragEvalRunRequest: RagEvalRunRequest, options?: RequestInit): Promise<RagEvalRunResponse> => {
+  
+  return customFetch<RagEvalRunResponse>(getRunDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostUrl(datasetId),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      ragEvalRunRequest,)
+  }
+);}
+
+
+
+
+export const getRunDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost>>, TError,{datasetId: string;data: RagEvalRunRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost>>, TError,{datasetId: string;data: RagEvalRunRequest}, TContext> => {
+
+const mutationKey = ['runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost>>, {datasetId: string;data: RagEvalRunRequest}> = (props) => {
+          const {datasetId,data} = props ?? {};
+
+          return  runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost(datasetId,data,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RunDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostMutationResult = NonNullable<Awaited<ReturnType<typeof runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost>>>
+    export type RunDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostMutationBody = RagEvalRunRequest
+    export type RunDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Run Dataset
+ */
+export const useRunDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost>>, TError,{datasetId: string;data: RagEvalRunRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof runDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPost>>,
+        TError,
+        {datasetId: string;data: RagEvalRunRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getRunDatasetApiV1RagAdminEvaluationDatasetsDatasetIdRunsPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Probe Retrieval
+ */
+export const getProbeRetrievalApiV1RagAdminEvaluationProbePostUrl = () => {
+
+
+  
+
+  return `/api/v1/rag/admin/evaluation/probe`
+}
+
+export const probeRetrievalApiV1RagAdminEvaluationProbePost = async (ragEvalProbeRequest: RagEvalProbeRequest, options?: RequestInit): Promise<RagEvalProbeResponse> => {
+  
+  return customFetch<RagEvalProbeResponse>(getProbeRetrievalApiV1RagAdminEvaluationProbePostUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      ragEvalProbeRequest,)
+  }
+);}
+
+
+
+
+export const getProbeRetrievalApiV1RagAdminEvaluationProbePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof probeRetrievalApiV1RagAdminEvaluationProbePost>>, TError,{data: RagEvalProbeRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof probeRetrievalApiV1RagAdminEvaluationProbePost>>, TError,{data: RagEvalProbeRequest}, TContext> => {
+
+const mutationKey = ['probeRetrievalApiV1RagAdminEvaluationProbePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof probeRetrievalApiV1RagAdminEvaluationProbePost>>, {data: RagEvalProbeRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  probeRetrievalApiV1RagAdminEvaluationProbePost(data,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProbeRetrievalApiV1RagAdminEvaluationProbePostMutationResult = NonNullable<Awaited<ReturnType<typeof probeRetrievalApiV1RagAdminEvaluationProbePost>>>
+    export type ProbeRetrievalApiV1RagAdminEvaluationProbePostMutationBody = RagEvalProbeRequest
+    export type ProbeRetrievalApiV1RagAdminEvaluationProbePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Probe Retrieval
+ */
+export const useProbeRetrievalApiV1RagAdminEvaluationProbePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof probeRetrievalApiV1RagAdminEvaluationProbePost>>, TError,{data: RagEvalProbeRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof probeRetrievalApiV1RagAdminEvaluationProbePost>>,
+        TError,
+        {data: RagEvalProbeRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getProbeRetrievalApiV1RagAdminEvaluationProbePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary List Runs
+ */
+export const getListRunsApiV1RagAdminEvaluationRunsGetUrl = (params?: ListRunsApiV1RagAdminEvaluationRunsGetParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/rag/admin/evaluation/runs?${stringifiedParams}` : `/api/v1/rag/admin/evaluation/runs`
+}
+
+export const listRunsApiV1RagAdminEvaluationRunsGet = async (params?: ListRunsApiV1RagAdminEvaluationRunsGetParams, options?: RequestInit): Promise<RagEvalRunResponse[]> => {
+  
+  return customFetch<RagEvalRunResponse[]>(getListRunsApiV1RagAdminEvaluationRunsGetUrl(params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getListRunsApiV1RagAdminEvaluationRunsGetQueryKey = (params?: ListRunsApiV1RagAdminEvaluationRunsGetParams,) => {
+    return [
+    `/api/v1/rag/admin/evaluation/runs`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getListRunsApiV1RagAdminEvaluationRunsGetQueryOptions = <TData = Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError = HTTPValidationError>(params?: ListRunsApiV1RagAdminEvaluationRunsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListRunsApiV1RagAdminEvaluationRunsGetQueryKey(params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>> = ({ signal }) => listRunsApiV1RagAdminEvaluationRunsGet(params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListRunsApiV1RagAdminEvaluationRunsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>>
+export type ListRunsApiV1RagAdminEvaluationRunsGetQueryError = HTTPValidationError
+
+
+export function useListRunsApiV1RagAdminEvaluationRunsGet<TData = Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError = HTTPValidationError>(
+ params: undefined |  ListRunsApiV1RagAdminEvaluationRunsGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListRunsApiV1RagAdminEvaluationRunsGet<TData = Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError = HTTPValidationError>(
+ params?: ListRunsApiV1RagAdminEvaluationRunsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListRunsApiV1RagAdminEvaluationRunsGet<TData = Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError = HTTPValidationError>(
+ params?: ListRunsApiV1RagAdminEvaluationRunsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Runs
+ */
+
+export function useListRunsApiV1RagAdminEvaluationRunsGet<TData = Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError = HTTPValidationError>(
+ params?: ListRunsApiV1RagAdminEvaluationRunsGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listRunsApiV1RagAdminEvaluationRunsGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListRunsApiV1RagAdminEvaluationRunsGetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary Get Run
+ */
+export const getGetRunApiV1RagAdminEvaluationRunsRunIdGetUrl = (runId: string,
+    params?: GetRunApiV1RagAdminEvaluationRunsRunIdGetParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/rag/admin/evaluation/runs/${runId}?${stringifiedParams}` : `/api/v1/rag/admin/evaluation/runs/${runId}`
+}
+
+export const getRunApiV1RagAdminEvaluationRunsRunIdGet = async (runId: string,
+    params?: GetRunApiV1RagAdminEvaluationRunsRunIdGetParams, options?: RequestInit): Promise<RagEvalRunResponse> => {
+  
+  return customFetch<RagEvalRunResponse>(getGetRunApiV1RagAdminEvaluationRunsRunIdGetUrl(runId,params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getGetRunApiV1RagAdminEvaluationRunsRunIdGetQueryKey = (runId?: string,
+    params?: GetRunApiV1RagAdminEvaluationRunsRunIdGetParams,) => {
+    return [
+    `/api/v1/rag/admin/evaluation/runs/${runId}`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getGetRunApiV1RagAdminEvaluationRunsRunIdGetQueryOptions = <TData = Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError = HTTPValidationError>(runId: string,
+    params?: GetRunApiV1RagAdminEvaluationRunsRunIdGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRunApiV1RagAdminEvaluationRunsRunIdGetQueryKey(runId,params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>> = ({ signal }) => getRunApiV1RagAdminEvaluationRunsRunIdGet(runId,params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(runId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetRunApiV1RagAdminEvaluationRunsRunIdGetQueryResult = NonNullable<Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>>
+export type GetRunApiV1RagAdminEvaluationRunsRunIdGetQueryError = HTTPValidationError
+
+
+export function useGetRunApiV1RagAdminEvaluationRunsRunIdGet<TData = Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError = HTTPValidationError>(
+ runId: string,
+    params: undefined |  GetRunApiV1RagAdminEvaluationRunsRunIdGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetRunApiV1RagAdminEvaluationRunsRunIdGet<TData = Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError = HTTPValidationError>(
+ runId: string,
+    params?: GetRunApiV1RagAdminEvaluationRunsRunIdGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>,
+          TError,
+          Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetRunApiV1RagAdminEvaluationRunsRunIdGet<TData = Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError = HTTPValidationError>(
+ runId: string,
+    params?: GetRunApiV1RagAdminEvaluationRunsRunIdGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Run
+ */
+
+export function useGetRunApiV1RagAdminEvaluationRunsRunIdGet<TData = Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError = HTTPValidationError>(
+ runId: string,
+    params?: GetRunApiV1RagAdminEvaluationRunsRunIdGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getRunApiV1RagAdminEvaluationRunsRunIdGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetRunApiV1RagAdminEvaluationRunsRunIdGetQueryOptions(runId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary Export Run
+ */
+export const getExportRunApiV1RagAdminEvaluationRunsRunIdExportGetUrl = (runId: string,
+    params?: ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/rag/admin/evaluation/runs/${runId}/export?${stringifiedParams}` : `/api/v1/rag/admin/evaluation/runs/${runId}/export`
+}
+
+export const exportRunApiV1RagAdminEvaluationRunsRunIdExportGet = async (runId: string,
+    params?: ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams, options?: RequestInit): Promise<unknown> => {
+  
+  return customFetch<unknown>(getExportRunApiV1RagAdminEvaluationRunsRunIdExportGetUrl(runId,params),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getExportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryKey = (runId?: string,
+    params?: ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams,) => {
+    return [
+    `/api/v1/rag/admin/evaluation/runs/${runId}/export`, ...(params ? [params]: [])
+    ] as const;
+    }
+
+    
+export const getExportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryOptions = <TData = Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError = HTTPValidationError>(runId: string,
+    params?: ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryKey(runId,params);
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>> = ({ signal }) => exportRunApiV1RagAdminEvaluationRunsRunIdExportGet(runId,params, { signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, enabled: !!(runId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryResult = NonNullable<Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>>
+export type ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryError = HTTPValidationError
+
+
+export function useExportRunApiV1RagAdminEvaluationRunsRunIdExportGet<TData = Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError = HTTPValidationError>(
+ runId: string,
+    params: undefined |  ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>,
+          TError,
+          Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useExportRunApiV1RagAdminEvaluationRunsRunIdExportGet<TData = Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError = HTTPValidationError>(
+ runId: string,
+    params?: ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>,
+          TError,
+          Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useExportRunApiV1RagAdminEvaluationRunsRunIdExportGet<TData = Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError = HTTPValidationError>(
+ runId: string,
+    params?: ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Export Run
+ */
+
+export function useExportRunApiV1RagAdminEvaluationRunsRunIdExportGet<TData = Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError = HTTPValidationError>(
+ runId: string,
+    params?: ExportRunApiV1RagAdminEvaluationRunsRunIdExportGetParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof exportRunApiV1RagAdminEvaluationRunsRunIdExportGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getExportRunApiV1RagAdminEvaluationRunsRunIdExportGetQueryOptions(runId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary Get Index Status
+ */
+export const getGetIndexStatusApiV1RagAdminIndexStatusGetUrl = () => {
+
+
+  
+
+  return `/api/v1/rag/admin/index-status`
+}
+
+export const getIndexStatusApiV1RagAdminIndexStatusGet = async ( options?: RequestInit): Promise<RagIndexStatusResponse> => {
+  
+  return customFetch<RagIndexStatusResponse>(getGetIndexStatusApiV1RagAdminIndexStatusGetUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getGetIndexStatusApiV1RagAdminIndexStatusGetQueryKey = () => {
+    return [
+    `/api/v1/rag/admin/index-status`
+    ] as const;
+    }
+
+    
+export const getGetIndexStatusApiV1RagAdminIndexStatusGetQueryOptions = <TData = Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError = HTTPValidationError>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetIndexStatusApiV1RagAdminIndexStatusGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>> = ({ signal }) => getIndexStatusApiV1RagAdminIndexStatusGet({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetIndexStatusApiV1RagAdminIndexStatusGetQueryResult = NonNullable<Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>>
+export type GetIndexStatusApiV1RagAdminIndexStatusGetQueryError = HTTPValidationError
+
+
+export function useGetIndexStatusApiV1RagAdminIndexStatusGet<TData = Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError = HTTPValidationError>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>,
+          TError,
+          Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetIndexStatusApiV1RagAdminIndexStatusGet<TData = Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError = HTTPValidationError>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>,
+          TError,
+          Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetIndexStatusApiV1RagAdminIndexStatusGet<TData = Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError = HTTPValidationError>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get Index Status
+ */
+
+export function useGetIndexStatusApiV1RagAdminIndexStatusGet<TData = Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError = HTTPValidationError>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getIndexStatusApiV1RagAdminIndexStatusGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetIndexStatusApiV1RagAdminIndexStatusGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary List Index Versions
+ */
+export const getListIndexVersionsApiV1RagAdminIndexVersionsGetUrl = () => {
+
+
+  
+
+  return `/api/v1/rag/admin/index-versions`
+}
+
+export const listIndexVersionsApiV1RagAdminIndexVersionsGet = async ( options?: RequestInit): Promise<RagIndexVersionResponse[]> => {
+  
+  return customFetch<RagIndexVersionResponse[]>(getListIndexVersionsApiV1RagAdminIndexVersionsGetUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+);}
+
+
+
+
+
+export const getListIndexVersionsApiV1RagAdminIndexVersionsGetQueryKey = () => {
+    return [
+    `/api/v1/rag/admin/index-versions`
+    ] as const;
+    }
+
+    
+export const getListIndexVersionsApiV1RagAdminIndexVersionsGetQueryOptions = <TData = Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError = HTTPValidationError>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListIndexVersionsApiV1RagAdminIndexVersionsGetQueryKey();
+
+  
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>> = ({ signal }) => listIndexVersionsApiV1RagAdminIndexVersionsGet({ signal, ...requestOptions });
+
+      
+
+      
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListIndexVersionsApiV1RagAdminIndexVersionsGetQueryResult = NonNullable<Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>>
+export type ListIndexVersionsApiV1RagAdminIndexVersionsGetQueryError = HTTPValidationError
+
+
+export function useListIndexVersionsApiV1RagAdminIndexVersionsGet<TData = Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError = HTTPValidationError>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListIndexVersionsApiV1RagAdminIndexVersionsGet<TData = Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError = HTTPValidationError>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>,
+          TError,
+          Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListIndexVersionsApiV1RagAdminIndexVersionsGet<TData = Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError = HTTPValidationError>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Index Versions
+ */
+
+export function useListIndexVersionsApiV1RagAdminIndexVersionsGet<TData = Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError = HTTPValidationError>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listIndexVersionsApiV1RagAdminIndexVersionsGet>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient 
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListIndexVersionsApiV1RagAdminIndexVersionsGetQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  query.queryKey = queryOptions.queryKey ;
+
+  return query;
+}
+
+
+
+
+/**
+ * @summary Create Index Version
+ */
+export const getCreateIndexVersionApiV1RagAdminIndexVersionsPostUrl = () => {
+
+
+  
+
+  return `/api/v1/rag/admin/index-versions`
+}
+
+export const createIndexVersionApiV1RagAdminIndexVersionsPost = async (ragIndexVersionCreateRequest: RagIndexVersionCreateRequest, options?: RequestInit): Promise<RagIndexVersionResponse> => {
+  
+  return customFetch<RagIndexVersionResponse>(getCreateIndexVersionApiV1RagAdminIndexVersionsPostUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      ragIndexVersionCreateRequest,)
+  }
+);}
+
+
+
+
+export const getCreateIndexVersionApiV1RagAdminIndexVersionsPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createIndexVersionApiV1RagAdminIndexVersionsPost>>, TError,{data: RagIndexVersionCreateRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createIndexVersionApiV1RagAdminIndexVersionsPost>>, TError,{data: RagIndexVersionCreateRequest}, TContext> => {
+
+const mutationKey = ['createIndexVersionApiV1RagAdminIndexVersionsPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createIndexVersionApiV1RagAdminIndexVersionsPost>>, {data: RagIndexVersionCreateRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createIndexVersionApiV1RagAdminIndexVersionsPost(data,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateIndexVersionApiV1RagAdminIndexVersionsPostMutationResult = NonNullable<Awaited<ReturnType<typeof createIndexVersionApiV1RagAdminIndexVersionsPost>>>
+    export type CreateIndexVersionApiV1RagAdminIndexVersionsPostMutationBody = RagIndexVersionCreateRequest
+    export type CreateIndexVersionApiV1RagAdminIndexVersionsPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Create Index Version
+ */
+export const useCreateIndexVersionApiV1RagAdminIndexVersionsPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createIndexVersionApiV1RagAdminIndexVersionsPost>>, TError,{data: RagIndexVersionCreateRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createIndexVersionApiV1RagAdminIndexVersionsPost>>,
+        TError,
+        {data: RagIndexVersionCreateRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getCreateIndexVersionApiV1RagAdminIndexVersionsPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Activate Index Version
+ */
+export const getActivateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePostUrl = (versionId: string,) => {
+
+
+  
+
+  return `/api/v1/rag/admin/index-versions/${versionId}/activate`
+}
+
+export const activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost = async (versionId: string, options?: RequestInit): Promise<RagIndexVersionResponse> => {
+  
+  return customFetch<RagIndexVersionResponse>(getActivateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePostUrl(versionId),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+
+export const getActivateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost>>, TError,{versionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost>>, TError,{versionId: string}, TContext> => {
+
+const mutationKey = ['activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost>>, {versionId: string}> = (props) => {
+          const {versionId} = props ?? {};
+
+          return  activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost(versionId,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ActivateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePostMutationResult = NonNullable<Awaited<ReturnType<typeof activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost>>>
+    
+    export type ActivateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Activate Index Version
+ */
+export const useActivateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost>>, TError,{versionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof activateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePost>>,
+        TError,
+        {versionId: string},
+        TContext
+      > => {
+
+      const mutationOptions = getActivateIndexVersionApiV1RagAdminIndexVersionsVersionIdActivatePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Rollback Index Version
+ */
+export const getRollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPostUrl = (versionId: string,) => {
+
+
+  
+
+  return `/api/v1/rag/admin/index-versions/${versionId}/rollback`
+}
+
+export const rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost = async (versionId: string, options?: RequestInit): Promise<RagIndexVersionResponse> => {
+  
+  return customFetch<RagIndexVersionResponse>(getRollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPostUrl(versionId),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+
+export const getRollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost>>, TError,{versionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost>>, TError,{versionId: string}, TContext> => {
+
+const mutationKey = ['rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost>>, {versionId: string}> = (props) => {
+          const {versionId} = props ?? {};
+
+          return  rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost(versionId,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPostMutationResult = NonNullable<Awaited<ReturnType<typeof rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost>>>
+    
+    export type RollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPostMutationError = HTTPValidationError
+
+    /**
+ * @summary Rollback Index Version
+ */
+export const useRollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost>>, TError,{versionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof rollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPost>>,
+        TError,
+        {versionId: string},
+        TContext
+      > => {
+
+      const mutationOptions = getRollbackIndexVersionApiV1RagAdminIndexVersionsVersionIdRollbackPostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Validate Index Version
+ */
+export const getValidateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePostUrl = (versionId: string,) => {
+
+
+  
+
+  return `/api/v1/rag/admin/index-versions/${versionId}/validate`
+}
+
+export const validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost = async (versionId: string, options?: RequestInit): Promise<RagIndexVersionResponse> => {
+  
+  return customFetch<RagIndexVersionResponse>(getValidateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePostUrl(versionId),
+  {      
+    ...options,
+    method: 'POST'
+    
+    
+  }
+);}
+
+
+
+
+export const getValidateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost>>, TError,{versionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost>>, TError,{versionId: string}, TContext> => {
+
+const mutationKey = ['validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost>>, {versionId: string}> = (props) => {
+          const {versionId} = props ?? {};
+
+          return  validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost(versionId,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ValidateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePostMutationResult = NonNullable<Awaited<ReturnType<typeof validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost>>>
+    
+    export type ValidateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Validate Index Version
+ */
+export const useValidateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost>>, TError,{versionId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof validateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePost>>,
+        TError,
+        {versionId: string},
+        TContext
+      > => {
+
+      const mutationOptions = getValidateIndexVersionApiV1RagAdminIndexVersionsVersionIdValidatePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
+ * @summary Reindex Stale Documents
+ */
+export const getReindexStaleDocumentsApiV1RagAdminReindexStalePostUrl = () => {
+
+
+  
+
+  return `/api/v1/rag/admin/reindex-stale`
+}
+
+export const reindexStaleDocumentsApiV1RagAdminReindexStalePost = async (ragIndexReindexStaleRequest: RagIndexReindexStaleRequest, options?: RequestInit): Promise<RagIndexReindexStaleResponse> => {
+  
+  return customFetch<RagIndexReindexStaleResponse>(getReindexStaleDocumentsApiV1RagAdminReindexStalePostUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      ragIndexReindexStaleRequest,)
+  }
+);}
+
+
+
+
+export const getReindexStaleDocumentsApiV1RagAdminReindexStalePostMutationOptions = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reindexStaleDocumentsApiV1RagAdminReindexStalePost>>, TError,{data: RagIndexReindexStaleRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reindexStaleDocumentsApiV1RagAdminReindexStalePost>>, TError,{data: RagIndexReindexStaleRequest}, TContext> => {
+
+const mutationKey = ['reindexStaleDocumentsApiV1RagAdminReindexStalePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+      
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reindexStaleDocumentsApiV1RagAdminReindexStalePost>>, {data: RagIndexReindexStaleRequest}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reindexStaleDocumentsApiV1RagAdminReindexStalePost(data,requestOptions)
+        }
+
+        
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReindexStaleDocumentsApiV1RagAdminReindexStalePostMutationResult = NonNullable<Awaited<ReturnType<typeof reindexStaleDocumentsApiV1RagAdminReindexStalePost>>>
+    export type ReindexStaleDocumentsApiV1RagAdminReindexStalePostMutationBody = RagIndexReindexStaleRequest
+    export type ReindexStaleDocumentsApiV1RagAdminReindexStalePostMutationError = HTTPValidationError
+
+    /**
+ * @summary Reindex Stale Documents
+ */
+export const useReindexStaleDocumentsApiV1RagAdminReindexStalePost = <TError = HTTPValidationError,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reindexStaleDocumentsApiV1RagAdminReindexStalePost>>, TError,{data: RagIndexReindexStaleRequest}, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reindexStaleDocumentsApiV1RagAdminReindexStalePost>>,
+        TError,
+        {data: RagIndexReindexStaleRequest},
+        TContext
+      > => {
+
+      const mutationOptions = getReindexStaleDocumentsApiV1RagAdminReindexStalePostMutationOptions(options);
+
+      return useMutation(mutationOptions, queryClient);
+    }
+    /**
  * @summary Ask Rag
  */
 export const getAskRagApiV1RagAskPostUrl = () => {

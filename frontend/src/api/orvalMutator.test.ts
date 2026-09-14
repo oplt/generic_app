@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./client", () => ({
     API_BASE: "http://localhost:8000/api/v1",
-    apiFetch: vi.fn(async (_path: string) => ({ ok: true })),
+    apiFetch: vi.fn(async () => ({ ok: true })),
 }));
 
 import { apiFetch } from "./client";

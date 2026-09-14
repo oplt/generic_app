@@ -5,18 +5,20 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
-from backend.tools.generic_app.naming import ModuleNames
-from backend.tools.generic_app.wiring import (
-    WiringError,
-    wire_alembic_env,
-    wire_api_router,
-    wire_manifest_registry,
-    wire_policy_catalog,
+from backend.tools.generic_app.alembic_resolve import (
+    AlembicResolveError,
+    resolve_alembic_down_revision,
 )
+from backend.tools.generic_app.journal import MutationJournal
+from backend.tools.generic_app.naming import ModuleNames
+from backend.tools.generic_app.wiring import WiringError, apply_all_wiring
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+
+Enablement = Literal["optional", "core", "profile"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +31,8 @@ class GeneratorOptions:
     storage: bool = False
     wire: bool = True
     force: bool = False
+    enablement: Enablement = "optional"
+    profile: str | None = None
 
 
 @dataclass
@@ -44,6 +48,7 @@ class GenerationResult:
     wired: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    rolled_back: bool = False
 
 
 def _env() -> Environment:
@@ -155,13 +160,15 @@ def plan_module_files(
     return files
 
 
-def build_context(names: ModuleNames, options: GeneratorOptions) -> dict[str, object]:
+def build_context(
+    names: ModuleNames,
+    options: GeneratorOptions,
+    *,
+    down_revision: str | None = None,
+) -> dict[str, object]:
     dependencies = ["identity_access"]
     if options.storage:
         dependencies.append("storage")
-    if options.crud and "projects" not in dependencies:
-        # User-owned resources; identity is enough. projects optional.
-        pass
 
     permissions: list[str] = []
     if options.permissions:
@@ -170,26 +177,34 @@ def build_context(names: ModuleNames, options: GeneratorOptions) -> dict[str, ob
             f"{names.permission_prefix}.manage",
         ]
 
+    always_enabled = options.enablement == "core"
+    optional = options.enablement == "optional"
+
     return {
         "names": names,
         "options": options,
         "dependencies": tuple(dependencies),
         "permissions": tuple(permissions),
         "revision_id": _migration_revision_id(names.key),
+        "down_revision": down_revision,
         "celery_queue": names.key,
         "path_id": "{" + f"{names.entity}_id" + "}",
+        "always_enabled": always_enabled,
+        "optional": optional,
+        "page_key": f"{names.key}.list",
+        "nav_path": f"/{names.key}",
     }
 
 
 def render_module(
     names: ModuleNames,
     options: GeneratorOptions,
+    *,
+    down_revision: str | None = None,
 ) -> list[GeneratedFile]:
-    context = build_context(names, options)
+    context = build_context(names, options, down_revision=down_revision)
     generated: list[GeneratedFile] = []
     for relative_path, template_name in plan_module_files(names, options):
-        # events.py requires application package — ensure package exists when
-        # events without crud.
         generated.append(
             GeneratedFile(
                 relative_path=relative_path,
@@ -197,7 +212,6 @@ def render_module(
             )
         )
 
-    # If events without crud, also emit application/__init__.py
     if options.events and not options.crud:
         init_path = f"backend/modules/{names.key}/application/__init__.py"
         if not any(item.relative_path == init_path for item in generated):
@@ -223,44 +237,6 @@ def find_repo_root(start: Path | None = None) -> Path:
     )
 
 
-def write_files(
-    repo_root: Path,
-    files: list[GeneratedFile],
-    *,
-    force: bool = False,
-) -> tuple[list[str], list[str]]:
-    written: list[str] = []
-    skipped: list[str] = []
-    for item in files:
-        target = repo_root / item.relative_path
-        if target.exists() and not force:
-            skipped.append(item.relative_path)
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(item.content, encoding="utf-8")
-        written.append(item.relative_path)
-    return written, skipped
-
-
-def apply_wiring(repo_root: Path, names: ModuleNames, options: GeneratorOptions) -> list[str]:
-    wired: list[str] = []
-    registry = repo_root / "backend/modules/manifests/registry.py"
-    router = repo_root / "backend/api/router.py"
-    if wire_manifest_registry(registry, names):
-        wired.append(str(registry.relative_to(repo_root)))
-    if wire_api_router(router, names):
-        wired.append(str(router.relative_to(repo_root)))
-    if options.crud:
-        env_path = repo_root / "backend/alembic/env.py"
-        if wire_alembic_env(env_path, names):
-            wired.append(str(env_path.relative_to(repo_root)))
-    if options.permissions:
-        catalog = repo_root / "backend/modules/policy/catalog.py"
-        if wire_policy_catalog(catalog, names):
-            wired.append(str(catalog.relative_to(repo_root)))
-    return wired
-
-
 def create_module(
     module_key: str,
     *,
@@ -277,44 +253,80 @@ def create_module(
             f"Module directory already exists: {module_dir}. Use --force to overwrite files."
         )
 
-    files = render_module(names, options)
+    if options.enablement == "profile":
+        if not options.profile:
+            raise ValueError("--profile enablement requires a profile key")
+        from backend.modules.platform.profiles import CAPABILITY_PROFILES
+
+        if options.profile not in CAPABILITY_PROFILES:
+            known = ", ".join(sorted(CAPABILITY_PROFILES))
+            raise ValueError(
+                f"Unknown capability profile {options.profile!r}. Known: {known}"
+            )
+
+    down_revision: str | None = None
+    if options.crud:
+        try:
+            down_revision = resolve_alembic_down_revision(root)
+        except AlembicResolveError as exc:
+            raise ValueError(str(exc)) from exc
+
+    files = render_module(names, options, down_revision=down_revision)
     result = GenerationResult(module_key=names.key, files=files)
 
     if dry_run:
         result.notes.append("Dry run — no files written and no wiring applied.")
+        if options.crud:
+            result.notes.append(f"Resolved Alembic down_revision={down_revision!r}")
         return result
 
-    _written, skipped = write_files(root, files, force=options.force)
-    result.skipped = skipped
+    journal = MutationJournal()
+    try:
+        for item in files:
+            target = root / item.relative_path
+            if target.exists() and not options.force:
+                result.skipped.append(item.relative_path)
+                continue
+            journal.write_text(target, item.content)
 
-    if options.wire:
-        try:
-            result.wired = apply_wiring(root, names, options)
-        except WiringError as exc:
-            result.notes.append(f"Wiring incomplete: {exc}")
-    else:
-        result.notes.append("Skipped registry/router wiring (--no-wire).")
+        if options.wire:
+            result.wired = apply_all_wiring(
+                root,
+                names,
+                crud=options.crud,
+                permissions=options.permissions,
+                celery=options.celery,
+                frontend=options.frontend,
+                profile=options.profile if options.enablement == "profile" else None,
+                journal=journal,
+            )
+        else:
+            result.notes.append("Skipped registry/router wiring (--no-wire).")
+    except (WiringError, OSError, ValueError) as exc:
+        journal.rollback()
+        result.rolled_back = True
+        raise RuntimeError(
+            f"Module generation failed and was rolled back: {exc}"
+        ) from exc
 
-    result.notes.append(
-        "Review generated manifest registration, run migrations if --crud, "
-        "and add nav/routes only if needed."
-    )
+    if options.enablement == "optional":
+        result.notes.append(
+            "Manifest is optional (pack toggle); enable via module pack / overrides."
+        )
+    elif options.enablement == "core":
+        result.notes.append("Manifest is always_enabled core.")
+    elif options.profile:
+        result.notes.append(
+            f"Manifest selected for capability profile {options.profile!r}."
+        )
+
     if options.permissions and options.wire:
         result.notes.append(
             "Permission constants were appended to policy catalog; seed/migrate "
             "roles as needed for new keys."
         )
-    elif options.permissions:
+    if options.crud:
         result.notes.append(
-            f"Add {names.permission_prefix}.read / "
-            f"{names.permission_prefix}.manage to policy catalog when wiring."
-        )
-    if options.celery:
-        result.notes.append(
-            f"Register Celery task module and include queue '{names.key}' in worker -Q."
-        )
-    if options.frontend:
-        result.notes.append(
-            "Wire the generated feature view into the app router / navigation manually."
+            f"Alembic revision parent resolved to {down_revision!r}; run upgrade when ready."
         )
     return result

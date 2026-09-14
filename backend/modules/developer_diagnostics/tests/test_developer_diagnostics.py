@@ -11,13 +11,13 @@ from backend.observability.request_diagnostics import (
     clear_recent,
     finish_request,
     is_enabled,
+    recent_snapshots,
     record_cache_hit,
     record_cache_miss,
     record_celery_task,
     record_external_call,
     record_rag_chunks,
     record_rag_stage,
-    recent_snapshots,
 )
 
 

@@ -24,6 +24,7 @@ import {
     createRagIndexVersion,
     getRagIndexStatus,
     reindexStaleRagDocuments,
+    rollbackRagIndexVersion,
     validateRagIndexVersion,
 } from "../../../api/ragIndexes";
 import { SettingsTabs } from "../../../components/layout/SettingsTabs";
@@ -61,6 +62,11 @@ export default function AdminRagIndexesView() {
         onSuccess: refresh,
         onError: (error) => toastError(error, "Failed to activate index version."),
     });
+    const rollbackMutation = useMutation({
+        mutationFn: rollbackRagIndexVersion,
+        onSuccess: refresh,
+        onError: (error) => toastError(error, "Failed to roll back index version."),
+    });
     const reindexMutation = useMutation({
         mutationFn: () => reindexStaleRagDocuments(50),
         onSuccess: refresh,
@@ -68,6 +74,7 @@ export default function AdminRagIndexesView() {
     });
 
     const data = statusQuery.data;
+    const readiness = data?.building_readiness;
 
     return (
         <PageShell title="RAG indexes" maxWidth="xl">
@@ -89,6 +96,16 @@ export default function AdminRagIndexesView() {
                                 migration before activating a mismatched index version.
                             </Alert>
                         )}
+                        {data.desired_index_version &&
+                            data.desired_index_version !== data.active_version.key && (
+                                <Alert severity="info">
+                                    Runtime config desires {data.desired_index_version}. Active
+                                    remains {data.active_version.key}
+                                    {data.building_version
+                                        ? ` while candidate ${data.building_version.key} is ${data.building_version.status}.`
+                                        : "."}
+                                </Alert>
+                            )}
                         <Box
                             sx={{
                                 display: "grid",
@@ -110,8 +127,8 @@ export default function AdminRagIndexesView() {
                                 icon={<FactCheckIcon fontSize="small" />}
                             />
                             <StatCard
-                                label="Documents stale"
-                                value={String(data.documents_stale)}
+                                label="Documents incomplete"
+                                value={String(data.documents_incomplete ?? data.documents_stale)}
                                 icon={<SyncIcon fontSize="small" />}
                                 color="warning"
                             />
@@ -124,7 +141,7 @@ export default function AdminRagIndexesView() {
 
                         <SectionCard
                             title="Active pipeline"
-                            description="Parser, chunker, and embedding configuration for the active index version."
+                            description="Serving traffic from the active index version. Candidates build side-by-side."
                             action={
                                 <Stack direction="row" spacing={1}>
                                     <Button
@@ -137,9 +154,12 @@ export default function AdminRagIndexesView() {
                                     <Button
                                         variant="contained"
                                         onClick={() => reindexMutation.mutate()}
-                                        disabled={reindexMutation.isPending || data.documents_stale === 0}
+                                        disabled={
+                                            reindexMutation.isPending ||
+                                            (data.documents_incomplete ?? data.documents_stale) === 0
+                                        }
                                     >
-                                        Reindex stale
+                                        Build missing
                                     </Button>
                                 </Stack>
                             }
@@ -159,10 +179,18 @@ export default function AdminRagIndexesView() {
                                     Indexed {data.documents_indexed} / {data.documents_total} documents ·{" "}
                                     {data.jobs_failed} failed jobs
                                 </Typography>
+                                {readiness && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        Candidate coverage {(Number(readiness.coverage) * 100).toFixed(1)}%
+                                        · incomplete {String(readiness.documents_incomplete)} · chunks{" "}
+                                        {String(readiness.chunk_count)}
+                                    </Typography>
+                                )}
                                 {reindexMutation.isSuccess && (
                                     <Alert severity="success">
-                                        Enqueued {reindexMutation.data.enqueued} reindex job(s) for
-                                        version {reindexMutation.data.active_index_version}.
+                                        Enqueued {reindexMutation.data.enqueued} job(s) targeting{" "}
+                                        {reindexMutation.data.target_index_version ??
+                                            reindexMutation.data.active_index_version}.
                                     </Alert>
                                 )}
                                 {reindexMutation.isError && (
@@ -178,7 +206,7 @@ export default function AdminRagIndexesView() {
 
                         <SectionCard
                             title="Index versions"
-                            description="Lifecycle: building → validated → active → retired. Reindex is non-destructive when dimensions match."
+                            description="Lifecycle: building → validated → active → retired. Activate only after validation; rollback reuses retained chunks."
                         >
                             <Table size="small">
                                 <TableHead>
@@ -191,7 +219,7 @@ export default function AdminRagIndexesView() {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {data.versions.map((version) => (
+                                    {(data.versions ?? []).map((version) => (
                                         <TableRow key={version.id}>
                                             <TableCell>{version.key}</TableCell>
                                             <TableCell>{version.status}</TableCell>
@@ -211,18 +239,27 @@ export default function AdminRagIndexesView() {
                                                             Validate
                                                         </Button>
                                                     )}
-                                                    {version.status !== "active" &&
-                                                        version.status !== "retired" && (
-                                                            <Button
-                                                                size="small"
-                                                                variant="contained"
-                                                                onClick={() =>
-                                                                    activateMutation.mutate(version.id)
-                                                                }
-                                                            >
-                                                                Activate
-                                                            </Button>
-                                                        )}
+                                                    {version.status === "validated" && (
+                                                        <Button
+                                                            size="small"
+                                                            variant="contained"
+                                                            onClick={() =>
+                                                                activateMutation.mutate(version.id)
+                                                            }
+                                                        >
+                                                            Activate
+                                                        </Button>
+                                                    )}
+                                                    {version.status === "retired" && (
+                                                        <Button
+                                                            size="small"
+                                                            onClick={() =>
+                                                                rollbackMutation.mutate(version.id)
+                                                            }
+                                                        >
+                                                            Rollback
+                                                        </Button>
+                                                    )}
                                                 </Stack>
                                             </TableCell>
                                         </TableRow>

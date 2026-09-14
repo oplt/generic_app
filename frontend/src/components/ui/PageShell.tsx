@@ -1,12 +1,13 @@
-import { Box, Container, Stack, type Breakpoint, type SxProps, type Theme } from "@mui/material";
+import { Box, Container, Stack, Typography, type Breakpoint, type SxProps, type Theme } from "@mui/material";
 
 type PageShellProps = {
     children: React.ReactNode;
     maxWidth?: Breakpoint | false;
+    title?: string;
     sx?: SxProps<Theme>;
 };
 
-export function PageShell({ children, maxWidth = "xl", sx }: PageShellProps) {
+export function PageShell({ children, maxWidth = "xl", title, sx }: PageShellProps) {
     return (
         <Box
             sx={[
@@ -19,7 +20,14 @@ export function PageShell({ children, maxWidth = "xl", sx }: PageShellProps) {
             ]}
         >
             <Container maxWidth={maxWidth} sx={{ px: "0 !important" }}>
-                <Stack spacing={{ xs: 3, md: 4 }}>{children}</Stack>
+                <Stack spacing={{ xs: 3, md: 4 }}>
+                    {title ? (
+                        <Typography component="h1" variant="h4" sx={{ fontWeight: 700 }}>
+                            {title}
+                        </Typography>
+                    ) : null}
+                    {children}
+                </Stack>
             </Container>
         </Box>
     );

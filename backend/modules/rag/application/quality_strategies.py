@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
-from collections import Counter, defaultdict
+from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -134,18 +134,29 @@ def mmr_select(
     return selected
 
 
-def expand_parent_content(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
-    """Replace child hit content with stored parent text when available."""
+def expand_parent_content(
+    chunks: list[RetrievedChunk],
+    *,
+    parents_by_doc_index: dict[tuple[str, int], str] | None = None,
+) -> list[RetrievedChunk]:
+    """Replace child hit content with parent text from refs or legacy metadata."""
 
     expanded: list[RetrievedChunk] = []
+    parents = parents_by_doc_index or {}
     for chunk in chunks:
         parent = chunk.metadata.get("parent_content")
+        if not isinstance(parent, str) or not parent.strip():
+            parent_idx = chunk.metadata.get("parent_chunk_index")
+            if isinstance(parent_idx, int):
+                parent = parents.get((chunk.document_id, parent_idx))
         if not isinstance(parent, str) or not parent.strip():
             expanded.append(chunk)
             continue
         metadata = dict(chunk.metadata)
         metadata["retrieved_as_child"] = True
         metadata["child_content"] = chunk.content
+        # Do not keep a duplicated parent blob on the expanded hit.
+        metadata.pop("parent_content", None)
         expanded.append(
             RetrievedChunk(
                 chunk_id=chunk.chunk_id,
@@ -198,12 +209,15 @@ def apply_quality_strategies(
     *,
     options: QualityOptions,
     final_limit: int,
+    parents_by_doc_index: dict[tuple[str, int], str] | None = None,
 ) -> list[RetrievedChunk]:
     """Apply enabled quality steps. Disabled options are no-ops (defaults unchanged)."""
 
     result = list(chunks)
     if options.parent_child_expand:
-        result = expand_parent_content(result)
+        result = expand_parent_content(
+            result, parents_by_doc_index=parents_by_doc_index
+        )
     if options.exact_dedup:
         result = exact_deduplicate(result)
     if options.near_dedup:

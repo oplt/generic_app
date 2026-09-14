@@ -7,7 +7,7 @@ from typing import Any
 
 # Bump these when the corresponding algorithm or durable schema changes.
 PARSER_VERSION = "parser-v1"
-CHUNKER_VERSION = "chunker-v2"
+CHUNKER_VERSION = "chunker-v3"
 EMBEDDING_SCHEMA_VERSION = "embedding-schema-v1"
 
 PIPELINE_VERSION_KEYS = (

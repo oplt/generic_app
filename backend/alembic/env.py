@@ -31,6 +31,8 @@ from backend.modules.rag.infrastructure import models as rag_models  # noqa: F40
 from backend.modules.settings import models as settings_models  # noqa: F401
 from backend.modules.users import models as user_models  # noqa: F401
 from backend.workers import models as worker_models  # noqa: F401
+# <generic-app:model-imports>
+# </generic-app:model-imports>
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

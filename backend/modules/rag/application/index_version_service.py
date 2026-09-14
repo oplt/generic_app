@@ -1,10 +1,12 @@
-"""RAG index version lifecycle and stale-document reindex workflows."""
+"""RAG index version lifecycle and blue/green reindex workflows."""
 
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
+from backend.core.config import settings
+from backend.lib.retrieval_cache import bump_corpus_generation
 from backend.modules.rag.application.document_ingestion_service import DocumentIngestionService
 from backend.modules.rag.application.pipeline_versions import (
     INDEX_VERSION_STATUSES,
@@ -14,16 +16,27 @@ from backend.modules.rag.application.pipeline_versions import (
 )
 from backend.modules.rag.infrastructure.models import (
     RAG_VECTOR_DIMENSIONS,
+    RagChunk,
     RagDocument,
     RagIndexVersion,
     RagIngestionJob,
 )
 from backend.modules.rag.infrastructure.rag_config import RagConfig
 from fastapi import HTTPException
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
+
+# Explicit lifecycle edges. Activation from building is forbidden.
+_ALLOWED_TRANSITIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("building", "validated"),
+        ("validated", "active"),
+        ("active", "retired"),
+        ("retired", "active"),  # rollback only
+    }
+)
 
 
 class IndexVersionService:
@@ -31,25 +44,39 @@ class IndexVersionService:
         self.db = db
         self.config = config or RagConfig.from_settings()
 
+    async def get_active_version(self) -> RagIndexVersion | None:
+        result = await self.db.execute(
+            select(RagIndexVersion).where(RagIndexVersion.status == "active").limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def ensure_active_version(self) -> RagIndexVersion:
-        """Create or refresh the active index version for the running config."""
+        """Return the serving (active) index version.
+
+        Cold-start only creates a validated+active row when the table is empty.
+        Config drift never auto-promotes a candidate; it opens/keeps a building row.
+        """
+
+        active = await self.get_active_version()
+        if active is not None:
+            await self.ensure_desired_building_version()
+            return active
 
         metadata = pipeline_version_metadata(self.config)
         key = str(metadata["index_version"])
         existing = await self.get_by_key(key)
         if existing is not None:
-            if existing.status != "active":
-                await self._retire_other_active(except_id=existing.id)
-                existing.status = "active"
-                existing.activated_at = datetime.now(UTC)
-                existing.retired_at = None
-                if existing.validated_at is None:
-                    existing.validated_at = datetime.now(UTC)
-                await self.db.flush()
-            return existing
+            if existing.status == "active":
+                return existing
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "No active RAG index version. Validate and activate a candidate "
+                    f"(desired key={key!r}, found status={existing.status!r})."
+                ),
+            )
 
         self._assert_dimensions_compatible(int(metadata["embedding_dimensions"]))
-        await self._retire_other_active(except_id=None)
         row = RagIndexVersion(
             key=key,
             status="active",
@@ -59,13 +86,55 @@ class IndexVersionService:
             embedding_provider=str(metadata["embedding_provider"]),
             embedding_model=str(metadata["embedding_model"]),
             embedding_dimensions=int(metadata["embedding_dimensions"]),
-            notes="Auto-created from runtime RAG configuration.",
+            notes="Bootstrap active version from runtime RAG configuration.",
             activated_at=datetime.now(UTC),
             validated_at=datetime.now(UTC),
         )
         self.db.add(row)
         await self.db.flush()
         return row
+
+    async def ensure_desired_building_version(self) -> RagIndexVersion | None:
+        """When runtime config differs from active, ensure a building candidate."""
+
+        active = await self.get_active_version()
+        metadata = pipeline_version_metadata(self.config)
+        desired_key = str(metadata["index_version"])
+        if active is not None and active.key == desired_key:
+            return None
+        existing = await self.get_by_key(desired_key)
+        if existing is not None:
+            return existing
+        self._assert_dimensions_compatible(int(metadata["embedding_dimensions"]))
+        row = RagIndexVersion(
+            key=desired_key,
+            status="building",
+            parser_version=str(metadata["parser_version"]),
+            chunker_version=str(metadata["chunker_version"]),
+            embedding_schema_version=str(metadata["embedding_schema_version"]),
+            embedding_provider=str(metadata["embedding_provider"]),
+            embedding_model=str(metadata["embedding_model"]),
+            embedding_dimensions=int(metadata["embedding_dimensions"]),
+            notes="Auto-opened building candidate because runtime config differs from active.",
+        )
+        self.db.add(row)
+        await self.db.flush()
+        logger.info(
+            "Opened building index version key=%s while active=%s",
+            desired_key,
+            getattr(active, "key", None),
+        )
+        return row
+
+    async def resolve_write_version(self) -> RagIndexVersion:
+        """Version that new chunk writes target (building desired, else active)."""
+
+        metadata = pipeline_version_metadata(self.config)
+        desired_key = str(metadata["index_version"])
+        desired = await self.get_by_key(desired_key)
+        if desired is not None and desired.status in {"building", "validated", "active"}:
+            return desired
+        return await self.ensure_active_version()
 
     async def list_versions(self) -> list[RagIndexVersion]:
         result = await self.db.execute(
@@ -103,13 +172,18 @@ class IndexVersionService:
         return row
 
     async def mark_validated(self, version_id: str) -> RagIndexVersion:
-        row = await self.get_by_id(version_id)
-        if row is None:
-            raise HTTPException(status_code=404, detail="Index version not found")
-        if row.status not in {"building", "validated"}:
+        row = await self._lock_version(version_id)
+        if row.status == "validated":
+            return row
+        self._assert_transition(row.status, "validated")
+        readiness = await self.promotion_readiness(row)
+        if not readiness["ready_for_validation"]:
             raise HTTPException(
                 status_code=422,
-                detail=f"Cannot validate index version in status {row.status!r}",
+                detail={
+                    "message": "Index version is not ready for validation",
+                    "readiness": readiness,
+                },
             )
         row.status = "validated"
         row.validated_at = datetime.now(UTC)
@@ -117,42 +191,143 @@ class IndexVersionService:
         return row
 
     async def activate(self, version_id: str) -> RagIndexVersion:
-        row = await self.get_by_id(version_id)
-        if row is None:
-            raise HTTPException(status_code=404, detail="Index version not found")
-        if row.status not in {"building", "validated", "active"}:
+        """Promote a validated candidate. Never activates building versions."""
+
+        row = await self._lock_version(version_id)
+        if row.status == "active":
+            return row
+        self._assert_transition(row.status, "active")
+        if row.status != "validated" or row.validated_at is None:
             raise HTTPException(
                 status_code=422,
-                detail=f"Cannot activate index version in status {row.status!r}",
+                detail="Only validated index versions can be activated",
             )
-        self._assert_dimensions_compatible(row.embedding_dimensions)
+        readiness = await self.promotion_readiness(row)
+        if not readiness["ready_for_activation"]:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "Index version failed promotion criteria",
+                    "readiness": readiness,
+                },
+            )
         await self._retire_other_active(except_id=row.id)
         now = datetime.now(UTC)
         row.status = "active"
         row.activated_at = now
         row.retired_at = None
-        if row.validated_at is None:
-            row.validated_at = now
         await self.db.flush()
+        try:
+            await bump_corpus_generation(organization_id=None, project_id=None)
+        except Exception:
+            logger.exception("Failed to bump retrieval corpus generation after activation")
         return row
+
+    async def rollback(self, version_id: str) -> RagIndexVersion:
+        """Re-activate a retired version without re-embedding."""
+
+        row = await self._lock_version(version_id)
+        if row.status == "active":
+            return row
+        if row.status != "retired":
+            raise HTTPException(
+                status_code=422,
+                detail=f"Rollback requires a retired version (got {row.status!r})",
+            )
+        self._assert_dimensions_compatible(row.embedding_dimensions)
+        chunk_count = await self._count_chunks_for_version(row.id)
+        if chunk_count < 1:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot rollback to a version with no remaining chunks",
+            )
+        await self._retire_other_active(except_id=row.id)
+        now = datetime.now(UTC)
+        row.status = "active"
+        row.activated_at = now
+        row.retired_at = None
+        await self.db.flush()
+        try:
+            await bump_corpus_generation(organization_id=None, project_id=None)
+        except Exception:
+            logger.exception("Failed to bump retrieval corpus generation after rollback")
+        return row
+
+    async def promotion_readiness(self, row: RagIndexVersion) -> dict[str, object]:
+        documents_total = await self._count_documents()
+        documents_indexed = await self._count_documents(status="indexed")
+        docs_with_chunks = await self._count_documents_with_chunks(row.id)
+        chunk_count = await self._count_chunks_for_version(row.id)
+        jobs_failed = await self._count_jobs(status="failed")
+        jobs_active = await self._count_jobs(active_only=True)
+        coverage = (
+            (docs_with_chunks / documents_indexed) if documents_indexed > 0 else 1.0
+        )
+        min_coverage = float(settings.RAG_INDEX_ACTIVATION_MIN_DOC_COVERAGE)
+        max_failed = int(settings.RAG_INDEX_ACTIVATION_MAX_FAILED_JOBS)
+        dimension_ok = row.embedding_dimensions == RAG_VECTOR_DIMENSIONS
+        has_chunks = chunk_count > 0 or documents_indexed == 0
+        coverage_ok = coverage >= min_coverage
+        failed_ok = jobs_failed <= max_failed
+        ready_for_validation = dimension_ok and has_chunks
+        ready_for_activation = (
+            dimension_ok
+            and has_chunks
+            and coverage_ok
+            and failed_ok
+            and jobs_active == 0
+            and row.validated_at is not None
+        )
+        return {
+            "version_id": row.id,
+            "version_key": row.key,
+            "status": row.status,
+            "documents_total": documents_total,
+            "documents_indexed": documents_indexed,
+            "documents_with_chunks": docs_with_chunks,
+            "documents_incomplete": max(documents_indexed - docs_with_chunks, 0),
+            "chunk_count": chunk_count,
+            "coverage": round(coverage, 4),
+            "min_coverage": min_coverage,
+            "jobs_active": jobs_active,
+            "jobs_failed": jobs_failed,
+            "max_failed_jobs": max_failed,
+            "dimension_ok": dimension_ok,
+            "ready_for_validation": ready_for_validation,
+            "ready_for_activation": ready_for_activation,
+        }
 
     async def status_summary(self) -> dict[str, object]:
         active = await self.ensure_active_version()
+        desired = pipeline_version_metadata(self.config)
+        building = await self.get_by_key(str(desired["index_version"]))
+        if building is not None and (
+            building.id == active.id or building.status not in {"building", "validated"}
+        ):
+            building = None
         snapshot = pipeline_snapshot_from_row(active)
         documents_total = await self._count_documents()
         documents_indexed = await self._count_documents(status="indexed")
-        documents_stale = await self._count_stale_indexed(snapshot)
+        documents_current = await self._count_documents_with_chunks(active.id)
+        documents_stale = max(documents_indexed - documents_current, 0)
         jobs_active = await self._count_jobs(active_only=True)
         jobs_failed = await self._count_jobs(status="failed")
         versions = await self.list_versions()
+        building_readiness = (
+            await self.promotion_readiness(building) if building is not None else None
+        )
         return {
             "active_version": active,
+            "desired_index_version": desired["index_version"],
+            "building_version": building,
+            "building_readiness": building_readiness,
             "pipeline": snapshot,
             "schema_embedding_dimensions": RAG_VECTOR_DIMENSIONS,
             "documents_total": documents_total,
             "documents_indexed": documents_indexed,
-            "documents_current": max(documents_indexed - documents_stale, 0),
+            "documents_current": documents_current,
             "documents_stale": documents_stale,
+            "documents_incomplete": documents_stale,
             "jobs_active": jobs_active,
             "jobs_failed": jobs_failed,
             "versions": versions,
@@ -165,22 +340,16 @@ class IndexVersionService:
         actor_user_id: str,
         limit: int = 50,
     ) -> dict[str, object]:
-        """Non-destructively enqueue reindex jobs for stale indexed documents.
+        """Enqueue side-by-side indexing into the write target version."""
 
-        Reuses the existing embedding column when dimensions match the pgvector
-        schema. Documents are rebuilt in place (chunks replaced on successful
-        ingestion) rather than dropping the prior index version first.
-        """
-
-        active = await self.ensure_active_version()
-        self._assert_dimensions_compatible(active.embedding_dimensions)
-        snapshot = pipeline_snapshot_from_row(active)
-        stale_ids = await self._list_stale_document_ids(snapshot, limit=limit)
+        target = await self.resolve_write_version()
+        self._assert_dimensions_compatible(target.embedding_dimensions)
+        missing = await self._list_documents_missing_version(target.id, limit=limit)
         ingestion = DocumentIngestionService(self.db, config=self.config)
         enqueued = 0
         skipped = 0
         job_ids: list[str] = []
-        for document_id, owner_id in stale_ids:
+        for document_id, owner_id in missing:
             job = await ingestion.enqueue_document_indexing(
                 document_id=document_id,
                 user_id=owner_id or actor_user_id,
@@ -189,22 +358,66 @@ class IndexVersionService:
             )
             enqueued += 1
             job_ids.append(job.id)
+        active = await self.get_active_version()
         return {
-            "requested": len(stale_ids),
+            "requested": len(missing),
             "enqueued": enqueued,
             "skipped": skipped,
             "job_ids": job_ids,
-            "active_index_version": active.key,
+            "active_index_version": active.key if active is not None else target.key,
+            "target_index_version": target.key,
+            "target_index_version_id": target.id,
         }
+
+    async def cleanup_retired_versions(self) -> dict[str, int]:
+        """Delete chunks for retired versions past retention; keep version rows."""
+
+        retention_days = int(settings.RAG_INDEX_RETENTION_DAYS)
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+        result = await self.db.execute(
+            select(RagIndexVersion).where(
+                RagIndexVersion.status == "retired",
+                RagIndexVersion.retired_at.is_not(None),
+                RagIndexVersion.retired_at < cutoff,
+            )
+        )
+        versions = list(result.scalars().all())
+        deleted_chunks = 0
+        for version in versions:
+            chunk_result = await self.db.execute(
+                delete(RagChunk).where(RagChunk.index_version_id == version.id)
+            )
+            deleted_chunks += int(chunk_result.rowcount or 0)
+        await self.db.commit()
+        return {"versions_considered": len(versions), "chunks_deleted": deleted_chunks}
+
+    async def _lock_version(self, version_id: str) -> RagIndexVersion:
+        result = await self.db.execute(
+            select(RagIndexVersion)
+            .where(RagIndexVersion.id == version_id)
+            .with_for_update()
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Index version not found")
+        await self.db.execute(
+            select(RagIndexVersion.id)
+            .where(RagIndexVersion.status == "active")
+            .with_for_update()
+        )
+        return row
 
     async def _retire_other_active(self, *, except_id: str | None) -> None:
         result = await self.db.execute(
-            select(RagIndexVersion).where(RagIndexVersion.status == "active")
+            select(RagIndexVersion)
+            .where(RagIndexVersion.status == "active")
+            .with_for_update()
         )
         now = datetime.now(UTC)
         for row in result.scalars().all():
             if except_id is not None and row.id == except_id:
                 continue
+            self._assert_transition(row.status, "retired")
             row.status = "retired"
             row.retired_at = now
 
@@ -222,55 +435,53 @@ class IndexVersionService:
             stmt = stmt.where(RagIngestionJob.status == status)
         return int(await self.db.scalar(stmt) or 0)
 
-    def _stale_predicate_sql(self, snapshot: dict[str, object]) -> tuple[str, dict[str, object]]:
-        clauses = []
-        params: dict[str, object] = {}
-        for key in (
-            "parser_version",
-            "chunker_version",
-            "embedding_schema_version",
-            "embedding_provider",
-            "embedding_model",
-            "embedding_dimensions",
-            "index_version",
-        ):
-            param = f"p_{key}"
-            clauses.append(
-                f"(metadata_json::jsonb->>'{key}') IS DISTINCT FROM CAST(:{param} AS TEXT)"
-            )
-            params[param] = str(snapshot.get(key))
-        return " OR ".join(clauses), params
-
-    async def _count_stale_indexed(self, snapshot: dict[str, object]) -> int:
-        where_sql, params = self._stale_predicate_sql(snapshot)
-        sql = text(
-            f"""
-            SELECT count(*) FROM rag_documents
-            WHERE deleted_at IS NULL
-              AND status = 'indexed'
-              AND ({where_sql})
-            """
+    async def _count_chunks_for_version(self, version_id: str) -> int:
+        stmt = select(func.count()).select_from(RagChunk).where(
+            RagChunk.index_version_id == version_id
         )
-        result = await self.db.execute(sql, params)
-        return int(result.scalar_one() or 0)
+        return int(await self.db.scalar(stmt) or 0)
 
-    async def _list_stale_document_ids(
-        self, snapshot: dict[str, object], *, limit: int
+    async def _count_documents_with_chunks(self, version_id: str) -> int:
+        stmt = (
+            select(func.count(func.distinct(RagChunk.document_id)))
+            .select_from(RagChunk)
+            .join(RagDocument, RagDocument.id == RagChunk.document_id)
+            .where(
+                RagChunk.index_version_id == version_id,
+                RagDocument.deleted_at.is_(None),
+                RagDocument.status == "indexed",
+            )
+        )
+        return int(await self.db.scalar(stmt) or 0)
+
+    async def _list_documents_missing_version(
+        self, version_id: str, *, limit: int
     ) -> list[tuple[str, str]]:
-        where_sql, params = self._stale_predicate_sql(snapshot)
-        params = {**params, "limit": limit}
         sql = text(
-            f"""
-            SELECT id, user_id FROM rag_documents
-            WHERE deleted_at IS NULL
-              AND status = 'indexed'
-              AND ({where_sql})
-            ORDER BY updated_at ASC
+            """
+            SELECT d.id, d.user_id
+            FROM rag_documents d
+            WHERE d.deleted_at IS NULL
+              AND d.status = 'indexed'
+              AND NOT EXISTS (
+                SELECT 1 FROM rag_chunks c
+                WHERE c.document_id = d.id
+                  AND c.index_version_id = :version_id
+              )
+            ORDER BY d.updated_at ASC
             LIMIT :limit
             """
         )
-        result = await self.db.execute(sql, params)
+        result = await self.db.execute(sql, {"version_id": version_id, "limit": limit})
         return [(str(row[0]), str(row[1])) for row in result.all()]
+
+    @staticmethod
+    def _assert_transition(current: str, target: str) -> None:
+        if (current, target) not in _ALLOWED_TRANSITIONS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid index version transition {current!r} -> {target!r}",
+            )
 
     @staticmethod
     def _assert_dimensions_compatible(dimensions: int) -> None:
@@ -291,7 +502,6 @@ def assert_valid_status(status: str) -> None:
         raise ValueError(f"Invalid index version status: {status}")
 
 
-# Re-export for callers that only need the fingerprint helper.
 __all__ = [
     "IndexVersionService",
     "assert_valid_status",

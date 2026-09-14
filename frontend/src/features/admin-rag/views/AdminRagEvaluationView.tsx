@@ -248,7 +248,7 @@ export default function AdminRagEvaluationView() {
                         {selectedDataset && (
                             <Typography variant="body2" color="text.secondary">
                                 {selectedDataset.description || "No description"} · tags:{" "}
-                                {selectedDataset.tags.join(", ") || "none"}
+                                {selectedDataset.tags?.join(", ") || "none"}
                             </Typography>
                         )}
                     </SectionCard>
@@ -302,11 +302,11 @@ export default function AdminRagEvaluationView() {
                                 <Stack spacing={1.5}>
                                     <Typography variant="body2">
                                         strategy={probe.strategy} · latencies(ms):{" "}
-                                        {Object.entries(probe.latencies_ms)
+                                        {Object.entries(probe.latencies_ms ?? {})
                                             .map(([key, value]) => `${key}=${value}`)
                                             .join(" · ")}
                                     </Typography>
-                                    <CandidateRows candidates={probe.candidates} />
+                                    <CandidateRows candidates={probe.candidates ?? []} />
                                     <Box>
                                         <Typography variant="subtitle2" gutterBottom>
                                             Assembled context
@@ -370,9 +370,9 @@ export default function AdminRagEvaluationView() {
                                             <TableRow key={item.id}>
                                                 <TableCell>{item.question}</TableCell>
                                                 <TableCell>
-                                                    {item.expected_chunk_ids.join(", ") || "—"}
+                                                    {item.expected_chunk_ids?.join(", ") || "—"}
                                                 </TableCell>
-                                                <TableCell>{item.tags.join(", ") || "—"}</TableCell>
+                                                <TableCell>{item.tags?.join(", ") || "—"}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -422,12 +422,12 @@ export default function AdminRagEvaluationView() {
                                                 </TableCell>
                                                 <TableCell>{run.status}</TableCell>
                                                 <TableCell>
-                                                    R@K={run.metrics.recall_at_k ?? "—"} · MRR=
-                                                    {run.metrics.mrr ?? "—"} · nDCG=
-                                                    {run.metrics.ndcg_at_k ?? "—"}
+                                                    R@K={String(run.metrics?.recall_at_k ?? "—")} · MRR=
+                                                    {String(run.metrics?.mrr ?? "—")} · nDCG=
+                                                    {String(run.metrics?.ndcg_at_k ?? "—")}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {run.comparison
+                                                    {run.comparison?.deltas
                                                         ? Object.entries(run.comparison.deltas)
                                                               .map(
                                                                   ([key, value]) =>

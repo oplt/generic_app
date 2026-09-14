@@ -75,6 +75,8 @@ class EvaluationTenantTest(unittest.IsolatedAsyncioTestCase):
     async def test_run_dataset_persists_aggregate_and_comparison(self) -> None:
         db = MagicMock()
         db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
         service = RagEvaluationService(db)
         dataset = SimpleNamespace(id="ds-1")
         case = SimpleNamespace(

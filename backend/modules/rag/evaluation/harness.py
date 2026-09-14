@@ -13,16 +13,16 @@ from pathlib import Path
 from typing import Any
 
 from backend.lib.vectors import cosine_similarity, estimate_tokens
+from backend.modules.rag.application.quality_strategies import (
+    QualityOptions,
+    apply_quality_strategies,
+)
 from backend.modules.rag.application.retrieval_ranker import (
     HybridRetrievalRanker,
     reciprocal_rank_fuse,
 )
-from backend.modules.rag.application.quality_strategies import (
-    apply_quality_strategies,
-    QualityOptions,
-)
-from backend.modules.rag.evaluation.metrics import retrieval_metrics
 from backend.modules.rag.domain.models import RetrievedChunk
+from backend.modules.rag.evaluation.metrics import retrieval_metrics
 
 EVALUATION_VERSION = "rag-offline-v1"
 STRATEGIES = (

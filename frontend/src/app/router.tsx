@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Box, Skeleton, Stack } from "@mui/material";
+import { ModuleRouteGate } from "../components/guards/ModuleRouteGate";
 import { ProtectedRoute } from "../components/guards/ProtectedRoute";
 import { useAuth } from "../hooks/useAuth";
 
@@ -33,6 +34,8 @@ const AdminDiagnosticsPage = lazy(
 );
 const AiStudioPage = lazy(() => import("../features/ai/views/AiStudioView"));
 const KnowledgeChatPage = lazy(() => import("../features/chat/views/KnowledgeChatView"));
+// <generic-app:lazy-imports>
+// </generic-app:lazy-imports>
 
 function PageLoader() {
     return (
@@ -52,6 +55,22 @@ function PageLoader() {
 
 function SuspensePage({ children }: { children: React.ReactNode }) {
     return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
+}
+
+function GatedPage({
+    pageKey,
+    moduleKey,
+    children,
+}: {
+    pageKey: string;
+    moduleKey?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <ModuleRouteGate pageKey={pageKey} moduleKey={moduleKey}>
+            <SuspensePage>{children}</SuspensePage>
+        </ModuleRouteGate>
+    );
 }
 
 export function AppRouter() {
@@ -74,16 +93,39 @@ export function AppRouter() {
                     }
                 >
                     <Route path="/dashboard" element={<SuspensePage><DashboardPage /></SuspensePage>} />
-                    <Route path="/calendar" element={<SuspensePage><CalendarPage /></SuspensePage>} />
+                    <Route
+                        path="/calendar"
+                        element={
+                            <GatedPage pageKey="calendar.main" moduleKey="calendar">
+                                <CalendarPage />
+                            </GatedPage>
+                        }
+                    />
                     <Route path="/projects" element={<SuspensePage><ProjectsPage /></SuspensePage>} />
                     <Route path="/projects/:projectId" element={<SuspensePage><ProjectDetailPage /></SuspensePage>} />
                     <Route path="/platform" element={<SuspensePage><PlatformPage /></SuspensePage>} />
-                    <Route path="/ai" element={<SuspensePage><AiStudioPage /></SuspensePage>} />
-                    <Route path="/knowledge-chat" element={<SuspensePage><KnowledgeChatPage /></SuspensePage>} />
+                    <Route
+                        path="/ai"
+                        element={
+                            <GatedPage pageKey="ai.studio" moduleKey="ai">
+                                <AiStudioPage />
+                            </GatedPage>
+                        }
+                    />
+                    <Route
+                        path="/knowledge-chat"
+                        element={
+                            <GatedPage pageKey="chat.knowledge" moduleKey="chat">
+                                <KnowledgeChatPage />
+                            </GatedPage>
+                        }
+                    />
                     <Route path="/knowledge" element={<Navigate to="/knowledge-chat" replace />} />
                     <Route path="/observability" element={<SuspensePage><ObservabilityPage /></SuspensePage>} />
                     <Route path="/profile" element={<SuspensePage><ProfilePage /></SuspensePage>} />
                     <Route path="/notifications" element={<SuspensePage><NotificationsPage /></SuspensePage>} />
+                    {/* <generic-app:routes> */}
+                    {/* </generic-app:routes> */}
                     <Route
                         path="/admin/users"
                         element={
@@ -119,7 +161,9 @@ export function AppRouter() {
                                 isAdmin={isAdmin}
                                 requireAdmin
                             >
-                                <SuspensePage><AdminRagIndexesPage /></SuspensePage>
+                                <GatedPage pageKey="rag.admin.indexes" moduleKey="rag">
+                                    <AdminRagIndexesPage />
+                                </GatedPage>
                             </ProtectedRoute>
                         }
                     />
@@ -132,7 +176,9 @@ export function AppRouter() {
                                 isAdmin={isAdmin}
                                 requireAdmin
                             >
-                                <SuspensePage><AdminRagEvaluationPage /></SuspensePage>
+                                <GatedPage pageKey="rag.admin.evaluation" moduleKey="rag">
+                                    <AdminRagEvaluationPage />
+                                </GatedPage>
                             </ProtectedRoute>
                         }
                     />
@@ -145,7 +191,9 @@ export function AppRouter() {
                                 isAdmin={isAdmin}
                                 requireAdmin
                             >
-                                <SuspensePage><AdminJobsPage /></SuspensePage>
+                                <GatedPage pageKey="jobs.admin.console" moduleKey="jobs">
+                                    <AdminJobsPage />
+                                </GatedPage>
                             </ProtectedRoute>
                         }
                     />
@@ -158,7 +206,9 @@ export function AppRouter() {
                                 isAdmin={isAdmin}
                                 requireAdmin
                             >
-                                <SuspensePage><AdminDiagnosticsPage /></SuspensePage>
+                                <GatedPage pageKey="diagnostics.admin" moduleKey="diagnostics">
+                                    <AdminDiagnosticsPage />
+                                </GatedPage>
                             </ProtectedRoute>
                         }
                     />

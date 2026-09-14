@@ -20,6 +20,7 @@ export type CapabilityProfileSummary = {
     label: string;
     description: string;
     optional_modules: string[];
+    selected_modules?: string[];
     active_modules: string[];
     backend_router_keys: string[];
     celery_queues: string[];

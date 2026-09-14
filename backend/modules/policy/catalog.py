@@ -25,6 +25,8 @@ JOBS_RETRY = "jobs.retry"
 JOBS_CANCEL = "jobs.cancel"
 DIAGNOSTICS_READ = "diagnostics.read"
 ADMIN_MANAGE = "admin.manage"
+# <generic-app:permission-constants>
+# </generic-app:permission-constants>
 
 ALL_PERMISSIONS: tuple[str, ...] = (
     PROJECT_READ,
@@ -43,6 +45,8 @@ ALL_PERMISSIONS: tuple[str, ...] = (
     JOBS_CANCEL,
     DIAGNOSTICS_READ,
     ADMIN_MANAGE,
+    # <generic-app:permission-entries>
+    # </generic-app:permission-entries>
 )
 
 SCOPE_SYSTEM = "system"

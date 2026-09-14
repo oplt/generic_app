@@ -1,9 +1,21 @@
-"""Patch intentional registry / router / alembic / policy catalog wiring."""
+"""Patch intentional registry / router / celery / frontend / alembic / policy wiring.
+
+All patches target stable ``<generic-app:…>`` marker sections so edits are
+deterministic, idempotent, and safe to re-run.
+"""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
+from backend.tools.generic_app.journal import MutationJournal
+from backend.tools.generic_app.markers import (
+    MarkerError,
+    merge_line_into_marked_block,
+    require_markers,
+    upsert_marked_block,
+)
 from backend.tools.generic_app.naming import ModuleNames
 
 
@@ -11,109 +23,511 @@ class WiringError(RuntimeError):
     """Raised when an intentional registration file cannot be patched safely."""
 
 
-def wire_manifest_registry(registry_path: Path, names: ModuleNames) -> bool:
-    """Insert manifest import + REGISTERED_MANIFESTS entry. Returns True if changed."""
+def _write(journal: MutationJournal | None, path: Path, content: str) -> None:
+    if journal is not None:
+        journal.write_text(path, content)
+    else:
+        path.write_text(content, encoding="utf-8")
 
+
+def _patch_file(
+    path: Path,
+    *,
+    open_marker: str,
+    close_marker: str,
+    line: str,
+    journal: MutationJournal | None,
+    sort: bool = True,
+) -> bool:
+    text = path.read_text(encoding="utf-8")
+    try:
+        new_text, changed = merge_line_into_marked_block(
+            text,
+            open_marker=open_marker,
+            close_marker=close_marker,
+            line=line,
+            sort=sort,
+        )
+    except MarkerError as exc:
+        raise WiringError(str(exc)) from exc
+    if changed:
+        _write(journal, path, new_text)
+    return changed
+
+
+def validate_wiring_targets(
+    repo_root: Path,
+    *,
+    crud: bool,
+    permissions: bool,
+    celery: bool,
+    frontend: bool,
+    profile: str | None,
+) -> None:
+    """Fail before apply when required marker seams are missing."""
+
+    checks: list[tuple[Path, tuple[tuple[str, str], ...]]] = [
+        (
+            repo_root / "backend/modules/manifests/registry.py",
+            (
+                ("# <generic-app:manifest-imports>", "# </generic-app:manifest-imports>"),
+                ("# <generic-app:manifest-entries>", "# </generic-app:manifest-entries>"),
+            ),
+        ),
+        (
+            repo_root / "backend/api/router_registry.py",
+            (
+                (
+                    "# <generic-app:router-contributions>",
+                    "# </generic-app:router-contributions>",
+                ),
+            ),
+        ),
+    ]
+    if crud:
+        checks.append(
+            (
+                repo_root / "backend/alembic/env.py",
+                (("# <generic-app:model-imports>", "# </generic-app:model-imports>"),),
+            )
+        )
+    if permissions:
+        checks.append(
+            (
+                repo_root / "backend/modules/policy/catalog.py",
+                (
+                    (
+                        "# <generic-app:permission-constants>",
+                        "# </generic-app:permission-constants>",
+                    ),
+                    (
+                        "# <generic-app:permission-entries>",
+                        "# </generic-app:permission-entries>",
+                    ),
+                ),
+            )
+        )
+    if celery:
+        checks.append(
+            (
+                repo_root / "backend/modules/manifests/celery_contrib.py",
+                (
+                    ("# <generic-app:task-routes>", "# </generic-app:task-routes>"),
+                    ("# <generic-app:task-modules>", "# </generic-app:task-modules>"),
+                ),
+            )
+        )
+    if frontend:
+        checks.append(
+            (
+                repo_root / "frontend/src/app/router.tsx",
+                (
+                    ("// <generic-app:lazy-imports>", "// </generic-app:lazy-imports>"),
+                    (
+                        "{/* <generic-app:routes> */}",
+                        "{/* </generic-app:routes> */}",
+                    ),
+                ),
+            )
+        )
+    if profile:
+        checks.append(
+            (
+                repo_root / "backend/modules/platform/profiles.py",
+                (
+                    (
+                        "# <generic-app:profile-extra-modules>",
+                        "# </generic-app:profile-extra-modules>",
+                    ),
+                ),
+            )
+        )
+
+    for path, markers in checks:
+        if not path.is_file():
+            raise WiringError(f"Missing wiring target: {path}")
+        try:
+            require_markers(path, *markers)
+        except MarkerError as exc:
+            raise WiringError(str(exc)) from exc
+
+
+def wire_manifest_registry(
+    registry_path: Path,
+    names: ModuleNames,
+    *,
+    journal: MutationJournal | None = None,
+) -> bool:
+    changed = False
+    import_line = (
+        f"from backend.modules.{names.key}.manifest import MANIFEST as {names.constant}"
+    )
+    changed |= _patch_file(
+        registry_path,
+        open_marker="# <generic-app:manifest-imports>",
+        close_marker="# </generic-app:manifest-imports>",
+        line=import_line,
+        journal=journal,
+    )
+    changed |= _patch_file(
+        registry_path,
+        open_marker="# <generic-app:manifest-entries>",
+        close_marker="# </generic-app:manifest-entries>",
+        line=f"    {names.constant},",
+        journal=journal,
+    )
+    return changed
+
+
+def wire_router_contribution(
+    registry_path: Path,
+    names: ModuleNames,
+    *,
+    journal: MutationJournal | None = None,
+) -> bool:
+    line = (
+        f'    "{names.key}": RouterContribution(\n'
+        f'        key="{names.key}",\n'
+        f'        import_path="backend.modules.{names.key}.api.router",\n'
+        f'        prefix="/{names.key}",\n'
+        f'        tags=("{names.key}",),\n'
+        f"    ),"
+    )
+    # Multi-line entries cannot use simple line-sort merge. Upsert by key.
     text = registry_path.read_text(encoding="utf-8")
-    import_line = (
-        f"from backend.modules.{names.key}.manifest import MANIFEST as {names.constant}\n"
-    )
-    if import_line in text:
-        return False
-
-    # Keep imports sorted-ish: insert before OPTIONAL_PLATFORM import block end /
-    # after last `from backend.modules` manifest import before REGISTERED_MANIFESTS.
-    anchor = "from backend.observability.manifest import MANIFEST as OBSERVABILITY\n"
-    if anchor not in text:
-        raise WiringError("Could not locate observability manifest import for wiring")
-    text = text.replace(anchor, anchor + import_line, 1)
-
-    entry = f"    {names.constant},\n"
-    tuple_anchor = "    MEMORY,\n    *OPTIONAL_PLATFORM_MANIFESTS,\n"
-    if tuple_anchor not in text:
-        raise WiringError("Could not locate REGISTERED_MANIFESTS insertion point")
-    text = text.replace(
-        tuple_anchor,
-        f"    MEMORY,\n{entry}    *OPTIONAL_PLATFORM_MANIFESTS,\n",
-        1,
-    )
-    registry_path.write_text(text, encoding="utf-8")
-    return True
-
-
-def wire_api_router(router_path: Path, names: ModuleNames) -> bool:
-    text = router_path.read_text(encoding="utf-8")
-    import_line = (
-        f"from backend.modules.{names.key}.api.router import router as {names.key}_router\n"
-    )
-    include_line = (
-        f'api_router.include_router({names.key}_router, prefix="/{names.key}", '
-        f'tags=["{names.key}"])\n'
-    )
-    if include_line in text:
-        return False
-
-    # Insert import among module imports (after settings import is fine).
-    settings_import = (
-        "from backend.modules.settings.router import router as settings_router\n"
-    )
-    if settings_import not in text:
-        raise WiringError("Could not locate settings router import for wiring")
-    text = text.replace(settings_import, settings_import + import_line, 1)
-
-    admin_include = (
-        'api_router.include_router(admin_router, prefix="/admin", tags=["admin"])\n'
-    )
-    if admin_include not in text:
-        raise WiringError("Could not locate admin router include for wiring")
-    text = text.replace(admin_include, include_line + admin_include, 1)
-    router_path.write_text(text, encoding="utf-8")
-    return True
+    open_m = "# <generic-app:router-contributions>"
+    close_m = "# </generic-app:router-contributions>"
+    try:
+        # Drop any previous contribution for this key, then append.
+        match = re.search(
+            re.escape(open_m) + r"(.*?)" + re.escape(close_m),
+            text,
+            re.DOTALL,
+        )
+        if match is None:
+            raise WiringError("Missing router contribution markers")
+        body = match.group(1)
+        # Remove existing block for this module key.
+        body = re.sub(
+            rf'\n    "{re.escape(names.key)}": RouterContribution\(.*?\n    \),',
+            "\n",
+            body,
+            count=1,
+            flags=re.DOTALL,
+        )
+        existing_lines = [ln for ln in body.splitlines() if ln.strip()]
+        # Keep other multi-line contributions intact by storing as raw chunks —
+        # reconstruct from remaining text + new contribution.
+        cleaned = "\n".join(existing_lines)
+        if cleaned.strip():
+            new_body = "\n" + cleaned.rstrip() + "\n" + line + "\n"
+        else:
+            new_body = "\n" + line + "\n"
+        # Sort by module key for stability.
+        chunks = re.findall(
+            r'    "[^"]+": RouterContribution\(.*?\n    \),',
+            new_body,
+            flags=re.DOTALL,
+        )
+        chunks = sorted(set(chunks), key=lambda chunk: chunk.split('"', 2)[1])
+        rebuilt = "\n" + "\n".join(chunks) + "\n" if chunks else "\n"
+        new_text, changed = upsert_marked_block(
+            text,
+            open_marker=open_m,
+            close_marker=close_m,
+            lines=rebuilt.strip("\n").splitlines() if rebuilt.strip() else [],
+            sort=False,
+        )
+    except (MarkerError, WiringError) as exc:
+        raise WiringError(str(exc)) from exc
+    if changed:
+        _write(journal, registry_path, new_text)
+    return changed
 
 
-def wire_alembic_env(env_path: Path, names: ModuleNames) -> bool:
-    text = env_path.read_text(encoding="utf-8")
-    import_line = (
+def wire_alembic_env(
+    env_path: Path,
+    names: ModuleNames,
+    *,
+    journal: MutationJournal | None = None,
+) -> bool:
+    line = (
         f"from backend.modules.{names.key}.infrastructure import models as "
-        f"{names.key}_models  # noqa: F401\n"
+        f"{names.key}_models  # noqa: F401"
     )
-    if import_line in text:
+    return _patch_file(
+        env_path,
+        open_marker="# <generic-app:model-imports>",
+        close_marker="# </generic-app:model-imports>",
+        line=line,
+        journal=journal,
+    )
+
+
+def wire_policy_catalog(
+    catalog_path: Path,
+    names: ModuleNames,
+    *,
+    journal: MutationJournal | None = None,
+) -> bool:
+    changed = False
+    changed |= _patch_file(
+        catalog_path,
+        open_marker="# <generic-app:permission-constants>",
+        close_marker="# </generic-app:permission-constants>",
+        line=f'{names.constant}_READ = "{names.permission_prefix}.read"',
+        journal=journal,
+    )
+    changed |= _patch_file(
+        catalog_path,
+        open_marker="# <generic-app:permission-constants>",
+        close_marker="# </generic-app:permission-constants>",
+        line=f'{names.constant}_MANAGE = "{names.permission_prefix}.manage"',
+        journal=journal,
+    )
+    changed |= _patch_file(
+        catalog_path,
+        open_marker="# <generic-app:permission-entries>",
+        close_marker="# </generic-app:permission-entries>",
+        line=f"    {names.constant}_READ,",
+        journal=journal,
+    )
+    changed |= _patch_file(
+        catalog_path,
+        open_marker="# <generic-app:permission-entries>",
+        close_marker="# </generic-app:permission-entries>",
+        line=f"    {names.constant}_MANAGE,",
+        journal=journal,
+    )
+    return changed
+
+
+def wire_celery_contrib(
+    contrib_path: Path,
+    names: ModuleNames,
+    *,
+    journal: MutationJournal | None = None,
+) -> bool:
+    changed = False
+    route_line = (
+        f'    "{names.key}": {{"{names.key}.example_task": "{names.key}"}},'
+    )
+    changed |= _patch_file(
+        contrib_path,
+        open_marker="# <generic-app:task-routes>",
+        close_marker="# </generic-app:task-routes>",
+        line=route_line,
+        journal=journal,
+    )
+    changed |= _patch_file(
+        contrib_path,
+        open_marker="# <generic-app:task-modules>",
+        close_marker="# </generic-app:task-modules>",
+        line=f'    "backend.modules.{names.key}.workers",',
+        journal=journal,
+    )
+    return changed
+
+
+def wire_profile_extra_modules(
+    profiles_path: Path,
+    *,
+    profile_key: str,
+    module_key: str,
+    journal: MutationJournal | None = None,
+) -> bool:
+    text = profiles_path.read_text(encoding="utf-8")
+    open_m = "# <generic-app:profile-extra-modules>"
+    close_m = "# </generic-app:profile-extra-modules>"
+    match = re.search(
+        re.escape(open_m) + r"(.*?)" + re.escape(close_m),
+        text,
+        re.DOTALL,
+    )
+    if match is None:
+        raise WiringError("Missing profile-extra-modules markers")
+
+    extras: dict[str, list[str]] = {}
+    for raw in match.group(1).splitlines():
+        line = raw.strip().rstrip(",")
+        if not line or line.startswith("#"):
+            continue
+        parsed = re.match(r'"([^"]+)":\s*\((.*)\)', line)
+        if not parsed:
+            continue
+        key = parsed.group(1)
+        inner = parsed.group(2).strip()
+        modules = [
+            part.strip().strip('"').strip("'")
+            for part in inner.split(",")
+            if part.strip().strip('"').strip("'")
+        ]
+        extras.setdefault(key, [])
+        for module in modules:
+            if module not in extras[key]:
+                extras[key].append(module)
+
+    bucket = extras.setdefault(profile_key, [])
+    if module_key in bucket:
         return False
-    anchor = "from backend.modules.users import models as user_models  # noqa: F401\n"
-    if anchor not in text:
-        raise WiringError("Could not locate alembic users model import for wiring")
-    text = text.replace(anchor, anchor + import_line, 1)
-    env_path.write_text(text, encoding="utf-8")
-    return True
+    bucket.append(module_key)
 
+    lines: list[str] = []
+    for key in sorted(extras):
+        mods = ", ".join(f'"{item}"' for item in sorted(extras[key]))
+        lines.append(f'    "{key}": ({mods},),')
 
-def wire_policy_catalog(catalog_path: Path, names: ModuleNames) -> bool:
-    """Append permission constants + ALL_PERMISSIONS entries."""
-
-    text = catalog_path.read_text(encoding="utf-8")
-    read_const = f'{names.constant}_READ = "{names.permission_prefix}.read"'
-    manage_const = f'{names.constant}_MANAGE = "{names.permission_prefix}.manage"'
-    if read_const in text:
-        return False
-
-    # Insert constants before ALL_PERMISSIONS.
-    anchor = "ALL_PERMISSIONS: tuple[str, ...] = ("
-    if anchor not in text:
-        raise WiringError("Could not locate ALL_PERMISSIONS for wiring")
-    constants = (
-        f"\n{read_const}\n{manage_const}\n"
+    new_text, changed = upsert_marked_block(
+        text,
+        open_marker=open_m,
+        close_marker=close_m,
+        lines=lines,
+        sort=False,
     )
-    text = text.replace(anchor, constants + anchor, 1)
+    if changed:
+        _write(journal, profiles_path, new_text)
+    return changed
 
-    # Insert into ALL_PERMISSIONS tuple before closing.
-    # Prefer after ADMIN_MANAGE,
-    admin_entry = "    ADMIN_MANAGE,\n)"
-    if admin_entry not in text:
-        raise WiringError("Could not locate ADMIN_MANAGE in ALL_PERMISSIONS")
-    text = text.replace(
-        admin_entry,
-        f"    ADMIN_MANAGE,\n    {names.constant}_READ,\n    {names.constant}_MANAGE,\n)",
-        1,
+
+def wire_frontend_router(
+    router_path: Path,
+    names: ModuleNames,
+    *,
+    journal: MutationJournal | None = None,
+) -> bool:
+    changed = False
+    lazy_line = (
+        f"const {names.pascal}ListPage = lazy(() => "
+        f'import("../features/{names.key}/views/{names.pascal}ListView"));'
     )
-    catalog_path.write_text(text, encoding="utf-8")
-    return True
+    changed |= _patch_file(
+        router_path,
+        open_marker="// <generic-app:lazy-imports>",
+        close_marker="// </generic-app:lazy-imports>",
+        line=lazy_line,
+        journal=journal,
+        sort=True,
+    )
+
+    # Multi-line JSX route — upsert by path attribute.
+    text = router_path.read_text(encoding="utf-8")
+    open_m = "{/* <generic-app:routes> */}"
+    close_m = "{/* </generic-app:routes> */}"
+    route_block = (
+        f'                    <Route\n'
+        f'                        path="/{names.key}"\n'
+        f"                        element={{\n"
+        f'                            <GatedPage pageKey="{names.key}.list" '
+        f'moduleKey="{names.key}">\n'
+        f"                                <{names.pascal}ListPage />\n"
+        f"                            </GatedPage>\n"
+        f"                        }}\n"
+        f"                    />"
+    )
+    match = re.search(
+        re.escape(open_m) + r"(.*?)" + re.escape(close_m),
+        text,
+        re.DOTALL,
+    )
+    if match is None:
+        raise WiringError("Missing frontend route markers")
+    body = match.group(1)
+    body = re.sub(
+        rf'\n\s*<Route\n\s*path="/{re.escape(names.key)}".*?\n\s*/>',
+        "\n",
+        body,
+        count=1,
+        flags=re.DOTALL,
+    )
+    chunks = re.findall(
+        r"\n?\s*<Route\n.*?/>",
+        body,
+        flags=re.DOTALL,
+    )
+    # Normalize and add
+    normalized = [chunk.strip("\n") for chunk in chunks if chunk.strip()]
+    normalized.append(route_block)
+    # Sort by path=
+    def _path_key(chunk: str) -> str:
+        found = re.search(r'path="([^"]+)"', chunk)
+        return found.group(1) if found else chunk
+
+    normalized = sorted(set(normalized), key=_path_key)
+    new_text, route_changed = upsert_marked_block(
+        text,
+        open_marker=open_m,
+        close_marker=close_m,
+        lines=normalized,
+        sort=False,
+    )
+    if route_changed:
+        _write(journal, router_path, new_text)
+        changed = True
+    return changed
+
+
+def apply_all_wiring(
+    repo_root: Path,
+    names: ModuleNames,
+    *,
+    crud: bool,
+    permissions: bool,
+    celery: bool,
+    frontend: bool,
+    profile: str | None,
+    journal: MutationJournal | None = None,
+) -> list[str]:
+    """Apply every required wiring patch; return relative paths that changed."""
+
+    validate_wiring_targets(
+        repo_root,
+        crud=crud,
+        permissions=permissions,
+        celery=celery,
+        frontend=frontend,
+        profile=profile,
+    )
+    wired: list[str] = []
+
+    def _track(path: Path, changed: bool) -> None:
+        if changed:
+            wired.append(str(path.relative_to(repo_root)))
+
+    registry = repo_root / "backend/modules/manifests/registry.py"
+    _track(registry, wire_manifest_registry(registry, names, journal=journal))
+
+    router_registry = repo_root / "backend/api/router_registry.py"
+    _track(
+        router_registry,
+        wire_router_contribution(router_registry, names, journal=journal),
+    )
+
+    if crud:
+        env_path = repo_root / "backend/alembic/env.py"
+        _track(env_path, wire_alembic_env(env_path, names, journal=journal))
+
+    if permissions:
+        catalog = repo_root / "backend/modules/policy/catalog.py"
+        _track(catalog, wire_policy_catalog(catalog, names, journal=journal))
+
+    if celery:
+        contrib = repo_root / "backend/modules/manifests/celery_contrib.py"
+        _track(contrib, wire_celery_contrib(contrib, names, journal=journal))
+
+    if frontend:
+        fe_router = repo_root / "frontend/src/app/router.tsx"
+        _track(fe_router, wire_frontend_router(fe_router, names, journal=journal))
+
+    if profile:
+        profiles = repo_root / "backend/modules/platform/profiles.py"
+        _track(
+            profiles,
+            wire_profile_extra_modules(
+                profiles,
+                profile_key=profile,
+                module_key=names.key,
+                journal=journal,
+            ),
+        )
+
+    return wired

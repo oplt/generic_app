@@ -19,9 +19,9 @@ from backend.modules.rag.application.quality_strategies import (
     merge_neighbor_chunks,
     quality_options_from_config,
 )
+from backend.modules.rag.application.rerankers import build_reranker
 from backend.modules.rag.application.retrieval_filters import exclude_injection_flagged_chunks
 from backend.modules.rag.application.retrieval_ranker import reciprocal_rank_fuse
-from backend.modules.rag.application.rerankers import build_reranker
 from backend.modules.rag.domain.models import RetrievalOutcome, RetrievedChunk
 from backend.modules.rag.infrastructure import metrics
 from backend.modules.rag.infrastructure.pgvector_errors import PgVectorUnavailableError
@@ -60,6 +60,12 @@ class RetrievalService:
             backend=str(getattr(self.config, "reranker_backend", "lightweight")),
         )
 
+    async def _active_index_version_id(self) -> str | None:
+        from backend.modules.rag.application.index_version_service import IndexVersionService
+
+        active = await IndexVersionService(self.db, config=self.config).get_active_version()
+        return active.id if active is not None else None
+
     async def retrieve(
         self,
         query: str,
@@ -92,6 +98,19 @@ class RetrievalService:
             if not valid_document_ids:
                 return RetrievalOutcome(chunks=[], no_matches=True)
             effective_filters["document_ids"] = valid_document_ids
+
+        try:
+            active_version_id = await self._active_index_version_id()
+        except Exception:
+            active_version_id = None
+        if not active_version_id:
+            logger.warning("RAG retrieval skipped: no active index version")
+            return RetrievalOutcome(
+                chunks=[],
+                degraded=True,
+                degradation_reason="no_active_index_version",
+            )
+        effective_filters["index_version_id"] = active_version_id
         filters = effective_filters or None
         cache_variant = (
             plan.cache_variant_prefix
@@ -100,6 +119,7 @@ class RetrievalService:
             + f":{getattr(self.config, 'embedding_dimensions', 'unknown')}"
             + f":reranker={getattr(self.config, 'reranker_backend', 'lightweight')}"
             + f":{pipeline_cache_variant_suffix()}"
+            + f":idx={active_version_id}"
             + f":q={int(getattr(self.config, 'dedup_exact_enabled', False))}"
             f"{int(getattr(self.config, 'dedup_near_enabled', False))}"
             f"{int(getattr(self.config, 'mmr_enabled', False))}"
@@ -202,10 +222,14 @@ class RetrievalService:
                 rerank_started = perf_counter()
                 filtered = self.ranker.rerank(query, filtered, limit=pool_limit)
                 metrics.rag_rerank_latency_ms.observe((perf_counter() - rerank_started) * 1000)
+            parents_by_doc_index: dict[tuple[str, int], str] | None = None
+            if quality.parent_child_expand:
+                parents_by_doc_index = await self._load_parent_texts(filtered)
             filtered = apply_quality_strategies(
                 filtered,
                 options=quality,
                 final_limit=plan.final_top_k,
+                parents_by_doc_index=parents_by_doc_index,
             )
             if quality.neighbor_expansion and quality.neighbor_window > 0:
                 filtered = await self._expand_neighbors(
@@ -322,6 +346,7 @@ class RetrievalService:
 
         document_ids = (filters or {}).get("document_ids")
         source_type = (filters or {}).get("source_type")
+        index_version_id = (filters or {}).get("index_version_id")
 
         async def _vector_lane() -> list[RetrievedChunk]:
             assert query_embedding is not None
@@ -344,6 +369,7 @@ class RetrievalService:
                 query=query,
                 candidate_limit=plan.lexical_limit,
                 organization_id=organization_id,
+                index_version_id=index_version_id,
             )
 
         if plan.strategy == "vector":
@@ -375,6 +401,36 @@ class RetrievalService:
             limit=plan.fuse_limit,
             k=plan.rrf_k,
         )
+
+    async def _load_parent_texts(
+        self, chunks: list[RetrievedChunk]
+    ) -> dict[tuple[str, int], str]:
+        """Resolve parent chunk bodies by (document_id, parent_chunk_index)."""
+
+        wanted: set[tuple[str, int]] = set()
+        for chunk in chunks:
+            if chunk.metadata.get("parent_content"):
+                continue
+            parent_idx = chunk.metadata.get("parent_chunk_index")
+            if isinstance(parent_idx, int):
+                wanted.add((chunk.document_id, parent_idx))
+        if not wanted:
+            return {}
+
+        parents: dict[tuple[str, int], str] = {}
+        for document_id in {doc_id for doc_id, _ in wanted}:
+            rows, _ = await self.repo.list_chunks_for_document(
+                document_id, limit=5000, offset=0
+            )
+            for row in rows:
+                key = (row.document_id, row.chunk_index)
+                if key not in wanted:
+                    continue
+                meta = json.loads(row.metadata_json or "{}")
+                if meta.get("chunk_role") == "child":
+                    continue
+                parents[key] = row.content
+        return parents
 
     async def _expand_neighbors(
         self,

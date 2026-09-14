@@ -31,11 +31,12 @@ function stateColor(state: OperationalState): "default" | "success" | "warning" 
 }
 
 function SectionBlock({ title, section }: { title: string; section: DiagnosticsSection }) {
+    const state = (section.state ?? "unknown") as OperationalState;
     return (
         <SectionCard title={title}>
             <Stack spacing={1.5}>
                 <Stack direction="row" spacing={1} alignItems="center">
-                    <Chip size="small" label={section.state} color={stateColor(section.state)} />
+                    <Chip size="small" label={state} color={stateColor(state)} />
                     <Typography variant="body2" color="text.secondary">
                         {section.detail || "—"}
                     </Typography>
@@ -89,7 +90,7 @@ export default function AdminDiagnosticsView() {
                         <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap flexWrap="wrap">
                             <Chip
                                 label={`overall: ${query.data.overall_state}`}
-                                color={stateColor(query.data.overall_state)}
+                                color={stateColor(query.data.overall_state as OperationalState)}
                             />
                             <Typography variant="body2" color="text.secondary">
                                 Generated {new Date(query.data.generated_at).toLocaleString()}
@@ -118,14 +119,14 @@ export default function AdminDiagnosticsView() {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {query.data.ai_providers.map((provider) => (
+                                    {(query.data.ai_providers ?? []).map((provider) => (
                                         <TableRow key={provider.key}>
                                             <TableCell>{provider.label}</TableCell>
                                             <TableCell>
                                                 <Chip
                                                     size="small"
                                                     label={provider.state}
-                                                    color={stateColor(provider.state)}
+                                                    color={stateColor(provider.state as OperationalState)}
                                                 />
                                             </TableCell>
                                             <TableCell>{provider.configured ? "yes" : "no"}</TableCell>
@@ -154,17 +155,16 @@ export default function AdminDiagnosticsView() {
                                         fontSize: 12,
                                     }}
                                 >
-                                    {JSON.stringify(query.data.observability_hints, null, 2)}
+                                    {JSON.stringify(query.data.observability_hints ?? {}, null, 2)}
                                 </Box>
                                 <Stack direction="row" spacing={1}>
                                     <Button
                                         size="small"
                                         href={
-                                            typeof query.data.observability_hints
-                                                .grafana_base_url === "string"
+                                            typeof query.data.observability_hints?.grafana_base_url ===
+                                            "string"
                                                 ? String(
-                                                      query.data.observability_hints
-                                                          .grafana_base_url
+                                                      query.data.observability_hints.grafana_base_url
                                                   )
                                                 : "/observability"
                                         }
@@ -176,11 +176,10 @@ export default function AdminDiagnosticsView() {
                                     <Button
                                         size="small"
                                         href={
-                                            typeof query.data.observability_hints
-                                                .tempo_explore_url === "string"
+                                            typeof query.data.observability_hints?.tempo_explore_url ===
+                                            "string"
                                                 ? String(
-                                                      query.data.observability_hints
-                                                          .tempo_explore_url
+                                                      query.data.observability_hints.tempo_explore_url
                                                   )
                                                 : "/observability"
                                         }

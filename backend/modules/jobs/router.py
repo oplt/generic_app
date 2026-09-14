@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.api.deps.db import get_db
+from backend.lib.idempotency import Idempotency, IdempotencySession
 from backend.modules.identity_access.models import User
 from backend.modules.jobs.schemas import (
     JobConsoleItemResponse,
@@ -12,8 +16,6 @@ from backend.modules.jobs.schemas import (
 )
 from backend.modules.jobs.service import JobsConsoleService
 from backend.modules.policy.deps import require_permission
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -66,13 +68,22 @@ async def retry_console_job(
     source: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("jobs.retry")),
+    idem: IdempotencySession = Depends(Idempotency("jobs.console.retry", required=False)),
 ):
     service = JobsConsoleService(db)
-    return await service.retry_job(
-        job_id,
-        actor_id=current_user.id,
-        is_admin=bool(current_user.is_admin),
-        source=source,
+
+    async def _retry() -> JobConsoleItemResponse:
+        return await service.retry_job(
+            job_id,
+            actor_id=current_user.id,
+            is_admin=bool(current_user.is_admin),
+            source=source,
+        )
+
+    return await idem.execute(
+        _retry,
+        status_code=200,
+        dump=lambda response: response.model_dump(mode="json"),
     )
 
 

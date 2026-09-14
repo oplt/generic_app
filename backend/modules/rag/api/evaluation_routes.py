@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from backend.api.deps.db import get_db
+from backend.lib.idempotency import Idempotency, IdempotencySession
 from backend.modules.identity_access.models import User
 from backend.modules.policy.deps import require_permission
 from backend.modules.rag.api.route_helpers import require_rag_enabled
@@ -14,6 +13,8 @@ from backend.modules.rag.api.schemas import (
     RagEvalDatasetCreateRequest,
     RagEvalDatasetResponse,
     RagEvalProbeRequest,
+    RagEvalProbeResponse,
+    RagEvalRunComparisonResponse,
     RagEvalRunItemResponse,
     RagEvalRunRequest,
     RagEvalRunResponse,
@@ -88,7 +89,11 @@ def _run_response(
         metrics=dict(row.metrics_json or {}),
         latency=dict(row.latency_json or {}),
         baseline_run_id=row.baseline_run_id,
-        comparison=row.comparison_json,
+        comparison=(
+            RagEvalRunComparisonResponse.model_validate(row.comparison_json)
+            if row.comparison_json
+            else None
+        ),
         error_message=row.error_message,
         created_at=row.created_at,
         completed_at=row.completed_at,
@@ -203,15 +208,15 @@ async def create_case(
     return _case_response(row)
 
 
-@router.post("/probe")
+@router.post("/probe", response_model=RagEvalProbeResponse)
 async def probe_retrieval(
     payload: RagEvalProbeRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("rag.manage")),
-) -> dict[str, Any]:
+) -> RagEvalProbeResponse:
     require_rag_enabled()
     service = RagEvaluationService(db)
-    return await service.probe(
+    result = await service.probe(
         user_id=current_user.id,
         organization_id=_tenant_org(current_user, payload.organization_id),
         query=payload.query,
@@ -221,6 +226,7 @@ async def probe_retrieval(
         top_k=payload.top_k,
         include_generation_judges=payload.include_generation_judges,
     )
+    return RagEvalProbeResponse.model_validate(result)
 
 
 @router.post(
@@ -233,23 +239,37 @@ async def run_dataset(
     payload: RagEvalRunRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("rag.manage")),
+    idem: IdempotencySession = Depends(
+        Idempotency(
+            "rag.evaluation.run",
+            required=False,
+            organization_id_from_payload=lambda body: body.get("organization_id"),
+        )
+    ),
 ):
     require_rag_enabled()
     service = RagEvaluationService(db)
-    run = await service.run_dataset(
-        dataset_id,
-        user_id=current_user.id,
-        organization_id=_tenant_org(current_user, payload.organization_id),
-        name=payload.name,
-        project_id=payload.project_id,
-        strategy=payload.strategy,
-        top_k=payload.top_k,
-        baseline_run_id=payload.baseline_run_id,
-        include_generation_judges=payload.include_generation_judges,
+
+    async def _run() -> RagEvalRunResponse:
+        run = await service.run_dataset(
+            dataset_id,
+            user_id=current_user.id,
+            organization_id=_tenant_org(current_user, payload.organization_id),
+            name=payload.name,
+            project_id=payload.project_id,
+            strategy=payload.strategy,
+            top_k=payload.top_k,
+            baseline_run_id=payload.baseline_run_id,
+            include_generation_judges=payload.include_generation_judges,
+        )
+        items = await service.repo.list_run_items(run.id)
+        return _run_response(run, items)
+
+    return await idem.execute(
+        _run,
+        status_code=201,
+        dump=lambda response: response.model_dump(mode="json"),
     )
-    items = await service.repo.list_run_items(run.id)
-    await db.commit()
-    return _run_response(run, items)
 
 
 @router.get("/runs", response_model=list[RagEvalRunResponse])

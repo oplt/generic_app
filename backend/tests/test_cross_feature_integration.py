@@ -6,12 +6,12 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from backend.lib.failure_injection import FaultKind, injecting
 from backend.modules.diagnostics.schemas import DiagnosticsSection
 from backend.modules.diagnostics.service import DiagnosticsService
 from backend.modules.manifests import REGISTERED_MANIFESTS, validate_registry
 from backend.modules.platform.profiles import CAPABILITY_PROFILES, resolve_capability_profile
 from backend.modules.policy import catalog
-from backend.lib.failure_injection import FaultKind, injecting
 
 
 class ManifestProfileRbacIntegrationTest(unittest.TestCase):
@@ -74,6 +74,8 @@ class EvaluationIndexVersionIntegrationTest(unittest.IsolatedAsyncioTestCase):
 
         db = MagicMock()
         db.flush = AsyncMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
         service = RagEvaluationService(db)
         dataset = SimpleNamespace(id="ds-1")
         case = SimpleNamespace(

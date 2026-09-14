@@ -91,8 +91,16 @@ class ExactMatchHybridTest(unittest.TestCase):
         for query_hint, exact_content in cases:
             with self.subTest(query=query_hint):
                 vector_lane = [
-                    _chunk(chunk_id="semantic-a", score=0.97, content="unrelated policy prose"),
-                    _chunk(chunk_id="semantic-b", score=0.95, content="another unrelated paragraph"),
+                    _chunk(
+                        chunk_id="semantic-a",
+                        score=0.97,
+                        content="unrelated policy prose",
+                    ),
+                    _chunk(
+                        chunk_id="semantic-b",
+                        score=0.95,
+                        content="another unrelated paragraph",
+                    ),
                 ]
                 lexical_lane = [
                     _chunk(chunk_id="exact", score=0.99, content=exact_content),
@@ -130,6 +138,10 @@ class RetrievalStrategyServiceTest(unittest.IsolatedAsyncioTestCase):
     async def test_lexical_strategy_skips_embeddings_and_vector_store(self) -> None:
         db = MagicMock()
         service = RetrievalService(db)
+
+        service._active_index_version_id = AsyncMock(return_value="ver-active")
+
+        service._active_index_version_id = AsyncMock(return_value="ver-active")
         service.config = SimpleNamespace(
             enabled=True,
             top_k=3,
@@ -176,6 +188,7 @@ class RetrievalStrategyServiceTest(unittest.IsolatedAsyncioTestCase):
     async def test_vector_strategy_skips_lexical_lane(self) -> None:
         db = MagicMock()
         service = RetrievalService(db)
+        service._active_index_version_id = AsyncMock(return_value="ver-active")
         service.config = SimpleNamespace(
             enabled=True,
             top_k=2,

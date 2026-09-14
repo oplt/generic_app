@@ -1,4 +1,4 @@
-from backend.modules.manifests.types import FrontendRoute, ModuleManifest, NavEntry
+from backend.modules.manifests.types import FrontendRoute, ModuleManifest
 
 MANIFEST = ModuleManifest(
     key="identity_access",
@@ -8,7 +8,12 @@ MANIFEST = ModuleManifest(
     always_enabled=True,
     backend_router_keys=("auth",),
     required_permissions=(),
-    database_requirements=("users", "organizations", "organization_memberships", "refresh_sessions"),
+    database_requirements=(
+        "users",
+        "organizations",
+        "organization_memberships",
+        "refresh_sessions",
+    ),
     frontend_routes=(
         FrontendRoute(path="/login", page_key="auth.login"),
         FrontendRoute(path="/signup", page_key="auth.signup"),

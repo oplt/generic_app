@@ -25,7 +25,7 @@ export function InvestigationContextFields({ filters, setters }: Props) {
                 <TextField select label="Time range" value={filters.timeRangeIndex} onChange={(event) => setters.setTimeRangeIndex(Number(event.target.value))}>
                     {TIME_RANGES.map((item, index) => <MenuItem key={item.from} value={index}>{item.label}</MenuItem>)}
                 </TextField>
-                <TextField label="Route" value={filters.route} onChange={(event) => setters.setRoute(event.target.value)} placeholder="/api/v1/users" />
+                <TextField label="Route" value={filters.route} onChange={(event) => setters.setRoute(event.target.value)} placeholder="/users" />
                 <TextField label="Job" value={filters.jobName} onChange={(event) => setters.setJobName(event.target.value)} placeholder="email" />
                 <TextField label="Request or trace" value={filters.requestId} onChange={(event) => setters.setRequestId(event.target.value)} placeholder="request id" />
                 <TextField label="Trace ID" value={filters.traceId} onChange={(event) => setters.setTraceId(event.target.value)} placeholder="trace id" />

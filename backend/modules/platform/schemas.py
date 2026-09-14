@@ -29,6 +29,7 @@ class CapabilityProfileSummary(BaseModel):
     label: str
     description: str
     optional_modules: list[str] = Field(default_factory=list)
+    selected_modules: list[str] = Field(default_factory=list)
     active_modules: list[str] = Field(default_factory=list)
     backend_router_keys: list[str] = Field(default_factory=list)
     celery_queues: list[str] = Field(default_factory=list)

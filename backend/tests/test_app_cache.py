@@ -6,6 +6,7 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
+from backend.core.config import settings
 from backend.lib.app_cache import CacheScope, app_cache, build_cache_key, namespaces
 from backend.lib.app_cache.keys import hash_cache_part
 
@@ -60,9 +61,8 @@ class AppCacheServiceTest(unittest.IsolatedAsyncioTestCase):
             patch("backend.core.cache.cache_get_json", side_effect=get_json),
             patch("backend.core.cache.cache_set_json", side_effect=set_json),
             patch("backend.core.cache._uses_redis_cache", return_value=False),
-            patch("backend.core.cache.settings") as mock_settings,
+            patch.object(settings, "CACHE_ENABLED", True),
         ):
-            mock_settings.CACHE_ENABLED = True
             values = await asyncio.gather(
                 app_cache.get_or_set(key, loader, ttl_seconds=30),
                 app_cache.get_or_set(key, loader, ttl_seconds=30),
@@ -105,9 +105,8 @@ class AppCacheServiceTest(unittest.IsolatedAsyncioTestCase):
             patch("backend.core.cache.cache_get_json", side_effect=get_json),
             patch("backend.core.cache.cache_set_json", side_effect=set_json),
             patch("backend.core.cache._uses_redis_cache", return_value=False),
-            patch("backend.core.cache.settings") as mock_settings,
+            patch.object(settings, "CACHE_ENABLED", True),
         ):
-            mock_settings.CACHE_ENABLED = True
             first = await app_cache.get_or_set(
                 key,
                 AsyncMock(return_value=None),
@@ -129,9 +128,8 @@ class AppCacheServiceTest(unittest.IsolatedAsyncioTestCase):
         with (
             patch("backend.core.cache.redis_client", client),
             patch("backend.core.cache.cache_delete", AsyncMock()) as cache_delete,
-            patch("backend.core.cache.settings") as mock_settings,
+            patch.object(settings, "CACHE_ENABLED", True),
         ):
-            mock_settings.CACHE_ENABLED = True
             await app_cache.invalidate_tags("settings:org:org-1")
 
         cache_delete.assert_awaited_once_with(
@@ -146,9 +144,8 @@ class AppCacheServiceTest(unittest.IsolatedAsyncioTestCase):
         with (
             patch("backend.core.cache.cache_set_json", AsyncMock()) as cache_set,
             patch("backend.core.cache.redis_client", client),
-            patch("backend.core.cache.settings") as mock_settings,
+            patch.object(settings, "CACHE_ENABLED", True),
         ):
-            mock_settings.CACHE_ENABLED = True
             await app_cache.set(
                 key,
                 {"on": True},
@@ -174,9 +171,8 @@ class AppCacheServiceTest(unittest.IsolatedAsyncioTestCase):
                 "backend.core.cache.cache_set_json",
                 AsyncMock(side_effect=RuntimeError("redis down")),
             ),
-            patch("backend.core.cache.settings") as mock_settings,
+            patch.object(settings, "CACHE_ENABLED", True),
         ):
-            mock_settings.CACHE_ENABLED = True
             await app_cache.set(
                 build_cache_key(namespaces.PLATFORM, "config"),
                 {"ok": True},

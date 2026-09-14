@@ -370,12 +370,30 @@ class DocumentIngestionService:
             await self.repo.update_document_status(document, DocumentStatus.EMBEDDING)
             await self.db.commit()
 
-            texts = [chunk.content for chunk in chunks]
-            vectors = await self.embeddings.embed_texts(texts)
+            embeddable = [
+                chunk
+                for chunk in chunks
+                if chunk.metadata.get("chunk_role") != "parent"
+            ]
+            texts = [chunk.content for chunk in embeddable]
+            vectors = await self.embeddings.embed_texts(texts) if texts else []
             await self._touch_job(job)
-            for chunk, vector in zip(chunks, vectors, strict=True):
+            expected_dims = int(self.config.embedding_dimensions)
+            from backend.lib.vectors import can_index_embedding
+
+            for chunk, vector in zip(embeddable, vectors, strict=True):
+                if not can_index_embedding(vector, expected_dimensions=expected_dims):
+                    raise HTTPException(
+                        status_code=502,
+                        detail="Document indexing failed: invalid embedding vector",
+                    )
                 chunk.embedding = vector
 
+            from backend.modules.rag.application.index_version_service import IndexVersionService
+
+            write_version = await IndexVersionService(
+                self.db, config=self.config
+            ).resolve_write_version()
             chunk_rows = await self.repo.replace_chunks(
                 document,
                 [
@@ -389,6 +407,7 @@ class DocumentIngestionService:
                     }
                     for c in chunks
                 ],
+                index_version_id=write_version.id,
             )
 
             await self.repo.update_document_status(document, DocumentStatus.INDEXED)
@@ -471,15 +490,24 @@ class DocumentIngestionService:
     ) -> None:
         # Cleanup runs after the document is hidden. Keep all derived DB data in
         # one transaction so retries cannot leave stale citations behind.
+        # Object-storage deletion is external I/O and must run after commit.
         from backend.modules.chat.repository import ChatRepository
 
         await self.repo.delete_query_records_for_document(document_id)
         await ChatRepository(self.db).delete_sources_for_document(document_id)
         await self.vector_store.delete_document(document_id, user_id)
-        await self.storage.delete_document(storage_path)
         await self.repo.delete_ingestion_jobs_for_document(document_id)
         await self.repo.scrub_deleted_document(document_id)
         await self.db.commit()
+        try:
+            await self.storage.delete_document(storage_path)
+        except Exception:
+            logger.exception(
+                "RAG document storage cleanup failed after DB commit document=%s path=%s",
+                document_id,
+                storage_path,
+            )
+            raise
         logger.info("RAG document cleanup completed document=%s user=%s", document_id, user_id)
 
     async def _get_document_for_indexing(

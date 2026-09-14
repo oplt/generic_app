@@ -38,9 +38,17 @@ class ModuleManifestRegistryTest(unittest.TestCase):
         self.assertIn("billing", enabled)
         self.assertIn("webhooks", enabled)
         self.assertIn("projects", enabled)
-        self.assertIn("rag", enabled)
-        self.assertIn("ai", enabled)
         self.assertIn("storage", enabled)
+        # Specialists are profile-selected, not always-on.
+        self.assertNotIn("rag", enabled)
+        self.assertNotIn("ai", enabled)
+
+    def test_effective_modules_can_select_specialists(self) -> None:
+        enabled = effective_modules([], enabled_selected=["rag"])
+        self.assertIn("rag", enabled)
+        self.assertIn("ai", enabled)  # dependency closure
+        self.assertIn("storage", enabled)
+        self.assertNotIn("chat", enabled)
 
     def test_missing_dependency_fails_clearly(self) -> None:
         manifests = (
@@ -57,7 +65,36 @@ class ModuleManifestRegistryTest(unittest.TestCase):
             validate_manifest_graph(manifests)
         self.assertIn("unknown module", str(ctx.exception).lower())
 
-    def test_enabled_optional_without_dependency_fails(self) -> None:
+    def test_enabled_optional_closes_dependencies_by_default(self) -> None:
+        manifests = (
+            ModuleManifest(
+                key="core",
+                version="1.0.0",
+                label="Core",
+                description="core",
+                always_enabled=True,
+            ),
+            ModuleManifest(
+                key="leaf",
+                version="1.0.0",
+                label="Leaf",
+                description="leaf",
+                optional=True,
+                dependencies=("ghost",),
+            ),
+            ModuleManifest(
+                key="ghost",
+                version="1.0.0",
+                label="Ghost",
+                description="ghost",
+                optional=True,
+            ),
+        )
+        enabled = resolve_effective_modules(manifests=manifests, enabled_optional=["leaf"])
+        self.assertIn("leaf", enabled)
+        self.assertIn("ghost", enabled)
+
+    def test_enabled_optional_without_dependency_fails_when_not_closing(self) -> None:
         manifests = (
             ModuleManifest(
                 key="core",
@@ -83,7 +120,11 @@ class ModuleManifestRegistryTest(unittest.TestCase):
             ),
         )
         with self.assertRaises(ModuleManifestError) as ctx:
-            resolve_effective_modules(manifests=manifests, enabled_optional=["leaf"])
+            resolve_effective_modules(
+                manifests=manifests,
+                enabled_optional=["leaf"],
+                close_dependencies=False,
+            )
         self.assertIn("missing required dependencies", str(ctx.exception).lower())
 
     def test_cycle_detected(self) -> None:

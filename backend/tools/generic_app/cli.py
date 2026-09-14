@@ -51,10 +51,27 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Declare storage dependency on the module manifest",
     )
+    enablement = create.add_mutually_exclusive_group()
+    enablement.add_argument(
+        "--optional",
+        action="store_true",
+        help="Optional pack module (default): always_enabled=False, optional=True",
+    )
+    enablement.add_argument(
+        "--core",
+        action="store_true",
+        help="Required core module: always_enabled=True",
+    )
+    enablement.add_argument(
+        "--profile",
+        metavar="NAME",
+        default=None,
+        help="Profile-selected specialist module (adds to profile modules=)",
+    )
     create.add_argument(
         "--no-wire",
         action="store_true",
-        help="Do not patch registry/router/alembic/policy catalog",
+        help="Do not patch registry/router/alembic/policy/celery/frontend markers",
     )
     create.add_argument(
         "--force",
@@ -88,10 +105,19 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(exc))
 
         if args.events and not args.crud:
-            # events helper imports the model; require crud for a coherent stub.
             parser.error("--events requires --crud (event helpers reference the model)")
         if args.frontend and not args.crud:
             parser.error("--frontend requires --crud (list/detail API contract)")
+
+        if args.core:
+            enablement = "core"
+            profile = None
+        elif args.profile:
+            enablement = "profile"
+            profile = args.profile
+        else:
+            enablement = "optional"
+            profile = None
 
         options = GeneratorOptions(
             crud=args.crud,
@@ -102,6 +128,8 @@ def main(argv: list[str] | None = None) -> int:
             storage=args.storage,
             wire=not args.no_wire,
             force=args.force,
+            enablement=enablement,  # type: ignore[arg-type]
+            profile=profile,
         )
         try:
             root = args.root or find_repo_root()
@@ -112,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
                 entity=args.entity,
                 dry_run=args.dry_run,
             )
-        except (FileExistsError, FileNotFoundError, ValueError) as exc:
+        except (FileExistsError, FileNotFoundError, ValueError, RuntimeError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
 

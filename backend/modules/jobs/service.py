@@ -33,6 +33,7 @@ QUEUE_BY_JOB_TYPE: dict[str, str] = {
     "email": "email",
     "rag-indexing": "ingestion",
     "rag-cleanup": "cleanup",
+    "rag-index-retention": "cleanup",
     "chat-retention": "cleanup",
     "idempotency-cleanup": "cleanup",
     "ai-evaluation": "evaluation",
@@ -73,7 +74,7 @@ def _redact_payload_summary(payload: dict[str, Any] | None) -> dict[str, Any]:
     if isinstance(field_names, list):
         names = [str(name) for name in field_names]
     else:
-        names = sorted(str(key) for key in raw.keys())
+        names = sorted(str(key) for key in raw)
     safe_names = [name for name in names if not _SECRET_KEY_RE.search(name)]
     return {
         "field_names": safe_names,
@@ -247,7 +248,10 @@ class JobsConsoleService:
         if detail["source"] == "application":
             job = await self.db.get(ApplicationJob, job_id)
             if job is None or job.status != STATUS_QUEUED:
-                raise HTTPException(status_code=409, detail="Only queued application jobs can be cancelled")
+                raise HTTPException(
+                    status_code=409,
+                    detail="Only queued application jobs can be cancelled",
+                )
             job.status = STATUS_CANCELLED
             job.finished_at = now
             job.last_error = "cancelled_by_operator"
@@ -342,7 +346,8 @@ class JobsConsoleService:
                 filtered = [
                     item
                     for item in filtered
-                    if item["state"] in {"failed", "dead_letter"} or item.get("raw_status") == STATUS_DEAD_LETTER
+                    if item["state"] in {"failed", "dead_letter"}
+                    or item.get("raw_status") == STATUS_DEAD_LETTER
                 ]
             else:
                 filtered = [item for item in filtered if item["state"] == status]
@@ -354,7 +359,8 @@ class JobsConsoleService:
             filtered = [
                 item
                 for item in filtered
-                if item["state"] in {"failed", "stale"} or item.get("raw_status") == STATUS_DEAD_LETTER
+                if item["state"] in {"failed", "stale"}
+                or item.get("raw_status") == STATUS_DEAD_LETTER
             ]
         return filtered
 
@@ -373,7 +379,9 @@ class JobsConsoleService:
             retry_blocked = None
         can_cancel = job.status == STATUS_QUEUED
         cancel_blocked = None if can_cancel else "Only queued application jobs can be cancelled"
-        payload_summary = _redact_payload_summary(job.payload if isinstance(job.payload, dict) else {})
+        payload_summary = _redact_payload_summary(
+            job.payload if isinstance(job.payload, dict) else {}
+        )
         item = {
             "id": job.id,
             "source": "application",

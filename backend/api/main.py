@@ -6,6 +6,11 @@ from time import perf_counter
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.api.middleware.correlation_id import CorrelationIdMiddleware
+from backend.api.middleware.csrf import CSRFMiddleware
+from backend.api.middleware.public_rate_limit import PublicRateLimitMiddleware
+from backend.api.middleware.request_logging import RequestLoggingMiddleware
+from backend.api.middleware.security_headers import SecurityHeadersMiddleware
 from backend.core.cache import redis_client
 from backend.core.config import settings
 from backend.core.error_handler import register_exception_handlers
@@ -14,25 +19,20 @@ from backend.core.logging import setup_logging
 from backend.core.storage import object_storage
 from backend.db.session import SessionLocal, engine
 from backend.modules.ai.providers import close_ai_provider_http_clients
+from backend.modules.developer_diagnostics.middleware import DeveloperDiagnosticsMiddleware
 from backend.modules.memory.infrastructure.memory_config import validate_memory_config
 from backend.modules.platform.service import PlatformService
 from backend.modules.rag.infrastructure.rag_config import validate_rag_config
 from backend.observability import setup_observability
 from backend.observability.prometheus_metrics import startup_dependency_duration_seconds
-from backend.observability.service import close_observability_http_client
-from backend.workers.async_dispatch import log_eager_mode_startup_warning
-from backend.workers.readiness import worker_readiness
-
-from backend.api.middleware.correlation_id import CorrelationIdMiddleware
-from backend.api.middleware.csrf import CSRFMiddleware
-from backend.api.middleware.public_rate_limit import PublicRateLimitMiddleware
-from backend.api.middleware.request_logging import RequestLoggingMiddleware
-from backend.api.middleware.security_headers import SecurityHeadersMiddleware
 from backend.observability.request_diagnostics import (
     DIAGNOSTICS_HEADER,
     TRACE_ID_HEADER,
 )
-from backend.modules.developer_diagnostics.middleware import DeveloperDiagnosticsMiddleware
+from backend.observability.service import close_observability_http_client
+from backend.workers.async_dispatch import log_eager_mode_startup_warning
+from backend.workers.readiness import worker_readiness
+
 from .router import api_router
 from .v1.health import health_router
 
@@ -89,8 +89,19 @@ async def lifespan(app: FastAPI):
     except (ModuleManifestError, CapabilityProfileError):
         logger.exception("Module manifest / capability profile validation failed")
         raise
-    validate_rag_config()
-    validate_memory_config()
+
+    from backend.modules.platform.profiles import resolve_active_modules
+
+    active = set(resolve_active_modules().active_modules)
+    if "rag" in active:
+        validate_rag_config()
+    if "memory" in active:
+        validate_memory_config()
+    logger.info(
+        "Capability profile active profile=%s modules=%s",
+        settings.capability_profile,
+        ",".join(sorted(active)),
+    )
     dependency_started = perf_counter()
     await asyncio.gather(
         object_storage.ensure_bucket(),

@@ -399,7 +399,7 @@ async def cache_set_model(key: str, value: BaseModel, *, ttl_seconds: int) -> No
     await cache_set_json(key, value.model_dump(mode="json"), ttl_seconds=ttl_seconds)
 
 
-async def cache_get_or_load_model(
+async def cache_get_or_load_model[T](
     key: str,
     model: type[T],
     *,

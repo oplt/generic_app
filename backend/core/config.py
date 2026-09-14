@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     CORE_DOMAIN_SINGULAR: str = "Project"
     CORE_DOMAIN_PLURAL: str = "Projects"
     PLATFORM_DEFAULT_MODULE_PACK: str = "full_platform"
+    # Optional alias; when set, overrides PLATFORM_DEFAULT_MODULE_PACK for bootstrap.
+    CAPABILITY_PROFILE: str | None = None
     DEVELOPER_DIAGNOSTICS_ENABLED: bool = False
     FAILURE_INJECTION_ENABLED: bool = False
 
@@ -272,6 +274,10 @@ class Settings(BaseSettings):
     RAG_MALWARE_SCAN_TIMEOUT_SECONDS: float = 10.0
     RAG_ASK_PROMPT_TEMPLATE_KEY: str = "rag-answer"
     RAG_ASK_TIMEOUT_SECONDS: float = 45.0
+    # Blue/green index versioning (Phase 4).
+    RAG_INDEX_RETENTION_DAYS: int = 14
+    RAG_INDEX_ACTIVATION_MIN_DOC_COVERAGE: float = 0.95
+    RAG_INDEX_ACTIVATION_MAX_FAILED_JOBS: int = 0
     CACHE_MAX_PAYLOAD_BYTES: int = 1024 * 1024
 
     CORS_ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(default_factory=list)
@@ -291,6 +297,13 @@ class Settings(BaseSettings):
     @property
     def allowed_origins(self) -> list[str]:
         return self.CORS_ALLOWED_ORIGINS or [self.FRONTEND_URL]
+
+    @property
+    def capability_profile(self) -> str:
+        """Active starter capability profile used at process bootstrap."""
+
+        raw = (self.CAPABILITY_PROFILE or self.PLATFORM_DEFAULT_MODULE_PACK or "").strip()
+        return raw or "full_platform"
 
     @property
     def content_security_policy(self) -> str:
@@ -482,6 +495,16 @@ class Settings(BaseSettings):
             raise ValueError("WEB_SEARCH_DAILY_REQUESTS must be between 0 and 100000")
         if not 0.1 <= self.RAG_PARSER_TIMEOUT_SECONDS <= 600:
             raise ValueError("RAG_PARSER_TIMEOUT_SECONDS must be between 0.1 and 600")
+        if not 1 <= self.RAG_INDEX_RETENTION_DAYS <= 3650:
+            raise ValueError("RAG_INDEX_RETENTION_DAYS must be between 1 and 3650")
+        if not 0.0 <= self.RAG_INDEX_ACTIVATION_MIN_DOC_COVERAGE <= 1.0:
+            raise ValueError(
+                "RAG_INDEX_ACTIVATION_MIN_DOC_COVERAGE must be between 0 and 1"
+            )
+        if not 0 <= self.RAG_INDEX_ACTIVATION_MAX_FAILED_JOBS <= 10_000:
+            raise ValueError(
+                "RAG_INDEX_ACTIVATION_MAX_FAILED_JOBS must be between 0 and 10000"
+            )
         strategy = self.RAG_RETRIEVAL_STRATEGY.strip().lower()
         if strategy not in {"vector", "lexical", "hybrid_rrf"}:
             raise ValueError(

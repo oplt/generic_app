@@ -11,6 +11,7 @@ export type SettingsTab = {
 type SettingsTabDefinition = SettingsTab & {
     requiresPlatformModule?: boolean;
     requiresAiModule?: boolean;
+    requiresActiveModule?: string;
     adminOnly?: boolean;
 };
 
@@ -21,10 +22,20 @@ const SETTINGS_TAB_DEFINITIONS: SettingsTabDefinition[] = [
     { label: "Observability", path: "/observability" },
     { label: "Settings", path: "/admin/settings", adminOnly: true },
     { label: "Users", path: "/admin/users", adminOnly: true },
-    { label: "RAG Indexes", path: "/admin/rag-indexes", adminOnly: true },
-    { label: "RAG Evaluation", path: "/admin/rag/evaluation", adminOnly: true },
-    { label: "Jobs", path: "/admin/jobs", adminOnly: true },
-    { label: "Diagnostics", path: "/admin/diagnostics", adminOnly: true },
+    { label: "RAG Indexes", path: "/admin/rag-indexes", adminOnly: true, requiresActiveModule: "rag" },
+    {
+        label: "RAG Evaluation",
+        path: "/admin/rag/evaluation",
+        adminOnly: true,
+        requiresActiveModule: "rag",
+    },
+    { label: "Jobs", path: "/admin/jobs", adminOnly: true, requiresActiveModule: "jobs" },
+    {
+        label: "Diagnostics",
+        path: "/admin/diagnostics",
+        adminOnly: true,
+        requiresActiveModule: "diagnostics",
+    },
     { label: "Platform Admin", path: "/admin/platform", adminOnly: true },
 ];
 
@@ -32,15 +43,20 @@ export function getVisibleSettingsTabs({
     isAdmin,
     hasUserPlatformModule,
     hasAiModule,
+    activeModules,
 }: {
     isAdmin: boolean;
     hasUserPlatformModule: boolean;
     hasAiModule: boolean;
+    activeModules: Set<string>;
 }): SettingsTab[] {
     return SETTINGS_TAB_DEFINITIONS.filter((item) => {
         if (item.adminOnly && !isAdmin) return false;
         if (item.requiresPlatformModule && !hasUserPlatformModule) return false;
         if (item.requiresAiModule && !hasAiModule) return false;
+        if (item.requiresActiveModule && !activeModules.has(item.requiresActiveModule)) {
+            return false;
+        }
         return true;
     });
 }
@@ -50,16 +66,20 @@ export function useSettingsTabs(): SettingsTab[] {
     const { data: platformMetadata } = usePlatformMetadata();
     const hasUserPlatformModule =
         platformMetadata?.module_catalog.some((item) => item.user_visible && item.enabled) ?? false;
-    const activeModules = new Set(platformMetadata?.active_modules ?? []);
-    const hasAiModule =
-        activeModules.has("ai") ||
-        (platformMetadata?.module_catalog.some((item) => item.key === "ai" && item.enabled) ??
-            false);
+    const activeModulesKey = (platformMetadata?.active_modules ?? []).join(",");
+    const hasAiModule = (platformMetadata?.active_modules ?? []).includes("ai");
 
-    return useMemo(
-        () => getVisibleSettingsTabs({ isAdmin, hasUserPlatformModule, hasAiModule }),
-        [hasAiModule, hasUserPlatformModule, isAdmin]
-    );
+    return useMemo(() => {
+        const activeModules = new Set(
+            activeModulesKey ? activeModulesKey.split(",") : []
+        );
+        return getVisibleSettingsTabs({
+            isAdmin,
+            hasUserPlatformModule,
+            hasAiModule,
+            activeModules,
+        });
+    }, [activeModulesKey, hasAiModule, hasUserPlatformModule, isAdmin]);
 }
 
 export function getActiveSettingsTab(

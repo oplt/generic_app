@@ -30,6 +30,7 @@ export const getPlatformConfigApiV1PlatformAdminConfigGetResponse = zod.object({
   "recommended_feature_flags": zod.array(zod.string()).optional(),
   "required_permissions": zod.array(zod.string()).optional(),
   "scheduled_tasks": zod.array(zod.string()).optional(),
+  "selected_modules": zod.array(zod.string()).optional(),
   "settings_prefixes": zod.array(zod.string()).optional()
 }).describe('Resolved capability matrix for the active (or listed) profile.'),zod.null()]).optional(),
   "app_name": zod.string(),
@@ -49,6 +50,7 @@ export const getPlatformConfigApiV1PlatformAdminConfigGetResponse = zod.object({
   "recommended_feature_flags": zod.array(zod.string()).optional(),
   "required_permissions": zod.array(zod.string()).optional(),
   "scheduled_tasks": zod.array(zod.string()).optional(),
+  "selected_modules": zod.array(zod.string()).optional(),
   "settings_prefixes": zod.array(zod.string()).optional()
 }).describe('Resolved capability matrix for the active (or listed) profile.')).optional(),
   "available_module_packs": zod.array(zod.object({
@@ -129,6 +131,7 @@ export const updatePlatformConfigApiV1PlatformAdminConfigPutResponse = zod.objec
   "recommended_feature_flags": zod.array(zod.string()).optional(),
   "required_permissions": zod.array(zod.string()).optional(),
   "scheduled_tasks": zod.array(zod.string()).optional(),
+  "selected_modules": zod.array(zod.string()).optional(),
   "settings_prefixes": zod.array(zod.string()).optional()
 }).describe('Resolved capability matrix for the active (or listed) profile.'),zod.null()]).optional(),
   "app_name": zod.string(),
@@ -148,6 +151,7 @@ export const updatePlatformConfigApiV1PlatformAdminConfigPutResponse = zod.objec
   "recommended_feature_flags": zod.array(zod.string()).optional(),
   "required_permissions": zod.array(zod.string()).optional(),
   "scheduled_tasks": zod.array(zod.string()).optional(),
+  "selected_modules": zod.array(zod.string()).optional(),
   "settings_prefixes": zod.array(zod.string()).optional()
 }).describe('Resolved capability matrix for the active (or listed) profile.')).optional(),
   "available_module_packs": zod.array(zod.object({
@@ -606,6 +610,7 @@ export const getPlatformMetadataApiV1PlatformMetadataGetResponse = zod.object({
   "recommended_feature_flags": zod.array(zod.string()).optional(),
   "required_permissions": zod.array(zod.string()).optional(),
   "scheduled_tasks": zod.array(zod.string()).optional(),
+  "selected_modules": zod.array(zod.string()).optional(),
   "settings_prefixes": zod.array(zod.string()).optional()
 }).describe('Resolved capability matrix for the active (or listed) profile.'),zod.null()]).optional(),
   "app_name": zod.string(),
@@ -625,6 +630,7 @@ export const getPlatformMetadataApiV1PlatformMetadataGetResponse = zod.object({
   "recommended_feature_flags": zod.array(zod.string()).optional(),
   "required_permissions": zod.array(zod.string()).optional(),
   "scheduled_tasks": zod.array(zod.string()).optional(),
+  "selected_modules": zod.array(zod.string()).optional(),
   "settings_prefixes": zod.array(zod.string()).optional()
 }).describe('Resolved capability matrix for the active (or listed) profile.')).optional(),
   "available_module_packs": zod.array(zod.object({

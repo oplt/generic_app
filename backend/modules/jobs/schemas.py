@@ -5,13 +5,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class JobsConsoleListResponse(BaseModel):
-    items: list[dict[str, Any]]
-    total: int
-    limit: int
-    offset: int
-
-
 class JobConsoleItemResponse(BaseModel):
     id: str
     source: str
@@ -42,3 +35,10 @@ class JobConsoleItemResponse(BaseModel):
     cancel_blocked_reason: str | None = None
     payload_summary: dict[str, Any] = Field(default_factory=dict)
     trace_hints: dict[str, Any] | None = None
+
+
+class JobsConsoleListResponse(BaseModel):
+    items: list[JobConsoleItemResponse]
+    total: int
+    limit: int
+    offset: int

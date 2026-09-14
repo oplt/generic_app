@@ -211,7 +211,15 @@ class EmbeddingAdapterTest(unittest.IsolatedAsyncioTestCase):
         from backend.modules.rag.application.embedding_service import EmbeddingService
 
         service = EmbeddingService(
-            SimpleNamespace(embedding_provider="local", embedding_model="test")
+            SimpleNamespace(
+                embedding_provider="local",
+                embedding_model="test",
+                embedding_dimensions=2,
+                embedding_batch_size=64,
+                embedding_concurrency=1,
+                embedding_max_retries=0,
+                embedding_allow_partial_failure=False,
+            )
         )
         vectors = await service.embed_texts(["a", "b"])
         self.assertEqual(len(vectors), 2)

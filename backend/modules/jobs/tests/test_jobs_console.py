@@ -8,8 +8,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.modules.jobs.service import (
-    JobsConsoleService,
     STATUS_CANCELLED,
+    JobsConsoleService,
     _redact_payload_summary,
 )
 from backend.workers.job_service import STATUS_QUEUED, STATUS_RUNNING
@@ -86,7 +86,8 @@ class JobsConsoleAuthzActionsTest(unittest.IsolatedAsyncioTestCase):
                 "source": "application",
                 "job_type": "email",
                 "can_retry": False,
-                "retry_blocked_reason": "Retry from console is only supported for RAG ingestion jobs",
+                "retry_blocked_reason": "Retry from console is only supported for RAG "
+                "ingestion jobs",
             }
         )
         with self.assertRaises(Exception) as raised:

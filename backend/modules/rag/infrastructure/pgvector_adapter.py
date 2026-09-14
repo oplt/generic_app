@@ -56,6 +56,7 @@ class PgVectorAdapter:
 
         document_ids = (filters or {}).get("document_ids")
         source_type = (filters or {}).get("source_type")
+        index_version_id = (filters or {}).get("index_version_id")
         indexed = await self.repo.similarity_search_indexed(
             user_id=user_id,
             project_id=project_id,
@@ -69,6 +70,7 @@ class PgVectorAdapter:
             # already-expanded limit as top_k. Do not multiply again here.
             candidate_limit=top_k,
             organization_id=organization_id,
+            index_version_id=index_version_id,
         )
         if indexed is None:
             raise PgVectorUnavailableError("repository_returned_no_result")

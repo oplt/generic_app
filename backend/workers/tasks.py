@@ -202,6 +202,41 @@ def cleanup_idempotency_records_task() -> int:
     return result
 
 
+@celery_app.task(name="backend.workers.tasks.cleanup_retired_rag_index_versions_task")
+def cleanup_retired_rag_index_versions_task() -> dict[str, int]:
+    result: dict[str, int] = {"versions_considered": 0, "chunks_deleted": 0}
+
+    def run() -> None:
+        nonlocal result
+        from backend.db.session import SessionLocal
+        from backend.modules.rag.application.index_version_service import IndexVersionService
+        from backend.workers.schedule_lock import release_beat_lock, try_acquire_beat_lock
+
+        async def _cleanup() -> dict[str, int]:
+            lock_token = await try_acquire_beat_lock(
+                "rag-index-retention", on_redis_error="proceed"
+            )
+            if lock_token is None:
+                return {"versions_considered": 0, "chunks_deleted": 0}
+            try:
+                async with SessionLocal() as db:
+                    return await IndexVersionService(db).cleanup_retired_versions()
+            finally:
+                await release_beat_lock("rag-index-retention", lock_token)
+
+        result = run_async_in_sync_context(_cleanup())
+
+    run_tracked_sync(
+        job_type="rag-index-retention",
+        payload={},
+        runner=run,
+        correlation_id="rag-index-retention",
+        max_attempts=1,
+        retryable=False,
+    )
+    return result
+
+
 @celery_app.task(name="backend.workers.tasks.run_ai_evaluation_task")
 def run_ai_evaluation_task(
     *,

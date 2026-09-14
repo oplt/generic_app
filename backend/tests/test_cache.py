@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.core.cache import (
@@ -182,7 +183,17 @@ class EmbeddingCacheTest(unittest.IsolatedAsyncioTestCase):
     async def test_embed_texts_uses_cache_for_repeat_query(self):
         from backend.modules.rag.application.embedding_service import EmbeddingService
 
-        service = EmbeddingService()
+        service = EmbeddingService(
+            SimpleNamespace(
+                embedding_provider="local",
+                embedding_model="hash",
+                embedding_dimensions=2,
+                embedding_batch_size=64,
+                embedding_concurrency=1,
+                embedding_max_retries=0,
+                embedding_allow_partial_failure=False,
+            )
+        )
         service._adapter = AsyncMock()
         service._adapter.embed_texts = AsyncMock(return_value=[[0.1, 0.2]])
         service_cache_key = embedding_cache_key(
@@ -211,7 +222,7 @@ class EmbeddingCacheTest(unittest.IsolatedAsyncioTestCase):
             mock_settings.CACHE_ENABLED = True
             mock_settings.CACHE_EMBEDDING_TTL_SECONDS = 600
             mock_settings.CACHE_EMBEDDING_MAX_TEXT_CHARS = 4000
-            mock_settings.RAG_EMBEDDING_DIMENSIONS = 1536
+            mock_settings.RAG_EMBEDDING_DIMENSIONS = 2
 
             first = await service.embed_texts(["hello"])
             second = await service.embed_texts(["hello"])

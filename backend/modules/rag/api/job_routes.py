@@ -8,6 +8,7 @@ from backend.core.pagination import (
     paginated_response,
     pagination_params,
 )
+from backend.lib.idempotency import Idempotency, IdempotencySession
 from backend.modules.identity_access.models import User
 from backend.modules.rag.api.route_helpers import require_rag_enabled
 from backend.modules.rag.api.schemas import (
@@ -63,19 +64,29 @@ async def retry_job(
     job_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    idem: IdempotencySession = Depends(Idempotency("rag.ingestion.retry", required=False)),
 ):
     """Create a fresh durable outbox attempt for a failed/stuck ingestion job."""
     require_rag_enabled()
-    repo = RagRepository(db)
-    old_job = await repo.get_ingestion_job(job_id)
-    if not old_job or old_job.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Job not found")
-    if old_job.status == "completed":
-        raise HTTPException(status_code=409, detail="Ingestion job is already complete")
-    service = DocumentIngestionService(db)
-    return await service.enqueue_document_indexing(
-        document_id=old_job.document_id,
-        user_id=current_user.id,
-        is_admin=current_user.is_admin,
-        force_new_attempt=True,
+
+    async def _retry() -> RagIngestionJobResponse:
+        repo = RagRepository(db)
+        old_job = await repo.get_ingestion_job(job_id)
+        if not old_job or old_job.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if old_job.status == "completed":
+            raise HTTPException(status_code=409, detail="Ingestion job is already complete")
+        service = DocumentIngestionService(db)
+        job = await service.enqueue_document_indexing(
+            document_id=old_job.document_id,
+            user_id=current_user.id,
+            is_admin=current_user.is_admin,
+            force_new_attempt=True,
+        )
+        return RagIngestionJobResponse.model_validate(job)
+
+    return await idem.execute(
+        _retry,
+        status_code=202,
+        dump=lambda response: response.model_dump(mode="json"),
     )

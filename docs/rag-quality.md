@@ -62,7 +62,7 @@ Workbench runs persist the active quality flags under `configuration.quality`.
 ## Evaluation note (Phase 12 acceptance)
 
 No quality flag is flipped on by default. Measured offline golden diffs for the
-new optional strategies are recorded in `tasks.txt` under P12-001; promote a
+new optional strategies should be recorded in `tasks.txt` when promoted; promote a
 strategy to default only after a clear workbench/harness win on representative
 tenant data.
 
@@ -70,8 +70,12 @@ tenant data.
 
 * `application/quality_strategies.py` — dedup / MMR / parent expand / neighbor merge
 * `application/rerankers.py` — pluggable reranker factory
-* `application/chunking_service.py` — document-aware + parent/child options
-* `application/embedding_service.py` — batch size, concurrency, retries, partial failure
-* `application/retrieval_service.py` — applies quality after fusion/rerank
+* `application/chunking_service.py` — document-aware + tokenizer-aligned parent/child
+* `application/embedding_service.py` — shared `retry_async`, deadline, vector validation (no zero-fill)
+* `application/retrieval_service.py` — applies quality after fusion/rerank; parent expand via refs
+
+Parent/child: children store `parent_chunk_index` + token/char offsets (not full
+`parent_content`). Parents are persisted as `chunk_role=parent` without embeddings.
+`CHUNKER_VERSION` is `chunker-v3`.
 
 Migration: none (metadata stays in `metadata_json`).

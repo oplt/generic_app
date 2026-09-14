@@ -171,12 +171,16 @@ class RagIndexVersionCreateRequest(RequestModel):
 
 class RagIndexStatusResponse(BaseModel):
     active_version: RagIndexVersionResponse
+    desired_index_version: str | None = None
+    building_version: RagIndexVersionResponse | None = None
+    building_readiness: dict[str, object] | None = None
     pipeline: dict[str, object]
     schema_embedding_dimensions: int
     documents_total: int
     documents_indexed: int
     documents_current: int
     documents_stale: int
+    documents_incomplete: int = 0
     jobs_active: int
     jobs_failed: int
     dimension_migration_required: bool = False
@@ -193,6 +197,8 @@ class RagIndexReindexStaleResponse(BaseModel):
     skipped: int
     job_ids: list[str]
     active_index_version: str
+    target_index_version: str | None = None
+    target_index_version_id: str | None = None
 
 
 class RagEvalDatasetCreateRequest(RequestModel):
@@ -252,6 +258,41 @@ class RagEvalProbeRequest(RequestModel):
     include_generation_judges: bool = False
 
 
+class RagEvalCandidateResponse(BaseModel):
+    rank: int
+    chunk_id: str
+    document_id: str
+    filename: str = ""
+    chunk_index: int = 0
+    page_number: int | None = None
+    section: str | None = None
+    content: str = ""
+    vector_rank: int | None = None
+    lexical_rank: int | None = None
+    vector_score: float | None = None
+    lexical_score: float | None = None
+    fused_score: float | None = None
+    reranker_score: float | None = None
+    included: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RagEvalProbeGenerationResponse(BaseModel):
+    answer: str | None = None
+    scores: dict[str, float] | None = None
+    provider: str | None = None
+
+
+class RagEvalProbeResponse(BaseModel):
+    strategy: str
+    top_k: int = 0
+    candidates: list[RagEvalCandidateResponse] = Field(default_factory=list)
+    context_chunks: list[RagEvalCandidateResponse] = Field(default_factory=list)
+    assembled_context: str = ""
+    latencies_ms: dict[str, float] = Field(default_factory=dict)
+    generation: RagEvalProbeGenerationResponse | None = None
+
+
 class RagEvalRunRequest(RequestModel):
     name: str = Field(default="run", max_length=255)
     project_id: str | None = None
@@ -274,6 +315,11 @@ class RagEvalRunItemResponse(BaseModel):
     notes: str | None = None
 
 
+class RagEvalRunComparisonResponse(BaseModel):
+    baseline_run_id: str
+    deltas: dict[str, float] = Field(default_factory=dict)
+
+
 class RagEvalRunResponse(BaseModel):
     id: str
     dataset_id: str
@@ -285,7 +331,7 @@ class RagEvalRunResponse(BaseModel):
     metrics: dict[str, Any] = Field(default_factory=dict)
     latency: dict[str, Any] = Field(default_factory=dict)
     baseline_run_id: str | None = None
-    comparison: dict[str, Any] | None = None
+    comparison: RagEvalRunComparisonResponse | None = None
     error_message: str | None = None
     created_at: datetime
     completed_at: datetime | None = None
